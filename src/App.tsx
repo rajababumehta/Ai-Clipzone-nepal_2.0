@@ -3199,9 +3199,9 @@ export default function App() {
                                       </div>
                                     </div>
 
-                                    {/* Right: Action Buttons */}
+                                    {/* Right: Action Buttons (Only Full Screen View, No Download) */}
                                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                      {/* Direct In-App Viewer Modal */}
+                                      {/* Direct In-App Fullscreen Viewer */}
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -3212,37 +3212,13 @@ export default function App() {
                                             fileSize: pdf.fileSize,
                                             courseTitle: currentClassroomCourse.title
                                           });
-                                          showToast(`Opening PDF: ${pdf.title}`, 'info');
+                                          showToast(`Opening Full Screen PDF: ${pdf.title}`, 'info');
                                         }}
-                                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
+                                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-md shadow-blue-500/20 cursor-pointer"
                                       >
-                                        <BookOpen className="w-3.5 h-3.5" />
-                                        <span>सिधै पढ्नुहोस् (Open)</span>
+                                        <Maximize2 className="w-4 h-4" />
+                                        <span>Full Screen मा पढ्नुहोस्</span>
                                       </button>
-
-                                      {/* Direct Download */}
-                                      <a
-                                        href={getDirectPdfDownloadUrl(pdf.pdfUrl)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        download
-                                        className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 cursor-pointer border border-zinc-800"
-                                        title="Download PDF"
-                                      >
-                                        <Download className="w-3.5 h-3.5" />
-                                        <span className="hidden md:inline">Download</span>
-                                      </a>
-
-                                      {/* Open in new tab */}
-                                      <a
-                                        href={getDirectPdfViewerUrl(pdf.pdfUrl)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 text-zinc-400 hover:text-blue-400 hover:bg-zinc-900 rounded-xl transition cursor-pointer border border-zinc-800"
-                                        title="Open in new browser tab without drive login"
-                                      >
-                                        <ExternalLink className="w-3.5 h-3.5" />
-                                      </a>
                                     </div>
                                   </motion.div>
                                 ))}
@@ -3254,7 +3230,7 @@ export default function App() {
                                 </div>
                                 <h5 className="text-sm font-bold text-zinc-300 font-sans">यस कोर्षमा अहिले कुनै PDF नोट उपलब्ध छैन</h5>
                                 <p className="text-xs text-zinc-500 font-sans max-w-sm mx-auto">
-                                  एडमिनले Google Drive बाट PDF नोटहरू लिङ्क गरेपछि यहाँ बिना लगइन सिधै पढ्न र डाउनलोड गर्न सकिनेछ।
+                                  एडमिनले Google Drive बाट PDF नोटहरू लिङ्क गरेपछि यहाँ सिधै Full Screen मा पढ्न सकिनेछ।
                                 </p>
                                 {isAdminActivated && (
                                   <button
@@ -4571,21 +4547,11 @@ export default function App() {
                                       courseTitle: selectedCourse.title
                                     });
                                   }}
-                                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                                  className="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                                 >
-                                  <BookOpen className="w-3 h-3" />
-                                  <span>सिधै पढ्नुहोस्</span>
+                                  <Maximize2 className="w-3.5 h-3.5" />
+                                  <span>Full Screen मा पढ्नुहोस्</span>
                                 </button>
-                                <a
-                                  href={getDirectPdfDownloadUrl(pdf.pdfUrl)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  download
-                                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-bold p-1.5 rounded-lg transition cursor-pointer border border-slate-700"
-                                  title="Direct Download PDF"
-                                >
-                                  <Download className="w-3 h-3" />
-                                </a>
                               </div>
                             </div>
                           ))

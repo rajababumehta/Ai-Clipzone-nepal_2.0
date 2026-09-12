@@ -30,7 +30,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
   fileSize,
   courseTitle
 }) => {
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
   const activePdf = pdf || (pdfUrl ? {
@@ -44,7 +44,6 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
   if (!isOpen || !activePdf) return null;
 
   const directViewerUrl = getDirectPdfViewerUrl(activePdf.pdfUrl);
-  const directDownloadUrl = getDirectPdfDownloadUrl(activePdf.pdfUrl);
 
   const toggleFullscreen = () => {
     setIsFullscreen(prev => !prev);
@@ -52,14 +51,14 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[3000] flex items-center justify-center p-2 sm:p-4 md:p-6">
+      <div className={`fixed inset-0 z-[3000] flex items-center justify-center ${isFullscreen ? 'p-0' : 'p-2 sm:p-4 md:p-6'}`}>
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm"
+          className="absolute inset-0 bg-slate-950/90 backdrop-blur-md"
         />
 
         {/* Modal Container */}
@@ -68,14 +67,14 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className={`relative z-10 w-full bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
-            isFullscreen ? 'h-full max-h-screen rounded-none' : 'h-[92vh] max-w-5xl'
+          className={`relative z-10 w-full bg-slate-900 border border-slate-800 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+            isFullscreen ? 'h-screen w-screen max-w-none rounded-none' : 'h-[92vh] max-w-5xl rounded-2xl md:rounded-3xl'
           }`}
         >
           {/* Header Bar */}
           <div className="bg-slate-950/95 border-b border-slate-800/90 px-4 py-3 sm:px-6 sm:py-3.5 flex items-center justify-between gap-3 text-white shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center shrink-0 shadow-inner">
+              <div className="w-10 h-10 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0 shadow-inner">
                 <FileText className="w-5 h-5" />
               </div>
               <div className="min-w-0 text-left">
@@ -90,8 +89,8 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
                       📄 {activePdf.fileSize}
                     </span>
                   )}
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-black px-2 py-0.5 rounded-md border border-emerald-500/30">
-                    🟢 Direct View • No Login Required
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-black px-2 py-0.5 rounded-md border border-emerald-500/30 flex items-center gap-1">
+                    <Maximize2 className="w-3 h-3" /> Full Screen Reader
                   </span>
                 </div>
                 <h3 className="text-sm sm:text-base font-black text-white truncate tracking-tight mt-0.5" title={activePdf.title}>
@@ -102,39 +101,24 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
 
             {/* Header Action Buttons */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Download button */}
-              <a
-                href={directDownloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-                title="Download PDF Document directly"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Download</span>
-              </a>
-
-              {/* Direct Open in New Tab */}
-              <a
-                href={directViewerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-slate-700 cursor-pointer"
-                title="Open in Full Browser Tab without login"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Open in Tab</span>
-              </a>
-
               {/* Fullscreen Toggle */}
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-bold bg-slate-800/80 border border-slate-700"
                 title={isFullscreen ? "Exit Fullscreen" : "Fullscreen View"}
               >
-                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 className="w-4 h-4 text-purple-400" />
+                    <span className="hidden sm:inline">Exit Fullscreen</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-4 h-4 text-purple-400" />
+                    <span className="hidden sm:inline">Fullscreen</span>
+                  </>
+                )}
               </button>
 
               {/* Close Button */}
@@ -152,14 +136,14 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
           {/* Sub-info banner */}
           <div className="bg-purple-950/40 border-b border-purple-800/30 px-4 py-1.5 text-left text-[11px] text-purple-200 flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2 overflow-hidden">
-              <span className="text-blue-400 select-none">💡</span>
+              <span className="text-purple-400 select-none">📖</span>
               <span className="truncate">
                 {activePdf.courseTitle ? `Course: ${activePdf.courseTitle} • ` : ''} 
-                Google Drive लगइन बिना नै यो PDF सिधै पढ्न र जुम गर्न मिल्छ।
+                Full Screen View: सुरक्षित रूपमा सम्पूर्ण अध्ययन सामग्री सिधै पढ्नुहोस् र जुम गर्नुहोस्।
               </span>
             </div>
-            <span className="text-[10px] text-purple-400 font-bold shrink-0 hidden md:inline">
-              🔒 Protected Document View
+            <span className="text-[10px] text-purple-300 font-bold shrink-0 flex items-center gap-1">
+              🔒 Read-Only Document
             </span>
           </div>
 
@@ -176,7 +160,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
               src={directViewerUrl}
               className="w-full h-full border-0 bg-white"
               title={activePdf.title}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
               onLoad={() => setIsLoading(false)}
             />
           </div>
@@ -185,18 +169,11 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
           <div className="bg-slate-950 px-4 py-2 border-t border-slate-800 text-left text-[10px] text-slate-500 flex items-center justify-between shrink-0">
             <span className="flex items-center gap-1.5 font-medium">
               <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-              AI Clipzone Digital Academy • Student Study Material
+              AI Clipzone Digital Academy • Student Full Screen Reader
             </span>
-            <div className="flex items-center gap-3">
-              <a
-                href={directViewerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-purple-400 hover:text-purple-300 hover:underline font-bold"
-              >
-                Drive Preview Problem? Click here to view in browser
-              </a>
-            </div>
+            <span className="text-[10px] text-slate-400 font-bold">
+              Protected Learning Material
+            </span>
           </div>
         </motion.div>
       </div>
