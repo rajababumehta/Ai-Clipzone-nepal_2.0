@@ -1,0 +1,6 @@
+{
+  "name": "AI Clipzone Nepal",
+  "description": "Nepal's #1 AI Premium Courses. Learn AI tools, video editing, image generation, music production, and professional presentations in Nepali & Hindi with lifetime access.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

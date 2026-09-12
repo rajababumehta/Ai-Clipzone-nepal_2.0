@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper to check if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper to check if user is the administrator
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email.lower() == 'ai.clipzone.edu@gmail.com' ||
+        request.auth.token.email.lower() == 'rajababum426@gmail.com' || 
+        request.auth.token.email.lower().matches('^admin.*')
+      );
+    }
+
+    // Security rules for student course access requests
+    match /course_requests/{requestId} {
+      // Students can view their own requests, admins can view all
+      allow read: if isSignedIn() && (
+        resource == null || 
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Any signed-in user can submit their own request
+      allow create: if isSignedIn() && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Admins can update any request (e.g. approve/decline). 
+      // Students can only update if they do not modify the verification status.
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (resource.data.userId == request.auth.uid && request.resource.data.status == resource.data.status)
+      );
+      
+      // Only admins can delete requests
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // Security rules for premium activation/license keys
+    match /activation_keys/{code} {
+      allow read, write: if true;
+    }
+
+    // Security rules for student video progress
+    match /user_progress/{userId} {
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // Security rules for dynamic courses catalog
+    match /courses/{courseId} {
+      allow read, write: if true;
+    }
+
+    // Security rules for system configuration & global session resets
+    match /system/{doc} {
+      allow read, write: if true;
+    }
+
+    // Global default catch-all: deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

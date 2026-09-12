@@ -1,0 +1,244 @@
+{
+  "entities": {
+    "CourseRequest": {
+      "title": "CourseRequest",
+      "description": "Represents a student's access request for a premium AI course",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique Firebase Authentication UID of the student"
+        },
+        "userEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "The email address of the student"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "The custom string ID of the course requested"
+        },
+        "courseTitle": {
+          "type": "string",
+          "description": "The title of the requested course"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "declined"],
+          "description": "The current verification and activation status of the request"
+        },
+        "requestedAt": {
+          "type": "number",
+          "description": "The timestamp when the request was made"
+        }
+      },
+      "required": ["userId", "userEmail", "courseId", "courseTitle", "status", "requestedAt"]
+    },
+    "ActivationKey": {
+      "title": "ActivationKey",
+      "description": "Represents a generated unique subscription license key/code",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The unique code like AI45NP"
+        },
+        "activeDeviceId": {
+          "type": "string",
+          "description": "The ID of the device currently active with this code for single-device restriction"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["unused", "used"],
+          "description": "Whether the key has been claimed"
+        },
+        "duration": {
+          "type": "string",
+          "enum": ["1month", "1year"],
+          "description": "Duration of the license"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp when key was created"
+        },
+        "claimedByEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "The email of the student who claimed the key"
+        },
+        "claimedByUid": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the student who claimed the key"
+        },
+        "claimedAt": {
+          "type": "number",
+          "description": "Timestamp when the key was claimed"
+        },
+        "expiresAt": {
+          "type": "number",
+          "description": "Timestamp when the license expires"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "The course ID associated with this activation key"
+        },
+        "courseTitle": {
+          "type": "string",
+          "description": "The title of the course associated with this activation key"
+        }
+      },
+      "required": ["code", "status", "duration", "createdAt"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Represents a dynamic course offered by AI Clipzone",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique course slug ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the course"
+        },
+        "price": {
+          "type": "string",
+          "description": "The displayed price tag of the course"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Numerical price value for calculation"
+        },
+        "message": {
+          "type": "string",
+          "description": "Suffix message for WhatsApp purchases"
+        },
+        "learn": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Key learn highlights of the course"
+        },
+        "image": {
+          "type": "string",
+          "description": "URL to the course display thumbnail"
+        },
+        "isPopular": {
+          "type": "boolean",
+          "description": "Whether this is marked as a popular bestseller"
+        },
+        "popularText": {
+          "type": "string",
+          "description": "Display banner text for popular courses"
+        },
+        "videos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "duration": { "type": "string" },
+              "videoUrl": { "type": "string" }
+            },
+            "required": ["title", "duration", "videoUrl"]
+          },
+          "description": "List of instructional videos in this course"
+        }
+      },
+      "required": ["id", "title", "price", "amount", "message", "learn", "image", "videos"]
+    },
+    "PaymentQrConfig": {
+      "title": "PaymentQrConfig",
+      "description": "System payment QR code, eSewa ID, bank and payment checkout configuration",
+      "type": "object",
+      "properties": {
+        "esewaId": { "type": "string" },
+        "accountName": { "type": "string" },
+        "bankName": { "type": "string" },
+        "bankAccountNo": { "type": "string" },
+        "bankBranch": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "qrImageUrl": { "type": "string" },
+        "paymentInstruction": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["esewaId", "accountName", "whatsappNumber"]
+    },
+    "FAQConfig": {
+      "title": "FAQConfig",
+      "description": "Dynamic FAQs collection and questions list configuration",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "answer": { "type": "string" }
+            },
+            "required": ["question", "answer"]
+          }
+        },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["items"]
+    },
+    "SiteSettingsConfig": {
+      "title": "SiteSettingsConfig",
+      "description": "Global website banner, contact info, institute branding, logo URLs, and certificate design & signatures",
+      "type": "object",
+      "properties": {
+        "siteTitle": { "type": "string" },
+        "siteTagline": { "type": "string" },
+        "instituteName": { "type": "string" },
+        "instituteLogoUrl": { "type": "string" },
+        "noticeBannerText": { "type": "string" },
+        "showNoticeBanner": { "type": "boolean" },
+        "supportEmail": { "type": "string" },
+        "supportPhone": { "type": "string" },
+        "certificateTitle": { "type": "string" },
+        "certificateSubtitle": { "type": "string" },
+        "certificateInstituteName": { "type": "string" },
+        "certificateLogoUrl": { "type": "string" },
+        "certificateDescription": { "type": "string" },
+        "certificateDirectorName": { "type": "string" },
+        "certificateDirectorTitle": { "type": "string" },
+        "certificateDirectorSignatureUrl": { "type": "string" },
+        "certificateCeoName": { "type": "string" },
+        "certificateCeoTitle": { "type": "string" },
+        "certificateCeoSignatureUrl": { "type": "string" },
+        "certificateTheme": { "type": "string" },
+        "certificateStampUrl": { "type": "string" },
+        "certificateSealText": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "course_requests/{requestId}": {
+      "schema": "CourseRequest",
+      "description": "Collection tracking student payment and activation course requests"
+    },
+    "activation_keys/{code}": {
+      "schema": "ActivationKey",
+      "description": "Collection tracking subscription activation codes"
+    },
+    "courses/{courseId}": {
+      "schema": "Course",
+      "description": "Collection tracking dynamic courses available for enrollment"
+    },
+    "system/payment_qr": {
+      "schema": "PaymentQrConfig",
+      "description": "Document holding dynamic payment QR and checkout credentials"
+    },
+    "system/faqs": {
+      "schema": "FAQConfig",
+      "description": "Document holding dynamic FAQs list"
+    },
+    "system/site_settings": {
+      "schema": "SiteSettingsConfig",
+      "description": "Document holding global website branding and settings"
+    }
+  }
+}

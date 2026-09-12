@@ -1,0 +1,300 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient (Pure Deep Obsidian Black) -->
+    <radialGradient id="pureBlackBg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#08080a" />
+      <stop offset="100%" stop-color="#000000" />
+    </radialGradient>
+
+    <!-- Metallic Silver 3D Chrome Gradients -->
+    <linearGradient id="silverChromeFace" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="22%" stop-color="#f8fafc" />
+      <stop offset="48%" stop-color="#e2e8f0" />
+      <stop offset="52%" stop-color="#94a3b8" />
+      <stop offset="78%" stop-color="#cbd5e1" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+
+    <linearGradient id="silverChromeExtrusion" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#64748b" />
+      <stop offset="50%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <linearGradient id="silverHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="50%" stop-color="#e2e8f0" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Glowing White Curved Arc Gradients -->
+    <linearGradient id="arcGlowGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="30%" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="70%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Graduation Cap Gradients -->
+    <linearGradient id="capGloss" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d3748" />
+      <stop offset="35%" stop-color="#1a202c" />
+      <stop offset="70%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#000000" />
+    </linearGradient>
+
+    <linearGradient id="capSilverTrim" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e2e8f0" />
+      <stop offset="50%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+
+    <!-- Soft Ambient Glow Filters -->
+    <filter id="whiteGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur1" />
+      <feGaussianBlur stdDeviation="16" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="intenseGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComponentTransfer in="blur" result="boost">
+        <feFuncA type="linear" slope="1.8" />
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="boost" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="drop3D" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#000000" flood-opacity="0.95" />
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.8" />
+    </filter>
+  </defs>
+
+  <!-- PURE BLACK SQUARE BASE WITH SOFT ROUNDED CORNERS (PWA APP ICON) -->
+  <rect width="512" height="512" rx="106" fill="url(#pureBlackBg)" />
+  <rect x="2" y="2" width="508" height="508" rx="104" fill="none" stroke="#22252e" stroke-width="2.5" opacity="0.6" />
+
+  <!-- GLOWING WHITE CURVED LIGHT ARC SURROUNDING THE TOP -->
+  <g filter="url(#intenseGlow)">
+    <!-- Soft diffuse outer aura -->
+    <path 
+      d="M 72 265 C 88 128, 205 60, 328 66 C 392 69, 442 108, 452 168" 
+      fill="none" 
+      stroke="#ffffff" 
+      stroke-width="14" 
+      stroke-linecap="round"
+      opacity="0.35"
+    />
+    <!-- Vibrant mid glow -->
+    <path 
+      d="M 72 265 C 88 128, 205 60, 328 66 C 392 69, 442 108, 452 168" 
+      fill="none" 
+      stroke="url(#arcGlowGradient)" 
+      stroke-width="7" 
+      stroke-linecap="round"
+    />
+    <!-- Crisp ultra-bright razor core -->
+    <path 
+      d="M 72 265 C 88 128, 205 60, 328 66 C 392 69, 442 108, 452 168" 
+      fill="none" 
+      stroke="#ffffff" 
+      stroke-width="3" 
+      stroke-linecap="round"
+    />
+  </g>
+
+  <!-- LUMINOUS WHITE SPARKLES & GLINTS AROUND ARC -->
+  <!-- Sparkle 1: Top Apex (328, 66) -->
+  <g transform="translate(328, 66)" filter="url(#whiteGlow)">
+    <path d="M 0 -14 Q 0 0 14 0 Q 0 0 0 14 Q 0 0 -14 0 Q 0 0 0 -14 Z" fill="#ffffff" />
+    <circle cx="0" cy="0" r="3" fill="#ffffff" />
+  </g>
+
+  <!-- Sparkle 2: Right Arch Peak (410, 96) -->
+  <g transform="translate(410, 96)" filter="url(#whiteGlow)">
+    <path d="M 0 -10 Q 0 0 10 0 Q 0 0 0 10 Q 0 0 -10 0 Q 0 0 0 -10 Z" fill="#ffffff" />
+    <circle cx="0" cy="0" r="2.2" fill="#ffffff" />
+  </g>
+
+  <!-- Sparkle 3: Upper Left Sweep (195, 88) -->
+  <g transform="translate(195, 88)" filter="url(#whiteGlow)">
+    <path d="M 0 -8 Q 0 0 8 0 Q 0 0 0 8 Q 0 0 -8 0 Q 0 0 0 -8 Z" fill="#ffffff" opacity="0.9" />
+    <circle cx="0" cy="0" r="1.8" fill="#ffffff" />
+  </g>
+
+  <!-- Sparkle 4: Arc Terminal Glow (452, 168) -->
+  <circle cx="452" cy="168" r="4.5" fill="#ffffff" filter="url(#whiteGlow)" />
+  <circle cx="452" cy="168" r="2" fill="#ffffff" />
+
+  <!-- Tiny Accent Glints -->
+  <circle cx="260" cy="72" r="2" fill="#ffffff" opacity="0.85" />
+  <circle cx="135" cy="142" r="2.5" fill="#ffffff" opacity="0.75" />
+  <circle cx="375" cy="78" r="2.2" fill="#ffffff" opacity="0.9" />
+
+  <!-- METALLIC SILVER 3D LETTERS "AI" (WELL INSIDE SAFE ZONE) -->
+  <g filter="url(#drop3D)">
+    <!-- 3D EXTRUSION / DEPTH SHADOW LAYERS (Shifted down for 3D depth) -->
+    <!-- 3D Shadow for letter A -->
+    <text 
+      x="176" 
+      y="402" 
+      text-anchor="middle" 
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+      font-weight="900" 
+      font-size="210" 
+      letter-spacing="-4" 
+      fill="url(#silverChromeExtrusion)"
+    >
+      A
+    </text>
+    <!-- 3D Shadow for letter I -->
+    <text 
+      x="334" 
+      y="402" 
+      text-anchor="middle" 
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+      font-weight="900" 
+      font-size="210" 
+      letter-spacing="-4" 
+      fill="url(#silverChromeExtrusion)"
+    >
+      I
+    </text>
+
+    <!-- Intermediate 3D Bevel Layer -->
+    <text 
+      x="176" 
+      y="397" 
+      text-anchor="middle" 
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+      font-weight="900" 
+      font-size="210" 
+      letter-spacing="-4" 
+      fill="#475569"
+      stroke="#1e293b"
+      stroke-width="3"
+    >
+      A
+    </text>
+    <text 
+      x="334" 
+      y="397" 
+      text-anchor="middle" 
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+      font-weight="900" 
+      font-size="210" 
+      letter-spacing="-4" 
+      fill="#475569"
+      stroke="#1e293b"
+      stroke-width="3"
+    >
+      I
+    </text>
+
+    <!-- FRONT METALLIC SILVER CHROME FACE - LETTER A -->
+    <text 
+      x="176" 
+      y="392" 
+      text-anchor="middle" 
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+      font-weight="900" 
+      font-size="210" 
+      letter-spacing="-4" 
+      fill="url(#silverChromeFace)"
+      stroke="url(#silverHighlight)"
+      stroke-width="2.5"
+    >
+      A
+    </text>
+
+    <!-- FRONT METALLIC SILVER CHROME FACE - LETTER I -->
+    <text 
+      x="334" 
+      y="392" 
+      text-anchor="middle" 
+      font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+      font-weight="900" 
+      font-size="210" 
+      letter-spacing="-4" 
+      fill="url(#silverChromeFace)"
+      stroke="url(#silverHighlight)"
+      stroke-width="2.5"
+    >
+      I
+    </text>
+  </g>
+
+  <!-- SHINY GRADUATION CAP RESTING ON THE LETTER A -->
+  <!-- Anchored atop letter A peak (X: 176, Y: 220) with jaunty academic tilt -->
+  <g transform="translate(176, 218) rotate(-14)" filter="url(#drop3D)">
+    <!-- Skull Cap Band / Underneath Base -->
+    <path 
+      d="M -36 -4 C -22 18, 22 18, 36 -4 L 32 14 C 20 28, -20 28, -32 14 Z" 
+      fill="url(#capGloss)" 
+      stroke="#475569" 
+      stroke-width="1.5" 
+    />
+    <path 
+      d="M -32 14 C -20 28, 20 28, 32 14" 
+      fill="none" 
+      stroke="url(#capSilverTrim)" 
+      stroke-width="2" 
+    />
+
+    <!-- Diamond Mortarboard Rhombus Top -->
+    <!-- Lower shadow rim of rhombus -->
+    <polygon 
+      points="0,-36 84,-6 0,24 -84,-6" 
+      fill="#090d16" 
+      stroke="#1e293b" 
+      stroke-width="3" 
+      transform="translate(0, 5)"
+    />
+
+    <!-- Upper shiny surface of mortarboard -->
+    <polygon 
+      points="0,-36 84,-6 0,24 -84,-6" 
+      fill="url(#capGloss)" 
+      stroke="url(#capSilverTrim)" 
+      stroke-width="2.5" 
+    />
+
+    <!-- Glossy reflection streak across mortarboard -->
+    <polygon 
+      points="-60,-12 0,-36 40,-22 -20,2" 
+      fill="#ffffff" 
+      opacity="0.22" 
+    />
+
+    <!-- Central Chrome Button Stud -->
+    <ellipse cx="0" cy="-6" rx="6.5" ry="4.5" fill="url(#silverChromeFace)" stroke="#ffffff" stroke-width="1.2" />
+
+    <!-- Shiny Silver Draped Tassel Ribbon -->
+    <path 
+      d="M 0 -6 Q -42 6, -58 28 Q -64 42, -59 58" 
+      fill="none" 
+      stroke="url(#silverChromeFace)" 
+      stroke-width="3" 
+      stroke-linecap="round" 
+    />
+
+    <!-- Silver Tassel Ring & Fringe -->
+    <ellipse cx="-59" cy="60" rx="3.5" ry="2" fill="#ffffff" />
+    <path 
+      d="M -63 62 L -66 78 L -52 78 L -55 62 Z" 
+      fill="url(#silverChromeFace)" 
+      stroke="#ffffff" 
+      stroke-width="0.8" 
+    />
+    <!-- Specular gleam on tassel tip -->
+    <circle cx="-59" cy="62" r="1.5" fill="#ffffff" />
+  </g>
+</svg>

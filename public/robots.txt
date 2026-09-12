@@ -1,0 +1,7 @@
+# Robots.txt for AI Clipzone
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://aiclipzone.netlify.app/sitemap.xml
