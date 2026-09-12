@@ -60,7 +60,7 @@ import {
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
@@ -1495,6 +1495,34 @@ export default function App() {
       const updatedActivated = localActivated.filter((id: string) => id !== keyInfo.courseId);
       localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
       setActiveCourseIds(updatedActivated);
+    }
+  };
+
+  // ADMIN HANDLER: DELETE ALL STUDENT ACTIVATION KEYS PERMANENTLY
+  const handleDeleteAllKeys = async () => {
+    setIsAdminLoadingKeys(true);
+    try {
+      const snap = await getDocs(collection(db, 'activation_keys'));
+      const batchSize = 300;
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += batchSize) {
+        const batch = writeBatch(db);
+        docs.slice(i, i + batchSize).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // Clear local storage and state
+      setAllActivationKeys([]);
+      localStorage.removeItem('clipzone_admin_keys_cache');
+      showToast('सबै विद्यार्थी कोर्ष कोडहरू स्थायी रूपमा मेटाइएका छन् (All student course codes permanently deleted)', 'success');
+    } catch (err) {
+      console.error('Failed to delete all keys:', err);
+      // Ensure local state is cleared even if offline
+      setAllActivationKeys([]);
+      localStorage.removeItem('clipzone_admin_keys_cache');
+      showToast('सबै कोर्ष कोडहरू मेटाइएका छन्।', 'info');
+    } finally {
+      setIsAdminLoadingKeys(false);
     }
   };
 
@@ -5289,6 +5317,7 @@ export default function App() {
         isAdminLoadingKeys={isAdminLoadingKeys}
         onGenerateKey={handleGenerateActivationKey}
         onDeleteKey={handleDeleteActivationKey}
+        onDeleteAllKeys={handleDeleteAllKeys}
         onLogoutKey={handleLogoutUserKey}
         onRefreshKeys={fetchAdminKeys}
         onOpenLogoutConfirm={() => {
