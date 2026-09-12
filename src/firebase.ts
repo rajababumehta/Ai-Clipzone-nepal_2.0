@@ -11,7 +11,7 @@ export const auth = getAuth(app);
 
 // Suppress reachability warning logs in sandboxed iframe environment
 try {
-  setLogLevel('error');
+  setLogLevel('silent');
 } catch (e) {
   // ignore
 }

@@ -5337,7 +5337,7 @@ export default function App() {
         onSaveSiteSettings={handleSaveSiteSettings}
         onCreateCourseClick={handleCreateCourseClick}
         onEditCourseClick={handleEditCourseClick}
-        onDeleteCourseClick={handleDeleteCourse}
+        onDeleteCourseClick={handlePromptDeleteCourse}
         onSaveCourse={handleSaveCourseDirect}
         showToast={showToast}
       />
@@ -5420,6 +5420,117 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* COURSE DELETE PERMISSION & CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {courseToDelete && (
+          <div className="fixed inset-0 z-[3500] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!isDeletingCourse) {
+                  setCourseToDelete(null);
+                  setDeleteConfirmInput('');
+                }
+              }}
+              className="absolute inset-0 bg-slate-950/85 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              className="relative w-full max-w-md bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 shadow-2xl overflow-hidden font-sans text-white z-10"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-rose-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-white">
+                      Confirm Course Deletion
+                    </h3>
+                    <p className="text-xs text-rose-300 font-medium">
+                      कोर्ष मेटाउनु अघि अनुमति पुष्टि गर्नुहोस्
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeletingCourse}
+                  onClick={() => {
+                    setCourseToDelete(null);
+                    setDeleteConfirmInput('');
+                  }}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="py-4 space-y-3">
+                <div className="p-3.5 bg-rose-950/40 border border-rose-500/30 rounded-2xl text-xs text-rose-200 space-y-1.5">
+                  <p className="font-bold text-rose-100 flex items-center gap-1.5">
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    Target Course to Delete:
+                  </p>
+                  <p className="text-sm font-black text-white bg-slate-950/80 px-3 py-2 rounded-xl border border-rose-500/30 break-words">
+                    {courseToDelete.title}
+                  </p>
+                  <p className="text-[11px] text-rose-300 pt-1 leading-relaxed">
+                    चेतावनी: यो कोर्ष र यस अन्तर्गतका सम्पूर्ण भिडियो तथा पिडिएफ सामग्रीहरू हट्नेछन्। दुर्घटनावश मेटाउनबाट बच्न तल <span className="font-bold text-white underline">DELETE</span> टाइप गर्नुहोस्।
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Type <span className="text-rose-400 font-mono font-black">DELETE</span> to confirm:
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmInput}
+                    onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                    placeholder="Type DELETE here..."
+                    autoFocus
+                    disabled={isDeletingCourse}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl px-4 py-3 text-sm font-mono font-black tracking-widest text-rose-300 placeholder-slate-600 outline-hidden text-center shadow-inner"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingCourse}
+                  onClick={() => {
+                    setCourseToDelete(null);
+                    setDeleteConfirmInput('');
+                  }}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
+                >
+                  Cancel (रद्द गर्नुहोस्)
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteConfirmInput.trim().toUpperCase() !== 'DELETE' || isDeletingCourse}
+                  onClick={handleExecuteDeleteCourse}
+                  className="flex-1 bg-linear-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-lg active:scale-98 flex items-center justify-center gap-1.5"
+                >
+                  {isDeletingCourse ? (
+                    <span className="inline-block animate-spin">⏳</span>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  {isDeletingCourse ? 'Deleting...' : 'Delete Course'}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
