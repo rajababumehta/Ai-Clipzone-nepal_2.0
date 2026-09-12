@@ -5337,7 +5337,7 @@ export default function App() {
         onSaveSiteSettings={handleSaveSiteSettings}
         onCreateCourseClick={handleCreateCourseClick}
         onEditCourseClick={handleEditCourseClick}
-        onDeleteCourseClick={handlePromptDeleteCourse}
+        onDeleteCourseClick={handleDeleteCourse}
         onSaveCourse={handleSaveCourseDirect}
         showToast={showToast}
       />

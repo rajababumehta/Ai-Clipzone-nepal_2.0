@@ -92,6 +92,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [keyToDelete, setKeyToDelete] = useState<any | null>(null);
   const [isDeletingKey, setIsDeletingKey] = useState(false);
 
+  // Course Deletion Confirmation state inside Admin Dashboard
+  const [courseToDeleteAdmin, setCourseToDeleteAdmin] = useState<Course | null>(null);
+  const [adminDeleteConfirmText, setAdminDeleteConfirmText] = useState('');
+  const [isAdminDeletingCourse, setIsAdminDeletingCourse] = useState(false);
+
   // When initialTab changes, update activeTab
   useEffect(() => {
     if (initialTab) {
@@ -2324,7 +2329,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDeleteCourseClick(course.id)}
+                          onClick={() => {
+                            setCourseToDeleteAdmin(course);
+                            setAdminDeleteConfirmText('');
+                          }}
                           className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
                         >
                           <Trash2 className="w-3 h-3" /> Delete
@@ -2435,6 +2443,99 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
                     Confirm Permanent Delete (स्थायी हटाउनुहोस्)
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* Course Permanent Delete Confirmation Dialog in Admin Dashboard */}
+        <AnimatePresence>
+          {courseToDeleteAdmin && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-rose-200 text-left space-y-4 font-sans"
+              >
+                <div className="flex items-center gap-3 text-rose-600">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center border border-rose-200 shrink-0">
+                    <Trash2 className="w-6 h-6 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">
+                      Confirm Course Deletion
+                    </h3>
+                    <p className="text-xs text-rose-600 font-bold">
+                      कोर्ष मेटाउनु अघि कृपया पुष्टि गर्नुहोस्
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-1.5 text-xs text-rose-900">
+                  <p className="font-extrabold text-slate-900">
+                    मेटाउन लागेको कोर्ष (Target Course):
+                  </p>
+                  <p className="font-black text-sm text-rose-700 bg-white px-3 py-2 rounded-xl border border-rose-200">
+                    {courseToDeleteAdmin.title}
+                  </p>
+                  <p className="text-[11px] text-rose-700 pt-1 leading-relaxed font-medium">
+                    यो कोर्ष र यससँग सम्बन्धित सबै भिडियो तथा पिडिएफ सामग्रीहरू हटाइनेछ। दुर्घटनावश मेटाउनबाट बच्न तल <span className="font-black text-rose-900 underline">DELETE</span> टाइप गर्नुहोस्।
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Type <span className="text-rose-600 font-mono font-black">DELETE</span> to confirm:
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDeleteConfirmText}
+                    onChange={(e) => setAdminDeleteConfirmText(e.target.value)}
+                    placeholder="Type DELETE here..."
+                    autoFocus
+                    disabled={isAdminDeletingCourse}
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-rose-500 rounded-xl px-4 py-2.5 text-sm font-mono font-black tracking-widest text-rose-600 placeholder-slate-400 outline-hidden text-center"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    disabled={isAdminDeletingCourse}
+                    onClick={() => {
+                      setCourseToDeleteAdmin(null);
+                      setAdminDeleteConfirmText('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Cancel (रद्द गर्नुहोस्)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={adminDeleteConfirmText.trim().toUpperCase() !== 'DELETE' || isAdminDeletingCourse}
+                    onClick={async () => {
+                      if (!courseToDeleteAdmin) return;
+                      try {
+                        setIsAdminDeletingCourse(true);
+                        await onDeleteCourseClick(courseToDeleteAdmin.id);
+                        setCourseToDeleteAdmin(null);
+                        setAdminDeleteConfirmText('');
+                      } catch (e) {
+                        console.error('Delete course error:', e);
+                      } finally {
+                        setIsAdminDeletingCourse(false);
+                      }
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isAdminDeletingCourse ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    {isAdminDeletingCourse ? 'Deleting...' : 'Confirm Delete (मेटाउनुहोस्)'}
                   </button>
                 </div>
               </motion.div>
