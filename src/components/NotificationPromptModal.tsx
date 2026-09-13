@@ -7,16 +7,26 @@ interface NotificationPromptModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPermissionChange?: (permission: NotificationPermission) => void;
-  showToast: (msg: string, type: 'success' | 'info' | 'error') => void;
+  onPermissionGranted?: () => void;
+  showToast?: (msg: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 export const NotificationPromptModal: React.FC<NotificationPromptModalProps> = ({
   isOpen,
   onClose,
   onPermissionChange,
+  onPermissionGranted,
   showToast
 }) => {
   if (!isOpen) return null;
+
+  const notify = (msg: string, type: 'success' | 'info' | 'error' = 'info') => {
+    if (typeof showToast === 'function') {
+      showToast(msg, type);
+    } else {
+      console.log(msg);
+    }
+  };
 
   const handleAllow = async () => {
     const permission = await requestNotificationPermission();
@@ -26,7 +36,11 @@ export const NotificationPromptModal: React.FC<NotificationPromptModalProps> = (
     localStorage.setItem('clipzone_notif_prompted', 'true');
 
     if (permission === 'granted') {
-      showToast('🎉 सूचनाहरू सफलतापूर्वक सुचारु गरियो! (Notifications enabled!)', 'success');
+      if (onPermissionGranted) {
+        onPermissionGranted();
+      } else {
+        notify('🎉 सूचनाहरू सफलतापूर्वक सुचारु गरियो! (Notifications enabled!)', 'success');
+      }
       // Send a welcome test push notification
       showNativeNotification({
         title: '🎉 AI Clipzone Nepal मा स्वागत छ!',
@@ -35,7 +49,7 @@ export const NotificationPromptModal: React.FC<NotificationPromptModalProps> = (
       });
       onClose();
     } else if (permission === 'denied') {
-      showToast('सूचना अनुमति अस्वीकार गरियो। तपाईं ब्राउचर सेटिङबाट फेरि अन गर्न सक्नुहुन्छ।', 'info');
+      notify('सूचना अनुमति अस्वीकार गरियो। तपाईं ब्राउचर सेटिङबाट फेरि अन गर्न सक्नुहुन्छ।', 'info');
       onClose();
     } else {
       onClose();

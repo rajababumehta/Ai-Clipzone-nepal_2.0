@@ -31,10 +31,17 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
   notifications = [],
   onSendNotification,
   onDeleteNotification,
-  showToast,
+  showToast: showToastProp,
   instituteName = 'AI Clipzone Nepal',
   instituteLogoUrl = '/pwa-192x192.png'
 }) => {
+  const showToast = (msg: string, type: 'success' | 'info' | 'error' = 'info') => {
+    if (typeof showToastProp === 'function') {
+      showToastProp(msg, type);
+    } else {
+      console.log(msg);
+    }
+  };
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
   // Form fields
   const [title, setTitle] = useState('');

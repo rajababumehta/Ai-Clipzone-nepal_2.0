@@ -39,7 +39,13 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
 }) => {
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
   const safeUnreadIds = Array.isArray(unreadIds) ? unreadIds : [];
-  const notify = showToast || ((msg: string) => console.log(msg));
+  const notify = (msg: string, type: 'success' | 'info' | 'error' = 'info') => {
+    if (typeof showToast === 'function') {
+      showToast(msg, type);
+    } else {
+      console.log(msg);
+    }
+  };
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'discount' | 'course' | 'announcement'>('all');
   const [permStatus, setPermStatus] = useState<NotificationPermission>(() => getNotificationPermission());
@@ -179,7 +185,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                     body: 'AI Clipzone notification delivery is working perfectly on this device!',
                     url: '/'
                   });
-                  showToast('Test push notification sent!', 'info');
+                  notify('Test push notification sent!', 'info');
                 }}
                 className="text-[10px] font-black bg-emerald-900/60 hover:bg-emerald-800 px-2 py-1 rounded-lg border border-emerald-500/40 text-emerald-200 transition cursor-pointer"
               >

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, FormEvent, MouseEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, FormEvent, MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -173,6 +173,20 @@ function getSecureYouTubeEmbedUrl(url: string, autoplay: boolean = false): strin
 }
 
 export default function App() {
+  // Toast banner state & helper (hoisted at top of App for guaranteed availability to all hooks and handlers)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  }, []);
+
   // Admin Mode states
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
@@ -2058,11 +2072,6 @@ export default function App() {
   const [contactCourse, setContactCourse] = useState('General Inquiry / सामान्य सोधपुछ');
   const [contactMsg, setContactMsg] = useState('');
 
-
-
-  // Toast banner state
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-
   // AI Chat Assistant state
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -2177,12 +2186,6 @@ export default function App() {
       setIsAppInstalled(true);
       showToast(`🎉 ${siteSettings.instituteName || 'AI Clipzone'} App Added to Home Screen!`, 'success');
     }, 1000);
-  };
-
-  // Toast helper
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
   };
 
   // Trigger Edit Course Form
@@ -7147,6 +7150,7 @@ export default function App() {
         <NotificationPromptModal
           isOpen={showNotifPromptModal}
           onClose={() => setShowNotifPromptModal(false)}
+          showToast={showToast}
           onPermissionGranted={() => {
             showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
           }}

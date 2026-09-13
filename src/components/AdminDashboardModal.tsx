@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -65,7 +65,7 @@ interface AdminDashboardModalProps {
   notifications?: PushNotificationItem[];
   onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteNotification?: (id: string) => Promise<void>;
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications';
 }
 
@@ -94,9 +94,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   notifications,
   onSendNotification,
   onDeleteNotification,
-  showToast,
+  showToast: showToastProp,
   initialTab = 'keys'
 }) => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (typeof showToastProp === 'function') {
+      showToastProp(message, type);
+    } else {
+      console.log(`[Toast ${type}]: ${message}`);
+    }
+  }, [showToastProp]);
+
   const [activeTab, setActiveTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications'>(initialTab);
 
   // Key Deletion Confirmation state
