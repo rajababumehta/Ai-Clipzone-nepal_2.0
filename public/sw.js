@@ -95,3 +95,53 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// 4. Notification Click Event: Focus or open the app when user taps system notification
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Focus an existing open window if available
+      for (const client of clientList) {
+        if ('focus' in client) {
+          if ('navigate' in client && targetUrl !== '/') {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
+// 5. Push Event: Handle server push notifications if configured
+self.addEventListener('push', (event) => {
+  let data = {
+    title: 'AI Clipzone Nepal',
+    body: 'New update or course discount available!',
+    icon: '/pwa-192x192.png',
+    data: { url: '/' }
+  };
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'AI Clipzone Nepal', {
+      body: data.body,
+      icon: data.icon || '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      data: data.data || { url: '/' }
+    })
+  );
+});

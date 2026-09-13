@@ -55,17 +55,21 @@ import {
   AlertTriangle,
   ArrowLeft,
   FileText,
-  ExternalLink
+  ExternalLink,
+  Bell
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS } from './data';
-import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem } from './types';
+import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
+import { NotificationPromptModal } from './components/NotificationPromptModal';
+import { NotificationCenterModal } from './components/NotificationCenterModal';
+import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 import { LOGO_DATA_URL, REMOTE_LOGO_URL } from './logo';
 
@@ -220,39 +224,33 @@ export default function App() {
   // Dynamic Courses state
   const [courses, setCourses] = useState<Course[]>(() => {
     const cached = localStorage.getItem('clipzone_dynamic_courses');
-    let cachedDeleted: string[] = [];
-    try {
-      cachedDeleted = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-      // Un-blacklist first course so it is restored immediately
-      if (cachedDeleted.includes('al-master-class-course-by-al-clipzone')) {
-        cachedDeleted = cachedDeleted.filter(id => id !== 'al-master-class-course-by-al-clipzone');
-        localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(cachedDeleted));
-      }
-    } catch (e) {
-      cachedDeleted = [];
-    }
-    
     if (cached) {
       try {
         const parsed: Course[] = JSON.parse(cached);
-        const filtered = parsed.filter(c => !cachedDeleted.includes(c.id));
-        if (filtered.length > 0) {
-          return filtered.map((c, i) => ({
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const parsedIds = new Set(parsed.map(c => c.id));
+          const merged = [...parsed];
+          COURSES.forEach(def => {
+            if (!parsedIds.has(def.id)) merged.push(def);
+          });
+          return merged.map((c, i) => ({
             ...c,
             order: typeof c.order === 'number' ? c.order : i
           })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         }
-      } catch (e) {
-        // fallback
-      }
+      } catch (e) {}
     }
-    const defaultFiltered = COURSES.filter(c => !cachedDeleted.includes(c.id));
-    const finalInitial = defaultFiltered.length > 0 ? defaultFiltered : COURSES;
-    return finalInitial.map((c, i) => ({
+    return COURSES.map((c, i) => ({
       ...c,
       order: typeof c.order === 'number' ? c.order : i
     })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   });
+
+  // Push Notifications state
+  const [notifications, setNotifications] = useState<PushNotificationItem[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
+  const [showNotifCenterModal, setShowNotifCenterModal] = useState<boolean>(false);
+  const [showNotifPromptModal, setShowNotifPromptModal] = useState<boolean>(false);
 
   // Course loading state from database
   const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => {
@@ -266,12 +264,11 @@ export default function App() {
     return COURSES.length === 0;
   });
 
-  // Keep activeCourseIds strictly in sync with available non-deleted courses
+  // Keep activeCourseIds strictly in sync with available courses
   useEffect(() => {
     try {
-      const cachedDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
       setActiveCourseIds(prev => {
-        const valid = prev.filter(id => !cachedDeleted.includes(id) && courses.some(c => c.id === id));
+        const valid = prev.filter(id => courses.some(c => c.id === id));
         if (valid.length !== prev.length) {
           localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(valid));
           return valid;
@@ -348,35 +345,25 @@ export default function App() {
           });
         });
 
+        // Always ensure all default courses from COURSES exist and are merged
+        const dbCourseIds = new Set(dbCourses.map(c => c.id));
+        const mergedCourses = [...dbCourses];
+        COURSES.forEach(defaultCourse => {
+          if (!dbCourseIds.has(defaultCourse.id)) {
+            mergedCourses.push(defaultCourse);
+            // Also seed to Firestore in background so it permanently persists
+            setDoc(doc(db, 'courses', defaultCourse.id), defaultCourse).catch(() => {});
+          }
+        });
+
         // Sort by order
-        const sortedCourses = dbCourses.map((c, i) => ({
+        const sortedCourses = mergedCourses.map((c, i) => ({
           ...c,
           order: typeof c.order === 'number' ? c.order : i
         })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-        // Un-blacklist any active courses from local storage deletion tracker
-        try {
-          const dbCourseIds = new Set(sortedCourses.map(c => c.id));
-          const localDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-          const updatedDeleted = localDeleted.filter(id => !dbCourseIds.has(id));
-          if (updatedDeleted.length !== localDeleted.length) {
-            localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(updatedDeleted));
-          }
-        } catch (e) {}
-
-        if (sortedCourses.length > 0) {
-          setCourses(sortedCourses);
-          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
-        } else {
-          if (COURSES.length > 0) {
-            setCourses(COURSES);
-            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(COURSES));
-          } else {
-            setCourses([]);
-            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify([]));
-          }
-        }
-
+        setCourses(sortedCourses);
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
         setIsCoursesLoading(false);
         localStorage.setItem('clipzone_courses_initialized', 'true');
       } catch (e) {
@@ -390,6 +377,104 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // PWA First-time open notification prompt
+  useEffect(() => {
+    try {
+      const hasPrompted = localStorage.getItem('clipzone_notif_prompted');
+      if (!hasPrompted && isNotificationSupported()) {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          // Graceful 1.8s delay after mount so app shell and logo animate in first
+          const timer = setTimeout(() => {
+            setShowNotifPromptModal(true);
+          }, 1800);
+          return () => clearTimeout(timer);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // Realtime listener for broadcast push notifications
+  useEffect(() => {
+    const notifQuery = collection(db, 'notifications');
+    const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
+      try {
+        const list: PushNotificationItem[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as PushNotificationItem;
+          list.push({
+            ...data,
+            id: d.id
+          });
+        });
+        // Sort newest first
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setNotifications(list);
+
+        // Calculate unread count
+        try {
+          const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
+          const unread = list.filter(n => !readIds.includes(n.id));
+          setUnreadNotifCount(unread.length);
+
+          // If a fresh broadcast was just sent by admin in last 30 seconds, trigger system notification
+          const seenAlertIds: string[] = JSON.parse(sessionStorage.getItem('clipzone_alerted_notifs') || '[]');
+          const newest = list[0];
+          if (newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
+            seenAlertIds.push(newest.id);
+            sessionStorage.setItem('clipzone_alerted_notifs', JSON.stringify(seenAlertIds));
+            showNativeNotification({
+              title: newest.title,
+              body: newest.body,
+              url: newest.url || '/'
+            });
+          }
+        } catch (e) {}
+      } catch (e) {
+        console.warn('Notifications parse error:', e);
+      }
+    }, (err) => {
+      console.warn('Notifications listener error:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Push Notification Handlers
+  const handleSendNotification = async (notifData: Omit<PushNotificationItem, 'id' | 'createdAt'>) => {
+    try {
+      const notifRef = doc(collection(db, 'notifications'));
+      const newNotif: PushNotificationItem = {
+        ...notifData,
+        id: notifRef.id,
+        createdAt: Date.now()
+      };
+      await setDoc(notifRef, newNotif);
+      showToast('📢 Notification broadcast sent to all users!', 'success');
+    } catch (e) {
+      console.error('Error sending notification:', e);
+      showToast('Failed to broadcast notification. Check rules.', 'error');
+      throw e;
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'notifications', id));
+      showToast('Notification removed successfully.', 'info');
+    } catch (e) {
+      console.error('Error deleting notification:', e);
+      showToast('Failed to delete notification.', 'error');
+      throw e;
+    }
+  };
+
+  const handleMarkAllNotifsRead = () => {
+    const allIds = notifications.map(n => n.id);
+    localStorage.setItem('clipzone_read_notifs', JSON.stringify(allIds));
+    setUnreadNotifCount(0);
+    showToast('All notifications marked as read', 'info');
+  };
 
   // Realtime listener for global admin session logout commands across all user devices
   useEffect(() => {
@@ -2817,6 +2902,21 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2.5">
+              {/* Notification Bell Button */}
+              <button
+                id="header-notification-bell-btn"
+                onClick={() => setShowNotifCenterModal(true)}
+                className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-purple-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group"
+                title="Notifications & Announcements"
+              >
+                <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-purple-400 transition" />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
+                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                  </span>
+                )}
+              </button>
+
               {/* Dropdown Menu Button */}
               <div className="relative">
                 <button
@@ -2847,6 +2947,24 @@ export default function App() {
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
                       className="absolute right-0 mt-2 w-52 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
                     >
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setShowNotifCenterModal(true);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-purple-400 transition flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Bell className="w-4 h-4 text-purple-400" />
+                          <span>📢 Notifications</span>
+                        </span>
+                        {unreadNotifCount > 0 && (
+                          <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                            {unreadNotifCount} new
+                          </span>
+                        )}
+                      </button>
+
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
@@ -5334,6 +5452,9 @@ export default function App() {
         onEditCourseClick={handleEditCourseClick}
         onDeleteCourseClick={handleDeleteCourse}
         onSaveCourse={handleSaveCourseDirect}
+        notifications={notifications}
+        onSendNotification={handleSendNotification}
+        onDeleteNotification={handleDeleteNotification}
         showToast={showToast}
       />
 
@@ -6984,6 +7105,36 @@ export default function App() {
           courseTitle={selectedPdfForView.courseTitle}
         />
       )}
+
+      {/* PWA FIRST VISIT NOTIFICATION PROMPT MODAL */}
+      <NotificationPromptModal
+        isOpen={showNotifPromptModal}
+        onClose={() => setShowNotifPromptModal(false)}
+        onPermissionGranted={() => {
+          showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
+        }}
+      />
+
+      {/* NOTIFICATION CENTER MODAL */}
+      <NotificationCenterModal
+        isOpen={showNotifCenterModal}
+        onClose={() => setShowNotifCenterModal(false)}
+        notifications={notifications}
+        onNotificationClick={(notif) => {
+          if (notif.url) {
+            if (notif.url.startsWith('#') || notif.url.startsWith('/#')) {
+              const hash = notif.url.replace('/#', '#');
+              window.location.hash = hash;
+            } else if (notif.url.startsWith('/')) {
+              window.location.href = notif.url;
+            } else {
+              window.open(notif.url, '_blank');
+            }
+          }
+        }}
+        onMarkAllRead={handleMarkAllNotifsRead}
+        onRequestPermissionPrompt={() => setShowNotifPromptModal(true)}
+      />
 
       {/* NATIVE APP BOTTOM NAVIGATION BAR - ONLY VISIBLE IN INSTALLED APK / PWA APP MODE (NEVER ON REGULAR BROWSER LINK) */}
       {isRunningInAppMode && (

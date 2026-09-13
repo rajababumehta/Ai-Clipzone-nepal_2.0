@@ -26,11 +26,13 @@ import {
   AlertCircle,
   Sparkles,
   GraduationCap,
-  FileText
+  FileText,
+  Bell
 } from 'lucide-react';
 
-import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig } from '../types';
+import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem } from '../types';
 import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS } from '../data';
+import { AdminNotificationsTab } from './AdminNotificationsTab';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -59,8 +61,12 @@ interface AdminDashboardModalProps {
   onEditCourseClick: (course: Course) => void;
   onDeleteCourseClick: (courseId: string) => Promise<void>;
   onSaveCourse?: (course: Course) => Promise<void>;
+  // Push Notifications
+  notifications?: PushNotificationItem[];
+  onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
+  onDeleteNotification?: (id: string) => Promise<void>;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-  initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses';
+  initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications';
 }
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
@@ -85,10 +91,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onEditCourseClick,
   onDeleteCourseClick,
   onSaveCourse,
+  notifications,
+  onSendNotification,
+  onDeleteNotification,
   showToast,
   initialTab = 'keys'
 }) => {
-  const [activeTab, setActiveTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications'>(initialTab);
 
   // Key Deletion Confirmation state
   const [keyToDelete, setKeyToDelete] = useState<any | null>(null);
@@ -690,6 +699,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           >
             <BookOpen className="w-3.5 h-3.5" />
             📚 Course Catalog ({courses.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'notifications'
+                ? 'bg-blue-600 text-white shadow-md font-bold'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5 text-purple-400" />
+            📢 Push Notifications ({notifications?.length || 0})
           </button>
         </div>
 
@@ -2366,6 +2387,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 ))}
               </div>
             </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 7: PUSH NOTIFICATIONS & BROADCASTS */}
+          {/* ========================================================================= */}
+          {activeTab === 'notifications' && (
+            <AdminNotificationsTab
+              notifications={notifications || []}
+              onSendNotification={onSendNotification || (async () => {})}
+              onDeleteNotification={onDeleteNotification || (async () => {})}
+              showToast={showToast}
+              instituteName={siteSettings.instituteName || 'AI Clipzone Nepal'}
+              instituteLogoUrl={siteSettings.instituteLogoUrl || '/pwa-192x192.png'}
+            />
           )}
 
         </div>

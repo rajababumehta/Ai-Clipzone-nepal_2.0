@@ -131,3 +131,16 @@ export interface ActivationKey {
   activeDeviceId?: string;
 }
 
+export interface PushNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'general';
+  badge?: string;
+  url?: string;
+  createdAt: number;
+  author?: string;
+  target?: 'all' | 'students';
+  icon?: string;
+}
+
