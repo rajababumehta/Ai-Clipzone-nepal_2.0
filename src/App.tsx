@@ -249,6 +249,7 @@ export default function App() {
   // Push Notifications state
   const [notifications, setNotifications] = useState<PushNotificationItem[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
+  const [unreadNotifIds, setUnreadNotifIds] = useState<string[]>([]);
   const [showNotifCenterModal, setShowNotifCenterModal] = useState<boolean>(false);
   const [showNotifPromptModal, setShowNotifPromptModal] = useState<boolean>(false);
 
@@ -411,10 +412,11 @@ export default function App() {
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setNotifications(list);
 
-        // Calculate unread count
+        // Calculate unread count and IDs
         try {
           const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
           const unread = list.filter(n => !readIds.includes(n.id));
+          setUnreadNotifIds(unread.map(n => n.id));
           setUnreadNotifCount(unread.length);
 
           // If a fresh broadcast was just sent by admin in last 30 seconds, trigger system notification
@@ -472,6 +474,7 @@ export default function App() {
   const handleMarkAllNotifsRead = () => {
     const allIds = notifications.map(n => n.id);
     localStorage.setItem('clipzone_read_notifs', JSON.stringify(allIds));
+    setUnreadNotifIds([]);
     setUnreadNotifCount(0);
     showToast('All notifications marked as read', 'info');
   };
@@ -7120,6 +7123,8 @@ export default function App() {
         isOpen={showNotifCenterModal}
         onClose={() => setShowNotifCenterModal(false)}
         notifications={notifications}
+        unreadIds={unreadNotifIds}
+        showToast={showToast}
         onNotificationClick={(notif) => {
           if (notif.url) {
             if (notif.url.startsWith('#') || notif.url.startsWith('/#')) {

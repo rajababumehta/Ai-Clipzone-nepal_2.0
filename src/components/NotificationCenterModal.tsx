@@ -19,43 +19,53 @@ import { requestNotificationPermission, showNativeNotification, getNotificationP
 interface NotificationCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  notifications: PushNotificationItem[];
-  unreadIds: string[];
-  onMarkAllRead: () => void;
+  notifications?: PushNotificationItem[];
+  unreadIds?: string[];
+  onMarkAllRead?: () => void;
   onNotificationClick?: (notif: PushNotificationItem) => void;
-  showToast: (msg: string, type: 'success' | 'info' | 'error') => void;
+  onRequestPermissionPrompt?: () => void;
+  showToast?: (msg: string, type: 'success' | 'info' | 'error') => void;
 }
 
 export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = ({
   isOpen,
   onClose,
-  notifications,
-  unreadIds,
+  notifications = [],
+  unreadIds = [],
   onMarkAllRead,
   onNotificationClick,
+  onRequestPermissionPrompt,
   showToast
 }) => {
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const safeUnreadIds = Array.isArray(unreadIds) ? unreadIds : [];
+  const notify = showToast || ((msg: string) => console.log(msg));
+
   const [activeFilter, setActiveFilter] = useState<'all' | 'discount' | 'course' | 'announcement'>('all');
   const [permStatus, setPermStatus] = useState<NotificationPermission>(() => getNotificationPermission());
 
   if (!isOpen) return null;
 
   const handleEnablePush = async () => {
+    if (onRequestPermissionPrompt) {
+      onRequestPermissionPrompt();
+      return;
+    }
     const perm = await requestNotificationPermission();
     setPermStatus(perm);
     if (perm === 'granted') {
-      showToast('🎉 Push Notifications enabled on this device!', 'success');
+      notify('🎉 Push Notifications enabled on this device!', 'success');
       showNativeNotification({
         title: '🔔 AI Clipzone Notifications Active!',
         body: 'You will now receive all course discounts and announcements instantly.',
         url: '/'
       });
     } else if (perm === 'denied') {
-      showToast('Notifications are blocked in your browser settings. Please allow notifications in site settings.', 'info');
+      notify('Notifications are blocked in your browser settings. Please allow notifications in site settings.', 'info');
     }
   };
 
-  const filteredNotifications = notifications.filter(n => {
+  const filteredNotifications = safeNotifications.filter(n => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'discount') return n.type === 'discount';
     if (activeFilter === 'course') return n.type === 'course';
@@ -122,9 +132,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 <h3 className="text-base sm:text-lg font-black text-white">
                   Notifications & Alerts
                 </h3>
-                {unreadIds.length > 0 && (
+                {safeUnreadIds.length > 0 && (
                   <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                    {unreadIds.length} new
+                    {safeUnreadIds.length} new
                   </span>
                 )}
               </div>
@@ -135,7 +145,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
           </div>
 
           <div className="flex items-center gap-1">
-            {notifications.length > 0 && (
+            {safeNotifications.length > 0 && (
               <button
                 onClick={onMarkAllRead}
                 className="text-[11px] font-bold text-purple-400 hover:text-purple-300 px-2 py-1 rounded-lg hover:bg-purple-950/40 transition cursor-pointer flex items-center gap-1"
@@ -207,7 +217,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            सबै ({notifications.length})
+            सबै ({safeNotifications.length})
           </button>
           <button
             onClick={() => setActiveFilter('discount')}
@@ -258,7 +268,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
             </div>
           ) : (
             filteredNotifications.map((notif) => {
-              const isUnread = unreadIds.includes(notif.id);
+              const isUnread = safeUnreadIds.includes(notif.id);
               const formattedDate = new Date(notif.createdAt).toLocaleDateString('ne-NP', {
                 month: 'short',
                 day: 'numeric',

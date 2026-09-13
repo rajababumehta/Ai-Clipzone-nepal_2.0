@@ -638,7 +638,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             }`}
           >
             <Key className="w-3.5 h-3.5" />
-            Activation Keys ({allActivationKeys.length})
+            Activation Keys ({allActivationKeys?.length || 0})
           </button>
 
           <button
@@ -698,7 +698,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            📚 Course Catalog ({courses.length})
+            📚 Course Catalog ({courses?.length || 0})
           </button>
 
           <button
@@ -831,10 +831,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div className="lg:col-span-7 flex flex-col">
                   <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                     <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-                      📋 Active Licenses & Status ({allActivationKeys.length})
+                      📋 Active Licenses & Status ({allActivationKeys?.length || 0})
                     </h4>
                     <div className="flex items-center gap-2">
-                      {allActivationKeys.length > 0 && onDeleteAllKeys && (
+                      {(allActivationKeys?.length || 0) > 0 && onDeleteAllKeys && (
                         <button
                           type="button"
                           onClick={() => {
@@ -845,7 +845,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           title="Delete all old student course codes permanently"
                         >
                           <Trash2 className="w-3 h-3 text-rose-600" />
-                          <span>Delete All ({allActivationKeys.length})</span>
+                          <span>Delete All ({allActivationKeys?.length || 0})</span>
                         </button>
                       )}
                       <button
@@ -2309,7 +2309,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <h4 className="text-sm font-black text-slate-900">
-                    📚 Dynamic Course Catalog ({courses.length} courses)
+                    📚 Dynamic Course Catalog ({courses?.length || 0} courses)
                   </h4>
                   <p className="text-xs text-slate-500 font-medium">
                     Add new courses with custom chapters, Drive/YouTube videos, price tags, and thumbnail graphics.
@@ -2620,7 +2620,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                 <div className="bg-rose-950/40 border border-rose-500/30 rounded-2xl p-4 text-xs text-rose-200/90 space-y-2">
                   <p className="font-medium leading-relaxed">
-                    यो कार्य स्थायी छ। डाटाबेसमा रहेका सबै पुराना <strong className="text-white font-black">विद्यार्थी कोर्ष कोडहरू ({allActivationKeys.length})</strong> पूर्ण रूपमा मेटिनेछन्।
+                    यो कार्य स्थायी छ। डाटाबेसमा रहेका सबै पुराना <strong className="text-white font-black">विद्यार्थी कोर्ष कोडहरू ({allActivationKeys?.length || 0})</strong> पूर्ण रूपमा मेटिनेछन्।
                   </p>
                   <p className="text-[11px] text-zinc-400">
                     पुष्टि गर्न तल <strong className="text-rose-400 font-black">DELETE</strong> टाइप गर्नुहोस्:

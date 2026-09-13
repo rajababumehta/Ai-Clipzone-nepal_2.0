@@ -19,7 +19,7 @@ import { PushNotificationItem } from '../types';
 import { showNativeNotification, requestNotificationPermission } from '../utils/notifications';
 
 interface AdminNotificationsTabProps {
-  notifications: PushNotificationItem[];
+  notifications?: PushNotificationItem[];
   onSendNotification: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteNotification: (id: string) => Promise<void>;
   showToast: (msg: string, type: 'success' | 'info' | 'error') => void;
@@ -28,13 +28,14 @@ interface AdminNotificationsTabProps {
 }
 
 export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
-  notifications,
+  notifications = [],
   onSendNotification,
   onDeleteNotification,
   showToast,
   instituteName = 'AI Clipzone Nepal',
   instituteLogoUrl = '/pwa-192x192.png'
 }) => {
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
   // Form fields
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -440,13 +441,13 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
         <div className="flex items-center justify-between mb-3.5 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">
-              📋 Sent Broadcasts History ({notifications.length})
+              📋 Sent Broadcasts History ({safeNotifications.length})
             </h4>
             <span className="text-[10px] text-zinc-500">हालसम्म पठाइएका सूचनाहरू</span>
           </div>
         </div>
 
-        {notifications.length === 0 ? (
+        {safeNotifications.length === 0 ? (
           <div className="py-8 text-center text-zinc-500">
             <Bell className="w-8 h-8 mx-auto mb-2 text-zinc-600" />
             <p className="text-xs font-semibold">कुनै सूचना पठाइएको छैन (No broadcast sent yet)</p>
@@ -454,7 +455,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-zinc-800/80 max-h-72 overflow-y-auto">
-            {notifications.map((notif) => {
+            {safeNotifications.map((notif) => {
               const formattedDate = new Date(notif.createdAt).toLocaleDateString('ne-NP', {
                 month: 'short',
                 day: 'numeric',
