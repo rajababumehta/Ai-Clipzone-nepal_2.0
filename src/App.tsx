@@ -135,6 +135,29 @@ function cleanUndefined<T extends object>(obj: T): T {
   return clean;
 }
 
+// Global detection helper to check if running in standalone PWA / installed APK mode
+function checkIsAppMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = window.navigator.userAgent.toLowerCase();
+  const isStandaloneDisplay = 
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches;
+  const isIOSStandalone = (window.navigator as any).standalone === true;
+  const isAndroidAppReferrer = typeof document !== 'undefined' && document.referrer.includes('android-app://');
+  const isUrlAppFlag = 
+    window.location.search.includes('mode=app') ||
+    window.location.search.includes('app=true') ||
+    window.location.search.includes('source=apk') ||
+    window.location.search.includes('source=pwa') ||
+    window.location.hash.includes('mode=app') ||
+    window.location.hash.includes('app=true');
+  const isAndroidWebView = ua.includes('wv') || (ua.includes('android') && ua.includes('version/'));
+  const isNativeAndroidBridge = (window as any).Android !== undefined || (window as any).ReactNativeWebView !== undefined;
+
+  return Boolean(isStandaloneDisplay || isIOSStandalone || isAndroidAppReferrer || isUrlAppFlag || isAndroidWebView || isNativeAndroidBridge);
+}
+
 function getYouTubeIdGlobal(url: string): string {
   if (!url) return '';
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -247,6 +270,7 @@ export default function App() {
   });
 
   // Push Notifications state
+  const [isRunningInAppMode, setIsRunningInAppMode] = useState<boolean>(() => checkIsAppMode());
   const [notifications, setNotifications] = useState<PushNotificationItem[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
   const [unreadNotifIds, setUnreadNotifIds] = useState<string[]>([]);
@@ -379,8 +403,13 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // PWA First-time open notification prompt
+  // PWA First-time open notification prompt - STRICTLY ONLY in PWA / Installed App mode (Never on website!)
   useEffect(() => {
+    // Only prompt when running in PWA / Installed App mode
+    if (!isRunningInAppMode && !checkIsAppMode()) {
+      return;
+    }
+
     try {
       const hasPrompted = localStorage.getItem('clipzone_notif_prompted');
       if (!hasPrompted && isNotificationSupported()) {
@@ -393,7 +422,7 @@ export default function App() {
         }
       }
     } catch (e) {}
-  }, []);
+  }, [isRunningInAppMode]);
 
   // Realtime listener for broadcast push notifications
   useEffect(() => {
@@ -419,10 +448,11 @@ export default function App() {
           setUnreadNotifIds(unread.map(n => n.id));
           setUnreadNotifCount(unread.length);
 
-          // If a fresh broadcast was just sent by admin in last 30 seconds, trigger system notification
+          // If a fresh broadcast was just sent by admin in last 30 seconds, trigger system notification ONLY in PWA mode
+          const isPwaActive = checkIsAppMode();
           const seenAlertIds: string[] = JSON.parse(sessionStorage.getItem('clipzone_alerted_notifs') || '[]');
           const newest = list[0];
-          if (newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
+          if (isPwaActive && newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
             seenAlertIds.push(newest.id);
             sessionStorage.setItem('clipzone_alerted_notifs', JSON.stringify(seenAlertIds));
             showNativeNotification({
@@ -2059,31 +2089,6 @@ export default function App() {
   const [showInstallBanner, setShowInstallBanner] = useState<boolean>(true);
   const [isIOS, setIsIOS] = useState<boolean>(false);
 
-  // Check if currently running inside native installed app / APK / PWA standalone mode
-  const checkIsAppMode = () => {
-    if (typeof window === 'undefined') return false;
-    const ua = window.navigator.userAgent.toLowerCase();
-    const isStandaloneDisplay = 
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches ||
-      window.matchMedia('(display-mode: minimal-ui)').matches;
-    const isIOSStandalone = (window.navigator as any).standalone === true;
-    const isAndroidAppReferrer = typeof document !== 'undefined' && document.referrer.includes('android-app://');
-    const isUrlAppFlag = 
-      window.location.search.includes('mode=app') ||
-      window.location.search.includes('app=true') ||
-      window.location.search.includes('source=apk') ||
-      window.location.search.includes('source=pwa') ||
-      window.location.hash.includes('mode=app') ||
-      window.location.hash.includes('app=true');
-    const isAndroidWebView = ua.includes('wv') || (ua.includes('android') && ua.includes('version/'));
-    const isNativeAndroidBridge = (window as any).Android !== undefined || (window as any).ReactNativeWebView !== undefined;
-
-    return isStandaloneDisplay || isIOSStandalone || isAndroidAppReferrer || isUrlAppFlag || isAndroidWebView || isNativeAndroidBridge;
-  };
-
-  const [isRunningInAppMode, setIsRunningInAppMode] = useState<boolean>(false);
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userAgent = window.navigator.userAgent.toLowerCase();
@@ -2905,20 +2910,22 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* Notification Bell Button */}
-              <button
-                id="header-notification-bell-btn"
-                onClick={() => setShowNotifCenterModal(true)}
-                className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-purple-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group"
-                title="Notifications & Announcements"
-              >
-                <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-purple-400 transition" />
-                {unreadNotifCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
-                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                  </span>
-                )}
-              </button>
+              {/* Notification Bell Button - ONLY VISIBLE IN INSTALLED PWA APP MODE */}
+              {isRunningInAppMode && (
+                <button
+                  id="header-notification-bell-btn"
+                  onClick={() => setShowNotifCenterModal(true)}
+                  className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-purple-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group"
+                  title="Notifications & Announcements"
+                >
+                  <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-purple-400 transition" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
+                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {/* Dropdown Menu Button */}
               <div className="relative">
@@ -2950,23 +2957,26 @@ export default function App() {
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
                       className="absolute right-0 mt-2 w-52 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
                     >
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setShowNotifCenterModal(true);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-purple-400 transition flex items-center justify-between cursor-pointer"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <Bell className="w-4 h-4 text-purple-400" />
-                          <span>📢 Notifications</span>
-                        </span>
-                        {unreadNotifCount > 0 && (
-                          <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                            {unreadNotifCount} new
+                      {/* Notifications item - ONLY in PWA App Mode */}
+                      {isRunningInAppMode && (
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setShowNotifCenterModal(true);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-purple-400 transition flex items-center justify-between cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2.5">
+                            <Bell className="w-4 h-4 text-purple-400" />
+                            <span>📢 Notifications</span>
                           </span>
-                        )}
-                      </button>
+                          {unreadNotifCount > 0 && (
+                            <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                              {unreadNotifCount} new
+                            </span>
+                          )}
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {
@@ -5128,6 +5138,29 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* PWA Notifications shortcut */}
+                  {isRunningInAppMode && (
+                    <button
+                      onClick={() => {
+                        setShowProfileModal(false);
+                        setShowNotifCenterModal(true);
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-purple-950/30 border border-purple-800/40 text-purple-200 hover:bg-purple-900/40 transition cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Bell className="w-4 h-4 text-purple-400" />
+                        <span className="font-bold text-xs">PWA Notifications & Alerts</span>
+                      </div>
+                      {unreadNotifCount > 0 ? (
+                        <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                          {unreadNotifCount} new
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500 text-[10px]">View all</span>
+                      )}
+                    </button>
+                  )}
+
                   {/* Logout and metadata section */}
                   <div className="flex items-center justify-between border-t border-slate-800 pt-4 text-[11px]">
                     <div className="text-slate-400 font-bold">
@@ -7109,14 +7142,16 @@ export default function App() {
         />
       )}
 
-      {/* PWA FIRST VISIT NOTIFICATION PROMPT MODAL */}
-      <NotificationPromptModal
-        isOpen={showNotifPromptModal}
-        onClose={() => setShowNotifPromptModal(false)}
-        onPermissionGranted={() => {
-          showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
-        }}
-      />
+      {/* PWA FIRST VISIT NOTIFICATION PROMPT MODAL - STRICTLY ONLY IN INSTALLED PWA APP */}
+      {isRunningInAppMode && (
+        <NotificationPromptModal
+          isOpen={showNotifPromptModal}
+          onClose={() => setShowNotifPromptModal(false)}
+          onPermissionGranted={() => {
+            showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
+          }}
+        />
+      )}
 
       {/* NOTIFICATION CENTER MODAL */}
       <NotificationCenterModal
