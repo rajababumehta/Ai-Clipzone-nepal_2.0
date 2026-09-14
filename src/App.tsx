@@ -267,7 +267,7 @@ export default function App() {
     }
   });
 
-  // Dynamic Courses state
+  // Dynamic Courses state - 100% resilient offline first
   const [courses, setCourses] = useState<Course[]>(() => {
     const deletedIds: string[] = (() => {
       try {
@@ -281,17 +281,19 @@ export default function App() {
     if (cached) {
       try {
         const parsed: Course[] = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           // Strictly exclude deleted courses and do NOT re-add them from defaults
           const activeList = parsed.filter(c => !deletedIds.includes(c.id));
-          return activeList.map((c, i) => ({
-            ...c,
-            order: typeof c.order === 'number' ? c.order : i
-          })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          if (activeList.length > 0) {
+            return activeList.map((c, i) => ({
+              ...c,
+              order: typeof c.order === 'number' ? c.order : i
+            })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          }
         }
       } catch (e) {}
     }
-    // Only return default courses that have never been deleted
+    // Reliable fallback: return default courses excluding any explicitly deleted ones
     return COURSES.filter(c => !deletedIds.includes(c.id)).map((c, i) => ({
       ...c,
       order: typeof c.order === 'number' ? c.order : i
@@ -306,6 +308,11 @@ export default function App() {
   const [showNotifCenterModal, setShowNotifCenterModal] = useState<boolean>(false);
   const [showNotifPromptModal, setShowNotifPromptModal] = useState<boolean>(false);
 
+  // Network connectivity status for offline resilience
+  const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(() => {
+    return typeof navigator !== 'undefined' ? navigator.onLine : true;
+  });
+
   // Course loading state from database
   const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => {
     const cached = localStorage.getItem('clipzone_dynamic_courses');
@@ -318,11 +325,17 @@ export default function App() {
     return COURSES.length === 0;
   });
 
-  // Keep activeCourseIds strictly in sync with available courses
+  // Keep activeCourseIds strictly in sync ONLY with explicitly deleted courses
+  // CRITICAL: NEVER wipe activeCourseIds when offline or when courses array is momentarily empty!
   useEffect(() => {
     try {
+      if (!courses || courses.length === 0) return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      if (!deletedCourseIds || deletedCourseIds.length === 0) return;
+
       setActiveCourseIds(prev => {
-        const valid = prev.filter(id => courses.some(c => c.id === id));
+        // Strictly only exclude courses that were explicitly deleted by admin
+        const valid = prev.filter(id => !deletedCourseIds.includes(id));
         if (valid.length !== prev.length) {
           localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(valid));
           return valid;
@@ -332,7 +345,7 @@ export default function App() {
     } catch (e) {
       console.warn('Active courses cleanup err:', e);
     }
-  }, [courses]);
+  }, [courses, deletedCourseIds]);
 
   // Course Add/Edit modal state
   const [showCourseFormModal, setShowCourseFormModal] = useState(false);
@@ -426,6 +439,28 @@ export default function App() {
           setIsCoursesLoading(false);
           localStorage.setItem('clipzone_courses_initialized', 'true');
         } else {
+          // If offline or snapshot is from local cache without server sync, PRESERVE local courses!
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setIsCoursesLoading(false);
+            return;
+          }
+          if (querySnapshot.metadata?.fromCache) {
+            setIsCoursesLoading(false);
+            return;
+          }
+
+          // Check if local cache already has courses - never wipe them accidentally
+          const cached = localStorage.getItem('clipzone_dynamic_courses');
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setIsCoursesLoading(false);
+                return;
+              }
+            } catch (e) {}
+          }
+
           // If Firestore is completely empty on fresh app setup, seed default courses ONLY once if never initialized
           const alreadyInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
           if (!alreadyInitialized && deletedIds.length === 0) {
@@ -441,10 +476,6 @@ export default function App() {
               setDoc(doc(db, 'courses', c.id), c).catch(() => {});
             });
             setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true }).catch(() => {});
-          } else {
-            // Courses were intentionally deleted or catalog is empty
-            setCourses([]);
-            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify([]));
           }
           setIsCoursesLoading(false);
         }
@@ -453,7 +484,7 @@ export default function App() {
         setIsCoursesLoading(false);
       }
     }, (err) => {
-      console.warn('Realtime courses listener error:', err);
+      console.warn('Realtime courses listener error (keeping offline cache):', err);
       setIsCoursesLoading(false);
     });
 
@@ -733,6 +764,11 @@ export default function App() {
 
   // Check active device sessions to enforce single device login and admin revocation
   const checkActiveDeviceSessions = async () => {
+    // If device is offline, skip remote check and keep all active sessions and courses intact!
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return;
+    }
+
     const deviceId = getOrCreateDeviceId();
     try {
       const activeCodesStr = localStorage.getItem('clipzone_active_codes');
@@ -802,7 +838,18 @@ export default function App() {
                 }
               }
             } else {
-              // Code was PERMANENTLY DELETED by Admin from Firestore!
+              // Document does not exist in snapshot:
+              // Only treat as deleted if online AND verified from server (not local cache miss)
+              if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                updatedActiveCodes.push(code);
+                continue;
+              }
+              if ((keyDocSnap as any)?.metadata?.fromCache) {
+                updatedActiveCodes.push(code);
+                continue;
+              }
+
+              // Code was CONFIRMED permanently deleted by Admin from Firestore!
               sessionTerminated = true;
               terminatedCode = code;
               terminateReason = 'deleted';
@@ -815,17 +862,17 @@ export default function App() {
             updatedActiveCodes.push(code);
           }
         } catch (e) {
-          // On temporary network hiccup, do NOT kick out user - preserve session
+          // On temporary network hiccup or offline, preserve session!
           updatedActiveCodes.push(code);
         }
       }
 
-      const updatedCourseIds = Array.from(updatedCourseIdsSet);
-      localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
-      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourseIds));
-      setActiveCourseIds(updatedCourseIds);
-
       if (sessionTerminated) {
+        const updatedCourseIds = Array.from(updatedCourseIdsSet);
+        localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
+        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourseIds));
+        setActiveCourseIds(updatedCourseIds);
+
         if (terminateReason === 'admin_logout') {
           showToast(`⚠️ तपाईंको सेसन एड्मिनद्वारा लगआउट गरिएको छ (Session logged out by Admin for code ${terminatedCode})`, 'error');
         } else if (terminateReason === 'deleted') {
@@ -884,16 +931,35 @@ export default function App() {
         checkActiveDeviceSessions();
       }
     };
+    const handleOnline = () => {
+      setIsNetworkOnline(true);
+      checkActiveDeviceSessions();
+      if (currentUser) {
+        fetchUserActiveKeys(currentUser);
+      }
+    };
+    const handleOffline = () => {
+      setIsNetworkOnline(false);
+    };
+
     window.addEventListener('visibilitychange', handleFocus);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     return () => {
       window.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, [currentUser]);
 
   // Real-time snapshot listener on student's active keys for instant admin logout / delete response
   useEffect(() => {
+    // If offline, do NOT attach remote snapshot listeners that can falsely report non-existence on cache miss
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
     const activeCodesStr = localStorage.getItem('clipzone_active_codes');
     if (!activeCodesStr) return;
     let activeCodes: string[] = [];
@@ -911,7 +977,12 @@ export default function App() {
           const userLoginTime = Number(localStorage.getItem('clipzone_session_login_time') || 0);
 
           if (!docSnap.exists()) {
-            // Code was permanently deleted by Admin from Firestore!
+            // CRITICAL OFFLINE & CACHE GUARD:
+            // When offline or retrieved from unconfirmed local cache, NEVER delete local activated course!
+            if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+            if ((docSnap as any)?.metadata?.fromCache) return;
+
+            // Code was CONFIRMED permanently deleted by Admin from Firestore!
             const currentCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
             const filteredCodes = currentCodes.filter(c => c !== code);
             localStorage.setItem('clipzone_active_codes', JSON.stringify(filteredCodes));
@@ -1029,6 +1100,14 @@ export default function App() {
     const activeCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
     const userLoginTime = Number(localStorage.getItem('clipzone_session_login_time') || 0);
 
+    // CRITICAL OFFLINE GUARD:
+    // If device is offline, immediately retain all local courses and active keys and avoid making network calls!
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (localActivatedCourses.length > 0) setActiveCourseIds(localActivatedCourses);
+      if (localKeysInfo.length > 0) setUserActivationKeys(localKeysInfo);
+      return;
+    }
+
     try {
       const deviceId = getOrCreateDeviceId();
       const verifiedKeys: any[] = [];
@@ -1058,8 +1137,15 @@ export default function App() {
               verifiedCourseIds.add(data.courseId);
             }
           } else {
-            // Document does not exist in Firestore - was permanently deleted by Admin
-            // Don't add to verified
+            // Document does not exist in snapshot:
+            // If offline, or if this snapshot is from cache and unconfirmed, PRESERVE local key info!
+            if (keySnap?.metadata?.fromCache || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+              const localMatch = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+              if (localMatch) {
+                verifiedKeys.push(localMatch);
+                if (localMatch.courseId) verifiedCourseIds.add(localMatch.courseId);
+              }
+            }
           }
         } catch (e) {
           // If offline or network error, keep local copy safe
@@ -1098,11 +1184,15 @@ export default function App() {
         localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(verifiedKeys));
         localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
         setActiveCourseIds(finalActiveIds);
-      } else if (activeCodes.length === 0 && localActivatedCourses.length === 0) {
+      } else if (localActivatedCourses.length > 0) {
+        // Network query yielded 0 confirmed keys (offline, network latency, or cache miss)
+        // STRICTLY PRESERVE existing active courses!
+        setActiveCourseIds(localActivatedCourses);
+        setUserActivationKeys(localKeysInfo);
+      } else if (activeCodes.length === 0) {
         setActiveCourseIds([]);
         setUserActivationKeys([]);
       }
-      // If student has localActivatedCourses and network check was indeterminate, keep existing local courses!
     } catch (err) {
       console.error('Error fetching student keys:', err);
       setActiveCourseIds(localActivatedCourses);
@@ -2940,6 +3030,14 @@ export default function App() {
 
       {/* Top Header & Navigation Container */}
       <div className="sticky top-0 z-[100] w-full shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
+        {/* Offline Status Banner */}
+        {!isNetworkOnline && (
+          <div className="w-full bg-gradient-to-r from-amber-950/90 via-zinc-900 to-amber-950/90 text-amber-300 text-xs font-bold py-1.5 px-4 text-center border-b border-amber-500/30 flex items-center justify-center gap-2 shadow-md">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>📶 अफलाइन मोड (Offline Mode) • तपाईंका एक्टिभ कोर्षहरू पूर्ण सुरक्षित छन्।</span>
+          </div>
+        )}
+
         {/* Dynamic Global Notice Banner from Admin Settings (Red Urgency Notice) */}
         {siteSettings.showNoticeBanner && siteSettings.noticeBannerText && (
           <div className="w-full bg-gradient-to-r from-black via-rose-950/90 to-black text-rose-200 text-xs font-bold py-1.5 px-4 text-center border-b border-rose-500/30 flex items-center justify-center gap-2 shadow-md">

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, setLogLevel, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase
@@ -16,10 +16,13 @@ try {
   // ignore
 }
 
-// Initialize Firestore with forced long polling to bypass WebSocket handshake latency in sandboxed webviews
+// Initialize Firestore with persistent IndexedDB offline cache and forced long polling
 export const db = initializeFirestore(
   app,
   {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
     experimentalForceLongPolling: true,
     ignoreUndefinedProperties: true,
   },
