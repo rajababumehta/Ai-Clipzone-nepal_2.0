@@ -611,8 +611,13 @@ export default function App() {
         const localLastReset = Number(localStorage.getItem('clipzone_last_session_reset') || 0);
         const loginTime = Number(localStorage.getItem('clipzone_session_login_time') || 0);
 
-        // Only trigger global logout if admin actually triggered it AFTER the user logged in/activated
-        if (serverResetAt > 0 && serverResetAt > localLastReset && (loginTime === 0 || serverResetAt > loginTime)) {
+        // Acknowledge initial server reset if not yet recorded so it doesn't trigger on new sessions
+        if (localLastReset === 0 && serverResetAt > 0) {
+          localStorage.setItem('clipzone_last_session_reset', String(serverResetAt));
+        }
+
+        // Only trigger global logout if admin actually triggered a NEW reset AFTER this device logged in
+        if (serverResetAt > 0 && localLastReset > 0 && serverResetAt > localLastReset && loginTime > 0 && serverResetAt > loginTime) {
           localStorage.setItem('clipzone_last_session_reset', String(serverResetAt));
           
           // Sign out Firebase Auth silently
@@ -686,11 +691,29 @@ export default function App() {
   }, []);
 
   const getOrCreateDeviceId = () => {
-    let devId = localStorage.getItem('clipzone_device_id');
+    let devId = '';
+    try {
+      devId = localStorage.getItem('clipzone_device_id') || '';
+    } catch (e) {}
+    if (!devId) {
+      try {
+        devId = sessionStorage.getItem('clipzone_device_id') || '';
+      } catch (e) {}
+    }
+    if (!devId) {
+      try {
+        const match = document.cookie.match(/(^|;)\s*clipzone_device_id=([^;]+)/);
+        if (match) devId = match[2];
+      } catch (e) {}
+    }
     if (!devId) {
       devId = 'dev_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now().toString(36);
-      localStorage.setItem('clipzone_device_id', devId);
     }
+    try {
+      localStorage.setItem('clipzone_device_id', devId);
+      sessionStorage.setItem('clipzone_device_id', devId);
+      document.cookie = `clipzone_device_id=${devId}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch (e) {}
     return devId;
   };
 
@@ -714,11 +737,15 @@ export default function App() {
     try {
       const activeCodesStr = localStorage.getItem('clipzone_active_codes');
       if (!activeCodesStr) return;
-      const activeCodes: string[] = JSON.parse(activeCodesStr);
-      if (activeCodes.length === 0) return;
+      let activeCodes: string[] = [];
+      try {
+        activeCodes = JSON.parse(activeCodesStr);
+      } catch (e) {}
+      if (!Array.isArray(activeCodes) || activeCodes.length === 0) return;
 
       const localActivatedCourses: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
       const userLoginTime = Number(localStorage.getItem('clipzone_session_login_time') || 0);
+      const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
       const updatedActiveCodes: string[] = [];
       const updatedCourseIdsSet = new Set<string>(localActivatedCourses);
       let sessionTerminated = false;
@@ -727,11 +754,7 @@ export default function App() {
 
       for (const code of activeCodes) {
         try {
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 1500));
-          const keyDocSnap: any = await Promise.race([
-            getDoc(doc(db, 'activation_keys', code)),
-            timeoutPromise
-          ]);
+          const keyDocSnap = await getDoc(doc(db, 'activation_keys', code));
           if (keyDocSnap && typeof keyDocSnap.exists === 'function') {
             if (keyDocSnap.exists()) {
               const keyData = keyDocSnap.data();
@@ -746,13 +769,26 @@ export default function App() {
                 if (keyData.courseId) {
                   updatedCourseIdsSet.delete(keyData.courseId);
                 }
-              } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
-                // Key active on another device
-                sessionTerminated = true;
-                terminatedCode = code;
-                terminateReason = 'device_conflict';
-                if (keyData.courseId) {
-                  updatedCourseIdsSet.delete(keyData.courseId);
+              } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId && keyData.activeDeviceId !== '') {
+                // Only terminate if another device actually claimed the key after this device
+                const thisKeyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+                const thisKeyClaimedAt = thisKeyInfo?.claimedAt || userLoginTime || 0;
+                const remoteClaimedAt = keyData.deviceClaimedAt || 0;
+
+                if (remoteClaimedAt > 0 && thisKeyClaimedAt > 0 && remoteClaimedAt > thisKeyClaimedAt) {
+                  sessionTerminated = true;
+                  terminatedCode = code;
+                  terminateReason = 'device_conflict';
+                  if (keyData.courseId) {
+                    updatedCourseIdsSet.delete(keyData.courseId);
+                  }
+                } else {
+                  // Same device session or refresh: keep active and sync activeDeviceId
+                  updatedActiveCodes.push(code);
+                  if (keyData.courseId) {
+                    updatedCourseIdsSet.add(keyData.courseId);
+                  }
+                  updateDoc(doc(db, 'activation_keys', code), { activeDeviceId: deviceId }).catch(() => {});
                 }
               } else {
                 // Keep active!
@@ -770,7 +806,6 @@ export default function App() {
               sessionTerminated = true;
               terminatedCode = code;
               terminateReason = 'deleted';
-              const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
               const keyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
               if (keyInfo && keyInfo.courseId) {
                 updatedCourseIdsSet.delete(keyInfo.courseId);
@@ -780,6 +815,7 @@ export default function App() {
             updatedActiveCodes.push(code);
           }
         } catch (e) {
+          // On temporary network hiccup, do NOT kick out user - preserve session
           updatedActiveCodes.push(code);
         }
       }
@@ -796,9 +832,6 @@ export default function App() {
           showToast(`❌ यो कोर्स कोड एड्मिनद्वारा मेटाइएको छ (Course code ${terminatedCode} was deleted from database)`, 'error');
         } else {
           showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${terminatedCode} अर्को डिभाइसमा एक्टिभ गरिएको छ। (Session ended! Code ${terminatedCode} active on another device.)`, 'error');
-        }
-        if (currentUser && currentUser.uid && !currentUser.uid.startsWith('local_')) {
-          await fetchUserActiveKeys(currentUser);
         }
       }
     } catch (err) {
@@ -818,12 +851,15 @@ export default function App() {
         if (localName) {
           const virtualUser = getOrCreateLocalUser(localName);
           setCurrentUser(virtualUser as any);
-          const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        }
+        // Always preserve activated courses from persistent local storage so student is never auto-logged out
+        const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        if (localActivated.length > 0) {
           setActiveCourseIds(localActivated);
-        } else {
-          setCurrentUser(null);
-          setUserActivationKeys([]);
-          setActiveCourseIds([]);
+        }
+        const localKeys = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+        if (localKeys.length > 0) {
+          setUserActivationKeys(localKeys);
         }
         setAuthLoading(false);
       }
@@ -840,13 +876,20 @@ export default function App() {
     };
   }, []);
 
-  // Periodic device session check to handle real-time single device enforcement
+  // Device session check on window focus or visibility change (avoids aggressive 12s interval killing sessions on mobile)
   useEffect(() => {
     checkActiveDeviceSessions();
-    const interval = setInterval(() => {
-      checkActiveDeviceSessions();
-    }, 12000);
-    return () => clearInterval(interval);
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        checkActiveDeviceSessions();
+      }
+    };
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [currentUser]);
 
   // Real-time snapshot listener on student's active keys for instant admin logout / delete response
@@ -898,18 +941,29 @@ export default function App() {
               }
               showToast(`⚠️ तपाईंको सेसन एड्मिनद्वारा लगआउट गरिएको छ (Session logged out by Admin for code ${code})`, 'error');
             } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId && keyData.activeDeviceId !== '') {
-              // Another device logged in with this key
-              const currentCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
-              const filteredCodes = currentCodes.filter(c => c !== code);
-              localStorage.setItem('clipzone_active_codes', JSON.stringify(filteredCodes));
+              // Check if another device ACTUALLY claimed it after this device
+              const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+              const thisKeyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+              const thisKeyClaimedAt = thisKeyInfo?.claimedAt || userLoginTime || 0;
+              const remoteClaimedAt = keyData.deviceClaimedAt || 0;
 
-              if (keyData.courseId) {
-                const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-                const updatedActivated = localActivated.filter(id => id !== keyData.courseId);
-                localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
-                setActiveCourseIds(updatedActivated);
+              // Only terminate if another device claimed it AFTER this device
+              if (remoteClaimedAt > 0 && thisKeyClaimedAt > 0 && remoteClaimedAt > thisKeyClaimedAt) {
+                const currentCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+                const filteredCodes = currentCodes.filter(c => c !== code);
+                localStorage.setItem('clipzone_active_codes', JSON.stringify(filteredCodes));
+
+                if (keyData.courseId) {
+                  const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+                  const updatedActivated = localActivated.filter(id => id !== keyData.courseId);
+                  localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+                  setActiveCourseIds(updatedActivated);
+                }
+                showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${code} अर्को डिभाइसमा एक्टिभ गरिएको छ।`, 'error');
+              } else {
+                // Same student re-opening or refreshed browser: re-sync deviceId to this active device
+                updateDoc(doc(db, 'activation_keys', code), { activeDeviceId: deviceId }).catch(() => {});
               }
-              showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${code} अर्को डिभाइसमा एक्टिभ गरिएको छ।`, 'error');
             }
           }
         }, (err) => {
@@ -972,86 +1026,83 @@ export default function App() {
   const fetchUserActiveKeys = async (user: FirebaseUser) => {
     const localActivatedCourses: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
     const localKeysInfo: any[] = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+    const activeCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+    const userLoginTime = Number(localStorage.getItem('clipzone_session_login_time') || 0);
 
     try {
       const deviceId = getOrCreateDeviceId();
-      // Single field query to avoid composite index requirement in Firestore
-      const q = query(
-        collection(db, 'activation_keys'),
-        where('claimedByUid', '==', user.uid)
-      );
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2000));
-      const querySnapshot: any = await Promise.race([
-        getDocs(q),
-        timeoutPromise
-      ]);
-      const firestoreKeys: any[] = [];
-      const firestoreActiveIds: string[] = [];
-      querySnapshot.forEach((docSnap: any) => {
-        const data = docSnap.data();
-        if (data.status === 'used') {
-          // Single device enforcement: only claim if unclaimed or already matching this device
-          if (!data.activeDeviceId || data.activeDeviceId === deviceId) {
+      const verifiedKeys: any[] = [];
+      const verifiedCourseIds = new Set<string>();
+
+      // 1. Verify every code stored locally on this device directly from Firestore
+      for (const code of activeCodes) {
+        try {
+          const keySnap = await getDoc(doc(db, 'activation_keys', code));
+          if (keySnap && typeof keySnap.exists === 'function' && keySnap.exists()) {
+            const data = keySnap.data();
+            // If admin marked forceLogoutAt
+            if (data.forceLogoutAt && userLoginTime > 0 && data.forceLogoutAt > userLoginTime) {
+              continue; // Exclude force logged out by Admin
+            }
+            if (data.status === 'deleted') {
+              continue; // Exclude deleted by Admin
+            }
+
+            // Sync deviceId if not set or matches
             if (!data.activeDeviceId) {
-              data.activeDeviceId = deviceId;
-              try {
-                updateDoc(doc(db, 'activation_keys', docSnap.id), { activeDeviceId: deviceId });
-              } catch (e) {}
+              updateDoc(doc(db, 'activation_keys', code), { activeDeviceId: deviceId }).catch(() => {});
             }
-            firestoreKeys.push({ id: docSnap.id, ...data });
+
+            verifiedKeys.push({ id: keySnap.id, code: keySnap.id, ...data });
             if (data.courseId) {
-              firestoreActiveIds.push(data.courseId);
+              verifiedCourseIds.add(data.courseId);
             }
+          } else {
+            // Document does not exist in Firestore - was permanently deleted by Admin
+            // Don't add to verified
+          }
+        } catch (e) {
+          // If offline or network error, keep local copy safe
+          const localMatch = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+          if (localMatch) {
+            verifiedKeys.push(localMatch);
+            if (localMatch.courseId) verifiedCourseIds.add(localMatch.courseId);
           }
         }
-      });
+      }
 
-      // Also sync active device status to local admin cache if present
-      try {
-        const adminCache = JSON.parse(localStorage.getItem('clipzone_admin_keys_cache') || '[]');
-        if (adminCache.length > 0) {
-          const firestoreMap = new Map(firestoreKeys.map(k => [k.code || k.id, k.activeDeviceId]));
-          const updatedCache = adminCache.map((k: any) => {
-            const code = k.code || k.id;
-            if (firestoreMap.has(code)) {
-              return { ...k, activeDeviceId: firestoreMap.get(code) };
+      // 2. If user is a registered non-anonymous account (e.g. Google), check claimed keys
+      if (user && user.uid && !user.uid.startsWith('local_') && !user.isAnonymous) {
+        try {
+          const q = query(
+            collection(db, 'activation_keys'),
+            where('claimedByUid', '==', user.uid)
+          );
+          const qSnap = await getDocs(q);
+          qSnap.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.status === 'used' && (!data.forceLogoutAt || data.forceLogoutAt <= userLoginTime)) {
+              if (!verifiedKeys.some(k => (k.code || k.id) === docSnap.id)) {
+                verifiedKeys.push({ id: docSnap.id, code: docSnap.id, ...data });
+              }
+              if (data.courseId) verifiedCourseIds.add(data.courseId);
             }
-            return k;
           });
-          localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updatedCache));
-          setAllActivationKeys(updatedCache);
-        }
-      } catch (e) {}
-
-      // Firestore is ground truth: filter out any key that was deleted from Firestore
-      const firestoreCodeSet = new Set(firestoreKeys.map(k => k.code || k.id));
-      const firestoreCourseSet = new Set(firestoreActiveIds);
-
-      // Keep local keys only if they were newly claimed locally/offline and not yet deleted on cloud
-      const finalKeysMap = new Map();
-      for (const k of firestoreKeys) {
-        if (k.id || k.code) finalKeysMap.set(k.id || k.code, k);
+        } catch (e) {}
       }
-      for (const k of localKeysInfo) {
-        const keyId = k.id || k.code;
-        if (keyId && (keyId.startsWith('local_') || firestoreCodeSet.has(keyId))) {
-          if (!finalKeysMap.has(keyId)) finalKeysMap.set(keyId, k);
-        }
-      }
-      const finalKeys = Array.from(finalKeysMap.values());
 
-      const finalActiveIdsSet = new Set<string>();
-      for (const k of finalKeys) {
-        if (k.courseId && (firestoreCourseSet.has(k.courseId) || (k.id || k.code)?.startsWith('local_'))) {
-          finalActiveIdsSet.add(k.courseId);
-        }
+      // If we verified keys, update state and local storage
+      if (verifiedCourseIds.size > 0) {
+        const finalActiveIds = Array.from(verifiedCourseIds);
+        setUserActivationKeys(verifiedKeys);
+        localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(verifiedKeys));
+        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
+        setActiveCourseIds(finalActiveIds);
+      } else if (activeCodes.length === 0 && localActivatedCourses.length === 0) {
+        setActiveCourseIds([]);
+        setUserActivationKeys([]);
       }
-      const finalActiveIds = Array.from(finalActiveIdsSet);
-
-      setUserActivationKeys(finalKeys);
-      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(finalKeys));
-      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
-      setActiveCourseIds(finalActiveIds);
+      // If student has localActivatedCourses and network check was indeterminate, keep existing local courses!
     } catch (err) {
       console.error('Error fetching student keys:', err);
       setActiveCourseIds(localActivatedCourses);
@@ -1436,6 +1487,7 @@ export default function App() {
             updateDoc(keyDocRef, {
               status: 'used',
               activeDeviceId: deviceId,
+              deviceClaimedAt: Date.now(),
               claimedByEmail: assignedStudentName,
               studentName: assignedStudentName,
               claimedByUid: activeUser?.uid || 'local_student',
