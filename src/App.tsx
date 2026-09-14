@@ -258,26 +258,41 @@ export default function App() {
     }
   });
 
+  // Deleted Courses tracking
+  const [deletedCourseIds, setDeletedCourseIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
   // Dynamic Courses state
   const [courses, setCourses] = useState<Course[]>(() => {
+    const deletedIds: string[] = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+      } catch {
+        return [];
+      }
+    })();
+
     const cached = localStorage.getItem('clipzone_dynamic_courses');
     if (cached) {
       try {
         const parsed: Course[] = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const parsedIds = new Set(parsed.map(c => c.id));
-          const merged = [...parsed];
-          COURSES.forEach(def => {
-            if (!parsedIds.has(def.id)) merged.push(def);
-          });
-          return merged.map((c, i) => ({
+        if (Array.isArray(parsed)) {
+          // Strictly exclude deleted courses and do NOT re-add them from defaults
+          const activeList = parsed.filter(c => !deletedIds.includes(c.id));
+          return activeList.map((c, i) => ({
             ...c,
             order: typeof c.order === 'number' ? c.order : i
           })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         }
       } catch (e) {}
     }
-    return COURSES.map((c, i) => ({
+    // Only return default courses that have never been deleted
+    return COURSES.filter(c => !deletedIds.includes(c.id)).map((c, i) => ({
       ...c,
       order: typeof c.order === 'number' ? c.order : i
     })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -375,36 +390,64 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'courses'), (querySnapshot) => {
       try {
-        const dbCourses: Course[] = [];
-        querySnapshot.forEach((docSnap) => {
-          const course = docSnap.data() as Course;
-          dbCourses.push({
-            ...course,
-            id: docSnap.id || course.id
-          });
-        });
-
-        // Always ensure all default courses from COURSES exist and are merged
-        const dbCourseIds = new Set(dbCourses.map(c => c.id));
-        const mergedCourses = [...dbCourses];
-        COURSES.forEach(defaultCourse => {
-          if (!dbCourseIds.has(defaultCourse.id)) {
-            mergedCourses.push(defaultCourse);
-            // Also seed to Firestore in background so it permanently persists
-            setDoc(doc(db, 'courses', defaultCourse.id), defaultCourse).catch(() => {});
+        const deletedIds: string[] = (() => {
+          try {
+            return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+          } catch {
+            return [];
           }
-        });
+        })();
 
-        // Sort by order
-        const sortedCourses = mergedCourses.map((c, i) => ({
-          ...c,
-          order: typeof c.order === 'number' ? c.order : i
-        })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        if (!querySnapshot.empty) {
+          const dbCourses: Course[] = [];
+          querySnapshot.forEach((docSnap) => {
+            const course = docSnap.data() as Course;
+            const courseId = docSnap.id || course.id;
+            // Strictly exclude any course marked as deleted
+            if (!deletedIds.includes(courseId)) {
+              dbCourses.push({
+                ...course,
+                id: courseId
+              });
+            } else {
+              // Permanently purge from Firestore if still lingering
+              deleteDoc(doc(db, 'courses', courseId)).catch(() => {});
+            }
+          });
 
-        setCourses(sortedCourses);
-        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
-        setIsCoursesLoading(false);
-        localStorage.setItem('clipzone_courses_initialized', 'true');
+          // Sort by order
+          const sortedCourses = dbCourses.map((c, i) => ({
+            ...c,
+            order: typeof c.order === 'number' ? c.order : i
+          })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+          setCourses(sortedCourses);
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
+          setIsCoursesLoading(false);
+          localStorage.setItem('clipzone_courses_initialized', 'true');
+        } else {
+          // If Firestore is completely empty on fresh app setup, seed default courses ONLY once if never initialized
+          const alreadyInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
+          if (!alreadyInitialized && deletedIds.length === 0) {
+            const initialCourses = COURSES.map((c, i) => ({
+              ...c,
+              order: typeof c.order === 'number' ? c.order : i
+            }));
+            setCourses(initialCourses);
+            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(initialCourses));
+            localStorage.setItem('clipzone_courses_initialized', 'true');
+            // Seed to Firestore once
+            initialCourses.forEach(c => {
+              setDoc(doc(db, 'courses', c.id), c).catch(() => {});
+            });
+            setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true }).catch(() => {});
+          } else {
+            // Courses were intentionally deleted or catalog is empty
+            setCourses([]);
+            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify([]));
+          }
+          setIsCoursesLoading(false);
+        }
       } catch (e) {
         console.warn('Error processing courses snapshot:', e);
         setIsCoursesLoading(false);
@@ -523,11 +566,47 @@ export default function App() {
     showToast('All notifications marked as read', 'info');
   };
 
-  // Realtime listener for global admin session logout commands across all user devices
+  // Realtime listener for global admin session logout commands and deleted courses blacklist across all user devices
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'system', 'config'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+
+        // 1. Synchronize remote deletedCourseIds blacklist from Firestore
+        if (Array.isArray(data.deletedCourseIds) && data.deletedCourseIds.length > 0) {
+          const currentDeleted: string[] = (() => {
+            try {
+              return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+            } catch {
+              return [];
+            }
+          })();
+          const mergedDeleted = Array.from(new Set([...currentDeleted, ...data.deletedCourseIds]));
+          localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(mergedDeleted));
+          setDeletedCourseIds(mergedDeleted);
+
+          // Purge any deleted courses from state & local storage
+          setCourses(prev => {
+            const filtered = prev.filter(c => !mergedDeleted.includes(c.id));
+            if (filtered.length !== prev.length) {
+              localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(filtered));
+              return filtered;
+            }
+            return prev;
+          });
+
+          // Also clean up from activeCourseIds
+          setActiveCourseIds(prev => {
+            const filtered = prev.filter(id => !mergedDeleted.includes(id));
+            if (filtered.length !== prev.length) {
+              localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(filtered));
+              return filtered;
+            }
+            return prev;
+          });
+        }
+
+        // 2. Global session logout check
         const serverResetAt = data.global_session_reset_at || 0;
         const localLastReset = Number(localStorage.getItem('clipzone_last_session_reset') || 0);
         const loginTime = Number(localStorage.getItem('clipzone_session_login_time') || 0);
@@ -2306,10 +2385,52 @@ export default function App() {
   // Delete Course
   const handleDeleteCourse = async (courseId: string) => {
     try {
-      // 1. Delete course doc from Firestore
+      // 1. Immediately update local deleted blacklist state & storage
+      const localDeleted: string[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+      if (!localDeleted.includes(courseId)) {
+        localDeleted.push(courseId);
+        localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(localDeleted));
+      }
+      setDeletedCourseIds(prev => prev.includes(courseId) ? prev : [...prev, courseId]);
+
+      // 2. Immediately purge from courses state and dynamic cache
+      setCourses(prev => {
+        const updatedList = prev.filter(c => c.id !== courseId);
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+        localStorage.setItem('clipzone_courses_initialized', 'true');
+        return updatedList;
+      });
+
+      // 3. Instantly clean up active activated courses state and storage
+      const localActivated: string[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+      const updatedActivated = localActivated.filter((id: string) => id !== courseId);
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+      setActiveCourseIds(prev => prev.filter(id => id !== courseId));
+
+      // 4. Close any open views or modals referencing this course
+      if (selectedCourse?.id === courseId) {
+        setSelectedCourse(null);
+      }
+      if (courseToDelete?.id === courseId) {
+        setCourseToDelete(null);
+      }
+
+      // 5. Delete course doc permanently from Firestore
       await deleteDoc(doc(db, 'courses', courseId));
       
-      // 2. Delete any secret activation keys created for this course
+      // 6. Delete any secret activation keys created for this course
       try {
         const keysQuery = query(collection(db, 'activation_keys'), where('courseId', '==', courseId));
         const keysSnap = await getDocs(keysQuery);
@@ -2320,7 +2441,7 @@ export default function App() {
         console.warn('Keys cleanup error on course delete:', keyErr);
       }
 
-      // 3. Persist deleted courseId in system config so it is never re-seeded
+      // 7. Persist deleted courseId in system config so it is permanently blacklisted across all devices & sessions
       try {
         await setDoc(doc(db, 'system', 'config'), {
           courses_seeded: true,
@@ -2329,27 +2450,6 @@ export default function App() {
       } catch (e) {
         console.warn('Config deleted ids set error:', e);
       }
-
-      // 4. Save deleted ID in local storage blacklists
-      const localDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-      if (!localDeleted.includes(courseId)) {
-        localDeleted.push(courseId);
-        localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(localDeleted));
-      }
-
-      // 5. Instantly clean up active activated courses state and storage
-      const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-      const updatedActivated = localActivated.filter((id: string) => id !== courseId);
-      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
-      setActiveCourseIds(prev => prev.filter(id => id !== courseId));
-
-      // 6. Update local state and dynamic cache
-      setCourses(prev => {
-        const updatedList = prev.filter(c => c.id !== courseId);
-        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
-        localStorage.setItem('clipzone_courses_initialized', 'true');
-        return updatedList;
-      });
 
       showToast('कोर्ष स्थायी रूपमा हटाइयो! (Course permanently deleted!)', 'success');
     } catch (err) {
