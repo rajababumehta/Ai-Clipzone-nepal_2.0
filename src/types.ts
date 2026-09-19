@@ -170,5 +170,7 @@ export interface SupportConversation {
   unreadUserCount: number;
   createdAt: number;
   updatedAt: number;
+  clearedByUserAt?: number;
+  clearedByAdminAt?: number;
 }
 

@@ -14,7 +14,11 @@ import {
   Phone,
   Smile,
   Paperclip,
-  CheckCircle2
+  CheckCircle2,
+  MoreVertical,
+  Trash2,
+  RotateCcw,
+  Info
 } from 'lucide-react';
 import { 
   collection, 
@@ -128,6 +132,22 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const adminEndRef = useRef<HTMLDivElement>(null);
   const adminReplyInputRef = useRef<HTMLInputElement>(null);
 
+  // --------------------------------------------------------------------------
+  // WHATSAPP "CLEAR CHAT FROM OWN ONLY" STATES
+  // WhatsApp Rule: Conversation records are NEVER permanently deleted from database.
+  // Each user (student or admin) can clear chat from their OWN view only.
+  // --------------------------------------------------------------------------
+  const [studentClearedAt, setStudentClearedAt] = useState<number>(() => {
+    if (typeof window === 'undefined' || !currentUserId) return 0;
+    return Number(localStorage.getItem(`clipzone_chat_cleared_user_${currentUserId}`) || 0);
+  });
+  const [studentMenuOpen, setStudentMenuOpen] = useState(false);
+  const [showStudentClearConfirm, setShowStudentClearConfirm] = useState(false);
+
+  const [adminClearedAt, setAdminClearedAt] = useState<number>(0);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [showAdminClearConfirm, setShowAdminClearConfirm] = useState(false);
+
   // Sync student name prop when it changes and contains a real name
   useEffect(() => {
     const cleanProp = cleanRealName(initialStudentName);
@@ -136,6 +156,43 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       localStorage.setItem('clipzone_student_name', cleanProp);
     }
   }, [initialStudentName]);
+
+  // Sync student clearedAt timestamp whenever currentUserId changes
+  useEffect(() => {
+    if (currentUserId) {
+      const local = Number(localStorage.getItem(`clipzone_chat_cleared_user_${currentUserId}`) || 0);
+      setStudentClearedAt(local);
+    }
+  }, [currentUserId]);
+
+  // Listen to student conversation doc for remote cleared timestamp
+  useEffect(() => {
+    if (!isOpen || isAdmin || !currentUserId) return;
+    const convRef = doc(db, 'support_conversations', currentUserId);
+    const unsub = onSnapshot(convRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        if (d.clearedByUserAt !== undefined) {
+          setStudentClearedAt((prev) => Math.max(prev, d.clearedByUserAt || 0));
+        }
+      }
+    });
+    return () => unsub();
+  }, [isOpen, isAdmin, currentUserId]);
+
+  // Sync admin clearedAt timestamp whenever selected conversation changes
+  useEffect(() => {
+    if (selectedAdminConvId) {
+      const local = Number(localStorage.getItem(`clipzone_chat_cleared_admin_${selectedAdminConvId}`) || 0);
+      const conv = adminConversations.find(c => c.id === selectedAdminConvId);
+      const remote = conv?.clearedByAdminAt || 0;
+      setAdminClearedAt(Math.max(local, remote));
+      setAdminMenuOpen(false);
+    } else {
+      setAdminClearedAt(0);
+      setAdminMenuOpen(false);
+    }
+  }, [selectedAdminConvId, adminConversations]);
 
   // ==========================================================================
   // 1. STUDENT MODE: Listener for student's direct messages with AI CLIPZONE
@@ -194,12 +251,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     return () => unsubscribe();
   }, [isOpen, isAdmin, currentUserId]);
 
+  // Filter messages based on WhatsApp-style local cleared timestamp (never deleted from DB)
+  const displayedStudentMessages = studentMessages.filter(
+    (msg) => !studentClearedAt || msg.timestamp > studentClearedAt
+  );
+
   // Scroll to bottom when student messages update
   useEffect(() => {
     if (isOpen && !isAdmin) {
       studentEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [studentMessages, isOpen, isAdmin]);
+  }, [displayedStudentMessages, isOpen, isAdmin]);
 
   // ==========================================================================
   // 2. ADMIN MODE: Listener for all student conversations & course buyers
@@ -230,7 +292,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             unreadAdminCount: d.unreadAdminCount || 0,
             unreadUserCount: d.unreadUserCount || 0,
             createdAt: d.createdAt || Date.now(),
-            updatedAt: d.updatedAt || Date.now()
+            updatedAt: d.updatedAt || Date.now(),
+            clearedByUserAt: d.clearedByUserAt || 0,
+            clearedByAdminAt: d.clearedByAdminAt || 0
           });
         });
 
@@ -341,12 +405,82 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     return () => unsubscribe();
   }, [isOpen, isAdmin, selectedAdminConvId]);
 
+  // Filter admin messages based on WhatsApp-style local cleared timestamp (never deleted from DB)
+  const displayedAdminMessages = adminMessages.filter(
+    (msg) => !adminClearedAt || msg.timestamp > adminClearedAt
+  );
+
   // Scroll to bottom when admin messages update
   useEffect(() => {
     if (isOpen && isAdmin) {
       adminEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [adminMessages, isOpen, isAdmin]);
+  }, [displayedAdminMessages, isOpen, isAdmin]);
+
+  // --------------------------------------------------------------------------
+  // WHATSAPP "CLEAR CHAT FROM OWN ONLY" HANDLERS
+  // --------------------------------------------------------------------------
+  const handleStudentClearChat = async () => {
+    const now = Date.now();
+    setStudentClearedAt(now);
+    if (currentUserId) {
+      localStorage.setItem(`clipzone_chat_cleared_user_${currentUserId}`, String(now));
+      try {
+        const convRef = doc(db, 'support_conversations', currentUserId);
+        await updateDoc(convRef, {
+          clearedByUserAt: now
+        });
+      } catch (e) {}
+    }
+    showToast?.('तपाईंको डिभाइसबाट च्याट खाली भयो (Chat cleared on your device)', 'info');
+    setShowStudentClearConfirm(false);
+    setStudentMenuOpen(false);
+  };
+
+  const handleStudentRestoreChat = async () => {
+    setStudentClearedAt(0);
+    if (currentUserId) {
+      localStorage.removeItem(`clipzone_chat_cleared_user_${currentUserId}`);
+      try {
+        const convRef = doc(db, 'support_conversations', currentUserId);
+        await updateDoc(convRef, {
+          clearedByUserAt: 0
+        });
+      } catch (e) {}
+    }
+    showToast?.('सम्पूर्ण च्याट इतिहास पुनः देखाइयो (All messages restored)', 'success');
+    setStudentMenuOpen(false);
+  };
+
+  const handleAdminClearChat = async () => {
+    if (!selectedAdminConvId) return;
+    const now = Date.now();
+    setAdminClearedAt(now);
+    localStorage.setItem(`clipzone_chat_cleared_admin_${selectedAdminConvId}`, String(now));
+    try {
+      const convRef = doc(db, 'support_conversations', selectedAdminConvId);
+      await updateDoc(convRef, {
+        clearedByAdminAt: now
+      });
+    } catch (e) {}
+    showToast?.('एडमिन भ्यूबाट च्याट खाली भयो (Chat cleared for admin only)', 'info');
+    setShowAdminClearConfirm(false);
+    setAdminMenuOpen(false);
+  };
+
+  const handleAdminRestoreChat = async () => {
+    if (!selectedAdminConvId) return;
+    setAdminClearedAt(0);
+    localStorage.removeItem(`clipzone_chat_cleared_admin_${selectedAdminConvId}`);
+    try {
+      const convRef = doc(db, 'support_conversations', selectedAdminConvId);
+      await updateDoc(convRef, {
+        clearedByAdminAt: 0
+      });
+    } catch (e) {}
+    showToast?.('एडमिनका लागि सम्पूर्ण च्याट इतिहास पुनः देखाइयो (All history restored)', 'success');
+    setAdminMenuOpen(false);
+  };
 
   if (!isOpen) return null;
 
@@ -723,11 +857,57 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           </div>
                         </div>
 
-                        {selectedAdminConv.userEmail && (
-                          <span className="text-[11px] text-[#8696a0] bg-[#111b21] px-2.5 py-1 rounded-full border border-[#222d34]">
-                            {selectedAdminConv.userEmail}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {selectedAdminConv.userEmail && (
+                            <span className="text-[11px] text-[#8696a0] bg-[#111b21] px-2.5 py-1 rounded-full border border-[#222d34] hidden sm:inline-block">
+                              {selectedAdminConv.userEmail}
+                            </span>
+                          )}
+
+                          {/* WhatsApp 3-dots Menu for Admin */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setAdminMenuOpen(!adminMenuOpen)}
+                              className="p-1.5 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
+                              title="More options"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            {adminMenuOpen && (
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-30" 
+                                  onClick={() => setAdminMenuOpen(false)} 
+                                />
+                                <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#202c33] border border-[#222d34] rounded-xl shadow-2xl py-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAdminMenuOpen(false);
+                                      setShowAdminClearConfirm(true);
+                                    }}
+                                    className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-amber-400 hover:text-amber-300 transition cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-amber-400 shrink-0" />
+                                    <span>Clear chat for admin (मेरो भ्यूबाट खाली)</span>
+                                  </button>
+                                  {adminClearedAt > 0 && adminMessages.length > displayedAdminMessages.length && (
+                                    <button
+                                      type="button"
+                                      onClick={handleAdminRestoreChat}
+                                      className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-[#00a884] transition cursor-pointer border-t border-[#222d34]"
+                                    >
+                                      <RotateCcw className="w-4 h-4 text-[#00a884] shrink-0" />
+                                      <span>Show all history (सबै इतिहास देखाउने)</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Messages Scroll Area */}
@@ -739,7 +919,24 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           </span>
                         </div>
 
-                        {adminMessages.length === 0 ? (
+                        {/* Banner if admin cleared their view */}
+                        {adminClearedAt > 0 && adminMessages.length > displayedAdminMessages.length && (
+                          <div className="flex justify-center my-1.5">
+                            <div className="bg-[#182229] border border-[#222d34] rounded-lg px-3 py-1.5 text-[11px] text-[#8696a0] flex items-center gap-2 shadow-xs">
+                              <span>🗑️ Messages cleared from admin view (Student still has them).</span>
+                              <button
+                                type="button"
+                                onClick={handleAdminRestoreChat}
+                                className="text-[#00a884] hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Restore</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {displayedAdminMessages.length === 0 ? (
                           <div className="py-12 text-center text-[#8696a0] text-xs space-y-2">
                             <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
                             <p className="font-semibold text-[#e9edef]">{selectedAdminConv.userName} सँग कुराकानी सुरु गर्नुहोस्</p>
@@ -748,7 +945,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             </p>
                           </div>
                         ) : (
-                          adminMessages.map((msg) => {
+                          displayedAdminMessages.map((msg) => {
                             const isAdminMsg = msg.sender === 'admin';
                             const isSeen = msg.isSeen || msg.status === 'seen';
 
@@ -908,6 +1105,50 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     </a>
                   )}
 
+                  {/* WhatsApp 3-dots Menu for Student */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setStudentMenuOpen(!studentMenuOpen)}
+                      className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
+                      title="More options"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+
+                    {studentMenuOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-30" 
+                          onClick={() => setStudentMenuOpen(false)} 
+                        />
+                        <div className="absolute right-0 top-full mt-1.5 w-60 bg-[#202c33] border border-[#222d34] rounded-xl shadow-2xl py-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudentMenuOpen(false);
+                              setShowStudentClearConfirm(true);
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-red-400 hover:text-red-300 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400 shrink-0" />
+                            <span>Clear chat (आफ्नो च्याट खाली गर्ने)</span>
+                          </button>
+                          {studentClearedAt > 0 && studentMessages.length > displayedStudentMessages.length && (
+                            <button
+                              type="button"
+                              onClick={handleStudentRestoreChat}
+                              className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-[#00a884] transition cursor-pointer border-t border-[#222d34]"
+                            >
+                              <RotateCcw className="w-4 h-4 text-[#00a884] shrink-0" />
+                              <span>Restore messages (पुरानो इतिहास देखाउने)</span>
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   <button
                     onClick={onClose}
                     className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
@@ -994,8 +1235,25 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </div>
                     </div>
 
+                    {/* Banner if student cleared older messages on this device */}
+                    {studentClearedAt > 0 && studentMessages.length > displayedStudentMessages.length && (
+                      <div className="flex justify-center my-1.5">
+                        <div className="bg-[#182229] border border-[#222d34] rounded-lg px-3 py-1.5 text-[11px] text-[#8696a0] flex items-center gap-2 shadow-xs">
+                          <span>🗑️ Messages cleared on this device. (Admin records remain safe)</span>
+                          <button
+                            type="button"
+                            onClick={handleStudentRestoreChat}
+                            className="text-[#00a884] hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Restore</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Messages Render */}
-                    {studentMessages.length === 0 ? (
+                    {displayedStudentMessages.length === 0 ? (
                       <div className="py-6 text-center space-y-3">
                         <div className="w-12 h-12 rounded-full bg-[#202c33] border border-[#222d34] flex items-center justify-center mx-auto text-[#00a884]">
                           <MessageCircle className="w-6 h-6" />
@@ -1023,7 +1281,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         </div>
                       </div>
                     ) : (
-                      studentMessages.map((msg) => {
+                      displayedStudentMessages.map((msg) => {
                         const isMe = msg.sender === 'user';
                         const isSeen = msg.isSeen || msg.status === 'seen';
 
@@ -1176,6 +1434,108 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           )}
 
         </div>
+
+        {/* ==================================================================== */}
+        {/* WHATSAPP CLEAR CHAT CONFIRMATION MODAL - STUDENT                     */}
+        {/* ==================================================================== */}
+        {showStudentClearConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <div className="bg-[#202c33] border border-[#222d34] rounded-2xl p-5 max-w-sm w-full shadow-2xl text-[#e9edef] space-y-4 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-[#e9edef]">Clear this chat?</h4>
+                  <p className="text-[11px] text-[#8696a0]">यो च्याट आफ्नो डिभाइसबाट खाली गर्ने?</p>
+                </div>
+              </div>
+
+              <div className="bg-[#111b21] border border-[#222d34] rounded-xl p-3 text-xs text-[#aebac1] space-y-2">
+                <p className="flex items-start gap-2">
+                  <span className="text-[#00a884] font-bold">✓</span>
+                  <span>
+                    <strong>Only on this device:</strong> Messages will be cleared from your screen only. (तपाईंको स्क्रिनबाट मात्र च्याट हट्नेछ।)
+                  </span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-[#00a884] font-bold">✓</span>
+                  <span>
+                    <strong>Safe with Admin:</strong> Conversation records remain intact with official AI CLIPZONE support. (एडमिनसँग सुरक्षित रहनेछ।)
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowStudentClearConfirm(false)}
+                  className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] hover:bg-[#111b21] rounded-lg transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStudentClearChat}
+                  className="px-4 py-2 text-xs font-bold bg-[#00a884] hover:bg-[#02906f] text-[#111b21] rounded-lg shadow-md transition cursor-pointer active:scale-95"
+                >
+                  Clear Chat
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================================== */}
+        {/* WHATSAPP CLEAR CHAT CONFIRMATION MODAL - ADMIN                       */}
+        {/* ==================================================================== */}
+        {showAdminClearConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <div className="bg-[#202c33] border border-[#222d34] rounded-2xl p-5 max-w-sm w-full shadow-2xl text-[#e9edef] space-y-4 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-[#e9edef]">Clear chat for Admin?</h4>
+                  <p className="text-[11px] text-[#8696a0]">एडमिन भ्यूबाट मात्र च्याट खाली गर्ने?</p>
+                </div>
+              </div>
+
+              <div className="bg-[#111b21] border border-[#222d34] rounded-xl p-3 text-xs text-[#aebac1] space-y-2">
+                <p className="flex items-start gap-2">
+                  <span className="text-[#00a884] font-bold">✓</span>
+                  <span>
+                    <strong>Admin View Only:</strong> Messages will only be hidden on your admin screen. (एडमिनको स्क्रिनबाट मात्र हट्नेछ।)
+                  </span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-[#00a884] font-bold">✓</span>
+                  <span>
+                    <strong>Student Preserved:</strong> The student will NOT lose any messages and can still view their entire chat history. (विद्यार्थीको च्याट सुरक्षित रहन्छ।)
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminClearConfirm(false)}
+                  className="px-4 py-2 text-xs font-semibold text-[#8696a0] hover:text-[#e9edef] hover:bg-[#111b21] rounded-lg transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAdminClearChat}
+                  className="px-4 py-2 text-xs font-bold bg-[#00a884] hover:bg-[#02906f] text-[#111b21] rounded-lg shadow-md transition cursor-pointer active:scale-95"
+                >
+                  Clear for Admin
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     </AnimatePresence>
   );
