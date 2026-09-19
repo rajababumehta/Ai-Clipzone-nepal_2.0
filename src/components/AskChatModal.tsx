@@ -9,7 +9,7 @@ import {
   Check, 
   CheckCheck, 
   Sparkles, 
-  Edit2, 
+  Lock, 
   Clock, 
   MessageCircle, 
   Search,
@@ -46,6 +46,8 @@ interface AskChatModalProps {
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   isAdmin?: boolean;
   allActivationKeys?: any[];
+  hasActivatedCourse?: boolean;
+  onOpenActivationModal?: () => void;
 }
 
 const QUICK_QUESTION_CHIPS = [
@@ -74,8 +76,26 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   activeCourseName = '',
   showToast,
   isAdmin = false,
-  allActivationKeys = []
+  allActivationKeys = [],
+  hasActivatedCourse = false,
+  onOpenActivationModal
 }) => {
+  // Helper to ensure name is a real student name - strictly never "Student Learner" or generic placeholder
+  const cleanRealName = (name: string | undefined | null): string => {
+    if (!name) return '';
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    if (
+      lower === 'student learner' ||
+      lower === 'student' ||
+      lower === 'learner' ||
+      lower === 'clipzone student'
+    ) {
+      return '';
+    }
+    return trimmed;
+  };
+
   // --------------------------------------------------------------------------
   // STUDENT VIEW STATES
   // --------------------------------------------------------------------------
@@ -83,10 +103,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const [studentInputText, setStudentInputText] = useState('');
   const [isStudentSending, setIsStudentSending] = useState(false);
   const [studentName, setStudentName] = useState(() => {
-    return localStorage.getItem('clipzone_student_name') || initialStudentName || 'Student Learner';
+    const fromProp = cleanRealName(initialStudentName);
+    if (fromProp) return fromProp;
+    const fromStorage = cleanRealName(localStorage.getItem('clipzone_student_name'));
+    if (fromStorage) return fromStorage;
+    if (userEmail) {
+      const p = userEmail.split('@')[0];
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }
+    return 'Student';
   });
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(studentName);
   const studentEndRef = useRef<HTMLDivElement>(null);
   const studentInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,11 +129,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const adminEndRef = useRef<HTMLDivElement>(null);
   const adminReplyInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync student name prop
+  // Sync student name prop when it changes and contains a real name
   useEffect(() => {
-    if (initialStudentName && !localStorage.getItem('clipzone_student_name')) {
-      setStudentName(initialStudentName);
-      setTempName(initialStudentName);
+    const cleanProp = cleanRealName(initialStudentName);
+    if (cleanProp && cleanProp !== studentName) {
+      setStudentName(cleanProp);
+      localStorage.setItem('clipzone_student_name', cleanProp);
     }
   }, [initialStudentName]);
 
@@ -344,25 +371,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // --------------------------------------------------------------------------
   // HANDLERS: STUDENT
   // --------------------------------------------------------------------------
-  const handleSaveStudentName = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tempName.trim()) return;
-    const clean = tempName.trim();
-    setStudentName(clean);
-    localStorage.setItem('clipzone_student_name', clean);
-    setIsEditingName(false);
-    showToast?.('तपाईंको नाम सुरक्षित गरियो! (Name updated)', 'success');
-
-    try {
-      const convRef = doc(db, 'support_conversations', currentUserId);
-      updateDoc(convRef, {
-        userName: clean,
-        updatedAt: Date.now()
-      }).catch(() => {});
-    } catch (e) {}
-  };
-
   const handleStudentSendMessage = async (textToSend?: string) => {
+    // Strict requirement: Only course activated user (or admin) can send messages to admin
+    if (!isAdmin && !hasActivatedCourse) {
+      showToast?.('🔒 केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र एडमिनलाई म्यासेज पठाउन सक्नुहुन्छ।', 'error');
+      if (onOpenActivationModal) {
+        onClose();
+        onOpenActivationModal();
+      }
+      return;
+    }
+
     const text = (textToSend !== undefined ? textToSend : studentInputText).trim();
     if (!text || isStudentSending || !currentUserId) return;
 
@@ -370,7 +389,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     setStudentInputText('');
 
     const now = Date.now();
-    const finalStudentName = studentName.trim() || 'Student Learner';
+    let finalStudentName = cleanRealName(studentName) || cleanRealName(initialStudentName);
+    if (!finalStudentName) {
+      finalStudentName = userEmail ? (userEmail.split('@')[0].charAt(0).toUpperCase() + userEmail.split('@')[0].slice(1)) : 'Student';
+    }
 
     try {
       // 1. Add message with status 'sent' and isSeen: false (single tick initially)
@@ -882,166 +904,171 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </button>
               </div>
 
-              {/* Student Identity Strip */}
-              <div className="bg-zinc-900/90 border-b border-zinc-800/80 px-4 py-2 flex items-center justify-between text-xs text-zinc-300 shrink-0">
+              {/* Student Identity Strip (Fixed real name - Name change option removed) */}
+              <div className="bg-zinc-900/90 border-b border-zinc-800/80 px-4 py-2.5 flex items-center justify-between text-xs text-zinc-300 shrink-0">
                 <div className="flex items-center gap-2 truncate">
-                  <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>
-                  <span className="text-zinc-400">विद्यार्थी:</span>
-                  {isEditingName ? (
-                    <form onSubmit={handleSaveStudentName} className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={tempName}
-                        onChange={(e) => setTempName(e.target.value)}
-                        className="bg-black border border-blue-500 rounded px-2 py-0.5 text-xs text-white focus:outline-none w-32"
-                        placeholder="तपाईंको नाम"
-                        autoFocus
-                      />
-                      <button
-                        type="submit"
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingName(false)}
-                        className="text-zinc-400 hover:text-white text-[10px] px-1"
-                      >
-                        ✕
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="flex items-center gap-1.5 truncate">
-                      <strong className="text-white font-semibold truncate">{studentName}</strong>
-                      <button
-                        onClick={() => {
-                          setTempName(studentName);
-                          setIsEditingName(true);
-                        }}
-                        className="text-blue-400 hover:text-blue-300 p-0.5 rounded hover:bg-blue-500/10 cursor-pointer"
-                        title="नाम परिवर्तन गर्नुहोस् (Change Name)"
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
-                    </div>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${hasActivatedCourse ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                  <span className="text-zinc-400 font-medium">विद्यार्थी:</span>
+                  <strong className="text-white font-bold truncate tracking-tight">{studentName}</strong>
+                  {hasActivatedCourse && (
+                    <span className="bg-emerald-500/15 text-emerald-300 text-[9.5px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/25 inline-flex items-center gap-1 shrink-0">
+                      <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                      <span>Verified</span>
+                    </span>
                   )}
                 </div>
 
-                {activeCourseName && (
-                  <span className="text-[10px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-full truncate max-w-[140px]">
+                {activeCourseName ? (
+                  <span className="text-[10px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/25 px-2.5 py-0.5 rounded-full truncate max-w-[150px] shrink-0">
                     🎓 {activeCourseName}
+                  </span>
+                ) : hasActivatedCourse ? (
+                  <span className="text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 px-2.5 py-0.5 rounded-full shrink-0">
+                    ✓ Enrolled
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25 px-2.5 py-0.5 rounded-full shrink-0">
+                    🔒 Not Activated
                   </span>
                 )}
               </div>
 
               {/* Messages Scroll Area */}
               <div className="grow overflow-y-auto p-4 space-y-3.5 text-sm">
-                {/* Info Card */}
-                <div className="bg-gradient-to-br from-blue-950/30 via-zinc-900/60 to-purple-950/30 border border-blue-500/20 rounded-2xl p-3.5 text-xs text-zinc-300 space-y-1.5 shadow-sm">
-                  <div className="flex items-center gap-2 font-bold text-blue-300 text-sm">
-                    <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
-                    <span>AI CLIPZONE अफिसियल सपोर्ट (Ask Admin)</span>
-                  </div>
-                  <p className="leading-relaxed text-zinc-300">
-                    नमस्ते <strong>{studentName}</strong>! तपाईंको कोर्ष सम्बन्धी कुनै पनि जिज्ञासा वा समस्याको लागि यहाँ म्यासेज गर्नुहोस्। एडमिनले हेरेपछि डबल नीलो टिक (Double Blue Tick) देखिनेछ।
-                  </p>
-                </div>
-
-                {/* Rendered Messages */}
-                {studentMessages.length === 0 ? (
-                  <div className="py-8 text-center space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-blue-400">
-                      <MessageCircle className="w-6 h-6" />
+                {!hasActivatedCourse && !isAdmin ? (
+                  /* LOCKED FOR UNACTIVATED USERS */
+                  <div className="bg-gradient-to-br from-amber-950/40 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-2xl p-6 text-center space-y-4 shadow-xl my-4">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 text-2xl shadow-inner">
+                      <Lock className="w-7 h-7 text-amber-400" />
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-zinc-300 font-semibold text-sm">कुनै म्यासेज छैन (No messages yet)</p>
-                      <p className="text-zinc-500 text-xs max-w-xs mx-auto">
-                        तलको बक्समा आफ्नो प्रश्न लेखेर पठाउनुहोस् वा द्रुत प्रश्न छान्नुहोस्।
+                    <div className="space-y-1.5">
+                      <h4 className="font-extrabold text-base text-white">कोर्ष एक्टिभेसन आवश्यक छ (Course Activation Required)</h4>
+                      <p className="text-xs text-zinc-300 leading-relaxed max-w-sm mx-auto">
+                        केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र आफ्नो वास्तविक नामसहित एडमिनलाई सिधै म्यासेज पठाउन सक्नुहुन्छ। कृपया पहिले आफ्नो Secret Code हाल्नुहोस्।
+                      </p>
+                    </div>
+                    {onOpenActivationModal && (
+                      <button
+                        onClick={() => {
+                          onClose();
+                          onOpenActivationModal();
+                        }}
+                        className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs px-5 py-3 rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"
+                      >
+                        <span>🗝️</span>
+                        <span>Enter Activation Code (कोड हाल्नुहोस्)</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Info Card */}
+                    <div className="bg-gradient-to-br from-blue-950/30 via-zinc-900/60 to-purple-950/30 border border-blue-500/20 rounded-2xl p-3.5 text-xs text-zinc-300 space-y-1.5 shadow-sm">
+                      <div className="flex items-center gap-2 font-bold text-blue-300 text-sm">
+                        <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                        <span>AI CLIPZONE अफिसियल सपोर्ट (Ask Admin)</span>
+                      </div>
+                      <p className="leading-relaxed text-zinc-300">
+                        नमस्ते <strong>{studentName}</strong>! तपाईंको कोर्ष सम्बन्धी कुनै पनि जिज्ञासा वा समस्याको लागि यहाँ म्यासेज गर्नुहोस्। एडमिनले हेरेपछि डबल नीलो टिक (Double Blue Tick) देखिनेछ।
                       </p>
                     </div>
 
-                    {/* Quick question starter chips */}
-                    <div className="pt-2 flex flex-col gap-1.5 max-w-sm mx-auto text-left">
-                      <span className="text-[10.5px] font-bold text-zinc-400 px-1">द्रुत प्रश्नहरू (Quick Ask):</span>
-                      {QUICK_QUESTION_CHIPS.map((chip, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleStudentSendMessage(chip)}
-                          className="text-left text-xs bg-zinc-900 hover:bg-zinc-850 hover:border-blue-500/40 active:scale-[0.98] transition border border-zinc-800 text-zinc-300 px-3 py-2 rounded-xl cursor-pointer flex items-center justify-between group"
-                        >
-                          <span className="truncate pr-2">{chip}</span>
-                          <Send className="w-3 h-3 text-blue-400 opacity-60 group-hover:opacity-100 shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  studentMessages.map((msg) => {
-                    const isMe = msg.sender === 'user';
-                    const isSeen = msg.isSeen || msg.status === 'seen';
+                    {/* Rendered Messages */}
+                    {studentMessages.length === 0 ? (
+                      <div className="py-8 text-center space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-blue-400">
+                          <MessageCircle className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-zinc-300 font-semibold text-sm">कुनै म्यासेज छैन (No messages yet)</p>
+                          <p className="text-zinc-500 text-xs max-w-xs mx-auto">
+                            तलको बक्समा आफ्नो प्रश्न लेखेर पठाउनुहोस् वा द्रुत प्रश्न छान्नुहोस्।
+                          </p>
+                        </div>
 
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                      >
-                        <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[75%]">
-                          {!isMe && (
-                            <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-black shrink-0 mb-1 shadow-sm">
-                              👑
-                            </div>
-                          )}
-
-                          <div
-                            className={`rounded-2xl px-3.5 py-2.5 text-sm shadow-md break-words ${
-                              isMe
-                                ? 'bg-blue-600 text-white rounded-br-xs'
-                                : 'bg-zinc-850 border border-zinc-700/70 text-zinc-100 rounded-bl-xs'
-                            }`}
-                          >
-                            {!isMe && (
-                              <div className="text-[10px] font-black text-blue-400 mb-0.5 flex items-center gap-1">
-                                <span>{siteSettings.instituteName || 'AI CLIPZONE'} Support</span>
-                                <ShieldCheck className="w-3 h-3 text-blue-400" />
-                              </div>
-                            )}
-
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-
-                            {/* Timestamp & WHATSAPP DOUBLE TICKS */}
-                            <div
-                              className={`text-[9.5px] mt-1 flex items-center justify-end gap-1 ${
-                                isMe ? 'text-blue-200' : 'text-zinc-400'
-                              }`}
+                        {/* Quick question starter chips */}
+                        <div className="pt-2 flex flex-col gap-1.5 max-w-sm mx-auto text-left">
+                          <span className="text-[10.5px] font-bold text-zinc-400 px-1">द्रुत प्रश्नहरू (Quick Ask):</span>
+                          {QUICK_QUESTION_CHIPS.map((chip, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => handleStudentSendMessage(chip)}
+                              className="text-left text-xs bg-zinc-900 hover:bg-zinc-850 hover:border-blue-500/40 active:scale-[0.98] transition border border-zinc-800 text-zinc-300 px-3 py-2 rounded-xl cursor-pointer flex items-center justify-between group"
                             >
-                              <span>{formatMessageTime(msg.timestamp)}</span>
-
-                              {/* WhatsApp style Double Tick for User's message */}
-                              {isMe && (
-                                isSeen ? (
-                                  <span title="एडमिनले हेरिसक्यो (Seen by Admin)" className="inline-flex items-center ml-0.5 text-sky-300">
-                                    <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
-                                  </span>
-                                ) : (
-                                  <span title="पठाइयो (Sent)" className="inline-flex items-center ml-0.5 text-blue-200/70">
-                                    <Check className="w-3.5 h-3.5 stroke-[2]" />
-                                  </span>
-                                )
-                              )}
-                            </div>
-                          </div>
+                              <span className="truncate pr-2">{chip}</span>
+                              <Send className="w-3 h-3 text-blue-400 opacity-60 group-hover:opacity-100 shrink-0" />
+                            </button>
+                          ))}
                         </div>
                       </div>
-                    );
-                  })
+                    ) : (
+                      studentMessages.map((msg) => {
+                        const isMe = msg.sender === 'user';
+                        const isSeen = msg.isSeen || msg.status === 'seen';
+
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                          >
+                            <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[75%]">
+                              {!isMe && (
+                                <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-black shrink-0 mb-1 shadow-sm">
+                                  👑
+                                </div>
+                              )}
+
+                              <div
+                                className={`rounded-2xl px-3.5 py-2.5 text-sm shadow-md break-words ${
+                                  isMe
+                                    ? 'bg-blue-600 text-white rounded-br-xs'
+                                    : 'bg-zinc-850 border border-zinc-700/70 text-zinc-100 rounded-bl-xs'
+                                }`}
+                              >
+                                {!isMe && (
+                                  <div className="text-[10px] font-black text-blue-400 mb-0.5 flex items-center gap-1">
+                                    <span>{siteSettings.instituteName || 'AI CLIPZONE'} Support</span>
+                                    <ShieldCheck className="w-3 h-3 text-blue-400" />
+                                  </div>
+                                )}
+
+                                <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+
+                                {/* Timestamp & WHATSAPP DOUBLE TICKS */}
+                                <div
+                                  className={`text-[9.5px] mt-1 flex items-center justify-end gap-1 ${
+                                    isMe ? 'text-blue-200' : 'text-zinc-400'
+                                  }`}
+                                >
+                                  <span>{formatMessageTime(msg.timestamp)}</span>
+
+                                  {/* WhatsApp style Double Tick for User's message */}
+                                  {isMe && (
+                                    isSeen ? (
+                                      <span title="एडमिनले हेरिसक्यो (Seen by Admin)" className="inline-flex items-center ml-0.5 text-sky-300">
+                                        <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      </span>
+                                    ) : (
+                                      <span title="पठाइयो (Sent)" className="inline-flex items-center ml-0.5 text-blue-200/70">
+                                        <Check className="w-3.5 h-3.5 stroke-[2]" />
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </>
                 )}
 
                 <div ref={studentEndRef} />
               </div>
 
-              {/* Quick suggestions strip */}
-              {studentMessages.length > 0 && (
+              {/* Quick suggestions strip (Only for enrolled students) */}
+              {(hasActivatedCourse || isAdmin) && studentMessages.length > 0 && (
                 <div className="px-3 py-1.5 bg-zinc-950/90 border-t border-zinc-850 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
                   <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">सुझाव:</span>
                   {['धन्यवाद!', 'हजुर, बुझेँ।', 'पेमेन्ट स्क्रिनसट पठाएँ', 'प्रमाणपत्र कहाँ हेर्ने?'].map((sug, i) => (
@@ -1064,24 +1091,47 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 }}
                 className="p-3 bg-black border-t border-zinc-800 flex items-center gap-2 shrink-0"
               >
-                <input
-                  ref={studentInputRef}
-                  type="text"
-                  value={studentInputText}
-                  onChange={(e) => setStudentInputText(e.target.value)}
-                  placeholder="तपाईंको म्यासेज लेख्नुहोस् (Type message)..."
-                  disabled={isStudentSending}
-                  className="grow bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-2xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none transition disabled:opacity-50"
-                />
+                {!hasActivatedCourse && !isAdmin ? (
+                  <div className="grow flex items-center justify-between bg-zinc-900/90 border border-amber-500/30 rounded-2xl px-4 py-2.5 text-xs text-amber-300/90">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र म्यासेज पठाउन सक्नुहुन्छ</span>
+                    </span>
+                    {onOpenActivationModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenActivationModal();
+                        }}
+                        className="bg-amber-500 hover:bg-amber-400 text-black font-black text-[11px] px-3 py-1 rounded-xl cursor-pointer transition shrink-0 ml-2 shadow-xs"
+                      >
+                        कोड हाल्नुहोस्
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      ref={studentInputRef}
+                      type="text"
+                      value={studentInputText}
+                      onChange={(e) => setStudentInputText(e.target.value)}
+                      placeholder="तपाईंको म्यासेज लेख्नुहोस् (Type message)..."
+                      disabled={isStudentSending}
+                      className="grow bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-2xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none transition disabled:opacity-50"
+                    />
 
-                <button
-                  type="submit"
-                  disabled={!studentInputText.trim() || isStudentSending}
-                  className="w-10 h-10 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white flex items-center justify-center transition cursor-pointer shrink-0 shadow-md shadow-blue-500/20 active:scale-95"
-                  title="म्यासेज पठाउनुहोस् (Send)"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
+                    <button
+                      type="submit"
+                      disabled={!studentInputText.trim() || isStudentSending}
+                      className="w-10 h-10 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white flex items-center justify-center transition cursor-pointer shrink-0 shadow-md shadow-blue-500/20 active:scale-95"
+                      title="म्यासेज पठाउनुहोस् (Send)"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </form>
             </div>
           )}

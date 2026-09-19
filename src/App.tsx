@@ -3144,17 +3144,6 @@ export default function App() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowAdminMenu(false);
-                      setAdminInitialTab('ask');
-                      setShowAdminDashboard(true);
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-emerald-400 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    💬 Ask & Messages
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
                       setIsAdminActivated(false);
                       localStorage.removeItem('clipzone_admin_activated');
                       setShowAdminMenu(false);
@@ -7483,13 +7472,17 @@ export default function App() {
         isRunningInAppMode={isRunningInAppMode}
         siteSettings={siteSettings}
         currentUserId={currentUser?.uid || getOrCreateDeviceId()}
-        initialStudentName={currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
-        userEmail={currentUser?.email || ''}
-        activeCourseName={
-          courses.find(c => activeCourseIds.includes(c.id))?.title || 
-          courses[0]?.title || 
+        initialStudentName={
+          userActivationKeys.find(k => k.studentName && k.studentName !== 'Student Learner')?.studentName ||
+          (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
+          (authName && authName !== 'Student Learner' ? authName : '') ||
+          (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '') ||
           ''
         }
+        userEmail={currentUser?.email || ''}
+        activeCourseName={courses.find(c => activeCourseIds.includes(c.id))?.title || ''}
+        hasActivatedCourse={activeCourseIds.length > 0}
+        onOpenActivationModal={() => setShowCodeInputModal(true)}
         showToast={showToast}
         isAdmin={isAdminActivated || isFirebaseUserAdmin(currentUser?.email)}
         allActivationKeys={allActivationKeys}
