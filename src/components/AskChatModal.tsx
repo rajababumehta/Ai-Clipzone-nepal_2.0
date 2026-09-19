@@ -201,15 +201,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
   }, [studentMessages, isOpen, isAdmin]);
 
-  // Focus student input on open
-  useEffect(() => {
-    if (isOpen && !isAdmin) {
-      setTimeout(() => {
-        studentInputRef.current?.focus();
-      }, 300);
-    }
-  }, [isOpen, isAdmin]);
-
   // ==========================================================================
   // 2. ADMIN MODE: Listener for all student conversations & course buyers
   // ==========================================================================
@@ -356,13 +347,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       adminEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [adminMessages, isOpen, isAdmin]);
-
-  // Focus admin input when conversation selected
-  useEffect(() => {
-    if (selectedAdminConvId) {
-      adminReplyInputRef.current?.focus();
-    }
-  }, [selectedAdminConvId]);
 
   if (!isOpen) return null;
 
