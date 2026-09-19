@@ -67,6 +67,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Security rules for Ask & Support live conversations and messages
+    match /support_conversations/{conversationId} {
+      allow read, write: if true;
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+
     // Global default catch-all: deny all other paths
     match /{document=**} {
       allow read, write: if false;

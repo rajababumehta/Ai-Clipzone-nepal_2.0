@@ -213,6 +213,37 @@
         "certificateSealText": { "type": "string" },
         "updatedAt": { "type": "number" }
       }
+    },
+    "SupportConversation": {
+      "title": "SupportConversation",
+      "description": "Represents a support conversation between student and admin",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "number" },
+        "lastSender": { "type": "string" },
+        "unreadAdminCount": { "type": "number" },
+        "unreadUserCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId", "userName", "lastMessage", "lastMessageAt"]
+    },
+    "SupportMessage": {
+      "title": "SupportMessage",
+      "description": "A single chat message in a support conversation",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "sender": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["conversationId", "sender", "senderName", "text", "timestamp"]
     }
   },
   "firestore": {
@@ -239,6 +270,14 @@
     "system/site_settings": {
       "schema": "SiteSettingsConfig",
       "description": "Document holding global website branding and settings"
+    },
+    "support_conversations/{conversationId}": {
+      "schema": "SupportConversation",
+      "description": "Collection of student support threads"
+    },
+    "support_conversations/{conversationId}/messages/{messageId}": {
+      "schema": "SupportMessage",
+      "description": "Real-time messages between student and admin"
     }
   }
 }

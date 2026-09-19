@@ -144,3 +144,27 @@ export interface PushNotificationItem {
   icon?: string;
 }
 
+export interface SupportMessage {
+  id: string;
+  conversationId: string;
+  sender: 'user' | 'admin';
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
+
+export interface SupportConversation {
+  id: string; // userId or deviceId
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userPhone?: string;
+  lastMessage: string;
+  lastMessageAt: number;
+  lastSender: 'user' | 'admin';
+  unreadAdminCount: number;
+  unreadUserCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
