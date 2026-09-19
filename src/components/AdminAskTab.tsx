@@ -131,8 +131,22 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             sender: d.sender || 'user',
             senderName: d.senderName || 'Student',
             text: d.text || '',
-            timestamp: d.timestamp || Date.now()
+            timestamp: d.timestamp || Date.now(),
+            isSeen: d.isSeen ?? false,
+            status: d.status ?? (d.isSeen ? 'seen' : 'sent'),
+            seenAt: d.seenAt
           });
+
+          // WhatsApp Seen logic: mark user's message as seen when admin opens conversation
+          if (d.sender === 'user' && !d.isSeen) {
+            try {
+              updateDoc(docSnap.ref, {
+                isSeen: true,
+                status: 'seen',
+                seenAt: Date.now()
+              }).catch(() => {});
+            } catch (e) {}
+          }
         });
         setMessages(loadedMsgs);
         setIsLoadingMsgs(false);
@@ -183,7 +197,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         sender: 'admin',
         senderName: `${instituteName} Support`,
         text,
-        timestamp: now
+        timestamp: now,
+        isSeen: false,
+        status: 'sent'
       });
 
       // 2. Update conversation doc
@@ -497,7 +513,17 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                               }`}
                             >
                               <span>{timeStr}</span>
-                              {isAdminMsg && <CheckCheck className="w-3 h-3 text-blue-200" />}
+                              {isAdminMsg && (
+                                (msg.isSeen || msg.status === 'seen') ? (
+                                  <span title="विद्यार्थीले हेरिसक्यो (Seen by student)" className="inline-flex items-center ml-0.5 text-sky-300">
+                                    <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                                  </span>
+                                ) : (
+                                  <span title="डेलिभर भयो (Sent)" className="inline-flex items-center ml-0.5 text-blue-200/70">
+                                    <Check className="w-3.5 h-3.5 stroke-[2]" />
+                                  </span>
+                                )
+                              )}
                             </div>
                           </div>
                         </div>

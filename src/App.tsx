@@ -6454,37 +6454,28 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING ASK MESSENGER BUTTON - only visible when not in app mode or on larger screens */}
+      {/* FLOATING AI CHAT ASSISTANT BUTTON - website browser mode only */}
       {!isRunningInAppMode && (
         <div className="fixed bottom-6 left-6 z-[990]">
           <button 
             id="floating-ai-agent-fab"
             onClick={() => {
-              setIsChatOpen(false);
-              setIsAskOpen(prev => !prev);
+              setIsAskOpen(false);
+              setIsChatOpen(prev => !prev);
             }}
             className="w-16 h-16 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/30 ring-2 ring-blue-400/40 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative"
-            aria-label="Ask AI CLIPZONE Support"
-            title="Ask & Live Support"
+            aria-label="AI Chat Assistant"
+            title="AI Chat Assistant"
           >
-            {isAskOpen ? (
+            {isChatOpen ? (
               <X className="w-7 h-7" />
             ) : (
               <>
-                <MessageCircle className="w-8 h-8 animate-bounce mt-0.5" />
-                {studentUnreadCount > 0 ? (
-                  <span className="absolute -top-1 -right-1 flex h-5 w-5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-5 w-5 bg-rose-500 text-[10px] font-black text-white items-center justify-center">
-                      {studentUnreadCount}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">💬</span>
-                  </span>
-                )}
+                <Bot className="w-8 h-8 animate-bounce mt-0.5" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">1</span>
+                </span>
               </>
             )}
           </button>
@@ -7500,6 +7491,8 @@ export default function App() {
           ''
         }
         showToast={showToast}
+        isAdmin={isAdminActivated || isFirebaseUserAdmin(currentUser?.email)}
+        allActivationKeys={allActivationKeys}
       />
 
       {/* NATIVE APP BOTTOM NAVIGATION BAR - ONLY VISIBLE IN INSTALLED APK / PWA APP MODE (NEVER ON REGULAR BROWSER LINK) */}

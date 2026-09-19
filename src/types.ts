@@ -151,6 +151,9 @@ export interface SupportMessage {
   senderName: string;
   text: string;
   timestamp: number;
+  isSeen?: boolean;
+  seenAt?: number;
+  status?: 'sent' | 'seen';
 }
 
 export interface SupportConversation {
@@ -159,6 +162,7 @@ export interface SupportConversation {
   userName: string;
   userEmail?: string;
   userPhone?: string;
+  purchasedCourses?: string[];
   lastMessage: string;
   lastMessageAt: number;
   lastSender: 'user' | 'admin';
