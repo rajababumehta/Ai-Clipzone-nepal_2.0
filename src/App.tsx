@@ -56,7 +56,8 @@ import {
   ArrowLeft,
   FileText,
   ExternalLink,
-  Bell
+  Bell,
+  MessageCircle
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS } from './data';
@@ -66,6 +67,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { AskChatModal } from './components/AskChatModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
@@ -195,7 +197,7 @@ export default function App() {
     return localStorage.getItem('clipzone_admin_activated') === 'true';
   });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'courses'>('keys');
+  const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
   const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
 
@@ -2295,6 +2297,33 @@ export default function App() {
 
   // AI Chat Assistant state
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAskOpen, setIsAskOpen] = useState(false);
+  const [studentUnreadCount, setStudentUnreadCount] = useState(0);
+
+  // Real-time listener for user unread replies from Admin
+  useEffect(() => {
+    try {
+      const devId = getOrCreateDeviceId();
+      const uId = currentUser?.uid || devId;
+      if (!uId) return;
+
+      const convRef = doc(db, 'support_conversations', uId);
+      const unsub = onSnapshot(convRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setStudentUnreadCount(data?.unreadUserCount || 0);
+        } else {
+          setStudentUnreadCount(0);
+        }
+      }, (err) => {
+        console.warn('Support conversation listener error:', err);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Error setting up support conversation listener:', e);
+    }
+  }, [currentUser]);
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       sender: 'bot',
@@ -3105,11 +3134,23 @@ export default function App() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowAdminMenu(false);
+                      setAdminInitialTab('keys');
                       setShowAdminDashboard(true);
                     }}
                     className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition-colors flex items-center gap-2 cursor-pointer"
                   >
                     🗝️ Code Generator
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAdminMenu(false);
+                      setAdminInitialTab('ask');
+                      setShowAdminDashboard(true);
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-emerald-400 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    💬 Ask & Messages
                   </button>
                   <button 
                     onClick={(e) => {
@@ -5745,6 +5786,7 @@ export default function App() {
         onSendNotification={handleSendNotification}
         onDeleteNotification={handleDeleteNotification}
         showToast={showToast}
+        initialTab={adminInitialTab}
       />
 
       {/* CONFIRM LOGOUT ALL USER DEVICES MODAL */}
@@ -6412,24 +6454,37 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING CHATBOT TRIGGER BUTTON - only visible when not in app mode or on larger screens */}
+      {/* FLOATING ASK MESSENGER BUTTON - only visible when not in app mode or on larger screens */}
       {!isRunningInAppMode && (
         <div className="fixed bottom-6 left-6 z-[990]">
           <button 
             id="floating-ai-agent-fab"
-            onClick={() => setIsChatOpen(prev => !prev)}
+            onClick={() => {
+              setIsChatOpen(false);
+              setIsAskOpen(prev => !prev);
+            }}
             className="w-16 h-16 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/30 ring-2 ring-blue-400/40 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative"
-            aria-label="Toggle chat assistant"
+            aria-label="Ask AI CLIPZONE Support"
+            title="Ask & Live Support"
           >
-            {isChatOpen ? (
+            {isAskOpen ? (
               <X className="w-7 h-7" />
             ) : (
               <>
-                <Bot className="w-8 h-8 animate-bounce mt-1" />
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">1</span>
-                </span>
+                <MessageCircle className="w-8 h-8 animate-bounce mt-0.5" />
+                {studentUnreadCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-5 w-5 bg-rose-500 text-[10px] font-black text-white items-center justify-center">
+                      {studentUnreadCount}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">💬</span>
+                  </span>
+                )}
               </>
             )}
           </button>
@@ -7430,6 +7485,23 @@ export default function App() {
         onRequestPermissionPrompt={() => setShowNotifPromptModal(true)}
       />
 
+      {/* ASK & LIVE SUPPORT CHAT MODAL ("Message to AI CLIPZONE") */}
+      <AskChatModal
+        isOpen={isAskOpen}
+        onClose={() => setIsAskOpen(false)}
+        isRunningInAppMode={isRunningInAppMode}
+        siteSettings={siteSettings}
+        currentUserId={currentUser?.uid || getOrCreateDeviceId()}
+        initialStudentName={currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
+        userEmail={currentUser?.email || ''}
+        activeCourseName={
+          courses.find(c => activeCourseIds.includes(c.id))?.title || 
+          courses[0]?.title || 
+          ''
+        }
+        showToast={showToast}
+      />
+
       {/* NATIVE APP BOTTOM NAVIGATION BAR - ONLY VISIBLE IN INSTALLED APK / PWA APP MODE (NEVER ON REGULAR BROWSER LINK) */}
       {isRunningInAppMode && (
         <nav 
@@ -7443,17 +7515,18 @@ export default function App() {
               id="app-nav-home"
               onClick={() => {
                 setIsChatOpen(false);
+                setIsAskOpen(false);
                 setShowProfileModal(false);
                 setCurrentView('home');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                currentView === 'home' && !isChatOpen && !showProfileModal
+                currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal
                   ? 'text-blue-400 font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isChatOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="text-[10.5px] font-semibold tracking-tight">Home</span>
             </button>
 
@@ -7462,18 +7535,19 @@ export default function App() {
               id="app-nav-classroom"
               onClick={() => {
                 setIsChatOpen(false);
+                setIsAskOpen(false);
                 setShowProfileModal(false);
                 setCurrentView('classroom');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-                currentView === 'classroom' && !isChatOpen && !showProfileModal
+                currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal
                   ? 'text-blue-400 font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               <div className="relative flex items-center justify-center">
-                <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isChatOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+                <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
                 {/* Green Notification Dot from Screenshot */}
                 <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
               </div>
@@ -7485,6 +7559,7 @@ export default function App() {
               id="app-nav-certificate"
               onClick={() => {
                 setIsChatOpen(false);
+                setIsAskOpen(false);
                 setShowProfileModal(false);
                 const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
                 if (!isLoggedIn) {
@@ -7509,19 +7584,25 @@ export default function App() {
               <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
             </button>
 
-            {/* 4. AI Help */}
+            {/* 4. Ask (Message to AI CLIPZONE) */}
             <button
-              id="app-nav-aihelp"
+              id="app-nav-ask"
               onClick={() => {
                 setShowProfileModal(false);
-                setIsChatOpen(prev => !prev);
+                setIsChatOpen(false);
+                setIsAskOpen(prev => !prev);
               }}
               className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                isChatOpen ? 'text-purple-400 font-bold' : 'text-zinc-400 hover:text-purple-300'
+                isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
               }`}
             >
-              <Bot className="w-5 h-5 mb-0.5 stroke-[2.2] text-purple-400" />
-              <span className="text-[10.5px] font-semibold tracking-tight">AI Help</span>
+              <div className="relative flex items-center justify-center">
+                <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+                {studentUnreadCount > 0 && (
+                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
+                )}
+              </div>
+              <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
             </button>
 
             {/* 5. Account */}
@@ -7529,10 +7610,11 @@ export default function App() {
               id="app-nav-account"
               onClick={() => {
                 setIsChatOpen(false);
+                setIsAskOpen(false);
                 setShowProfileModal(true);
               }}
               className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                showProfileModal ? 'text-sky-400 font-bold' : 'text-zinc-400 hover:text-sky-300'
+                showProfileModal && !isAskOpen ? 'text-sky-400 font-bold' : 'text-zinc-400 hover:text-sky-300'
               }`}
             >
               <User className="w-5 h-5 mb-0.5 stroke-[2.2] text-sky-400" />

@@ -27,12 +27,14 @@ import {
   Sparkles,
   GraduationCap,
   FileText,
-  Bell
+  Bell,
+  MessageSquare
 } from 'lucide-react';
 
 import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem } from '../types';
 import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS } from '../data';
 import { AdminNotificationsTab } from './AdminNotificationsTab';
+import { AdminAskTab } from './AdminAskTab';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -66,7 +68,7 @@ interface AdminDashboardModalProps {
   onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteNotification?: (id: string) => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
-  initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications';
+  initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask';
 }
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
@@ -105,7 +107,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [showToastProp]);
 
-  const [activeTab, setActiveTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>(initialTab);
 
   // Key Deletion Confirmation state
   const [keyToDelete, setKeyToDelete] = useState<any | null>(null);
@@ -719,6 +721,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           >
             <Bell className="w-3.5 h-3.5 text-purple-400" />
             📢 Push Notifications ({notifications?.length || 0})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ask')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'ask'
+                ? 'bg-blue-600 text-white shadow-md font-bold'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+            💬 Ask (User Messages)
           </button>
         </div>
 
@@ -2408,6 +2422,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               showToast={showToast}
               instituteName={siteSettings.instituteName || 'AI Clipzone Nepal'}
               instituteLogoUrl={siteSettings.instituteLogoUrl || '/pwa-192x192.png'}
+            />
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 8: ASK & STUDENT LIVE SUPPORT (MESSENGER) */}
+          {/* ========================================================================= */}
+          {activeTab === 'ask' && (
+            <AdminAskTab
+              showToast={showToast}
+              instituteName={siteSettings.instituteName || 'AI CLIPZONE'}
+              instituteLogoUrl={siteSettings.instituteLogoUrl}
             />
           )}
 
