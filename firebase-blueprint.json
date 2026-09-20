@@ -228,7 +228,9 @@
         "unreadAdminCount": { "type": "number" },
         "unreadUserCount": { "type": "number" },
         "createdAt": { "type": "number" },
-        "updatedAt": { "type": "number" }
+        "updatedAt": { "type": "number" },
+        "clearedByUserAt": { "type": "number" },
+        "clearedByAdminAt": { "type": "number" }
       },
       "required": ["userId", "userName", "lastMessage", "lastMessageAt"]
     },
