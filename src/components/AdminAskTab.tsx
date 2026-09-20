@@ -36,6 +36,7 @@ interface AdminAskTabProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   instituteName?: string;
   instituteLogoUrl?: string;
+  allActivationKeys?: any[];
 }
 
 const ADMIN_QUICK_PRESETS = [
@@ -46,10 +47,73 @@ const ADMIN_QUICK_PRESETS = [
   'समस्या समाधान भएको छ, कृपया पुनः भिडियो खोलेर हेर्नुहोस्।'
 ];
 
+// Helper: Normalize and reject generic placeholder names
+const cleanRealName = (name?: string | null): string => {
+  if (!name) return '';
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === 'student learner' ||
+    lower === 'student' ||
+    lower === 'learner' ||
+    lower === 'user' ||
+    lower === 'guest' ||
+    lower === 'anonymous' ||
+    lower === 'null' ||
+    lower === 'undefined'
+  ) {
+    return '';
+  }
+  return trimmed;
+};
+
+// Helper: Verify if user has an activated course
+const verifyCourseActivated = (
+  userId: string,
+  userEmail?: string,
+  convData?: { activeCourse?: string; purchasedCourses?: string[]; isCourseActivated?: boolean },
+  keysList?: any[]
+): { isActivated: boolean; keyMatch?: any; courseTitle?: string } => {
+  // 1. Check used/claimed activation keys in database
+  if (Array.isArray(keysList)) {
+    const keyMatch = keysList.find((k: any) => {
+      const isClaimed = k.status === 'used' || Boolean(k.claimedAt) || Boolean(k.activeDeviceId);
+      if (!isClaimed) return false;
+      if (k.claimedByUid && (k.claimedByUid === userId)) return true;
+      if (k.claimedByEmail && userEmail && k.claimedByEmail.toLowerCase() === userEmail.toLowerCase()) return true;
+      if (userEmail && k.claimedByEmail && (userEmail.includes(k.claimedByEmail) || k.claimedByEmail.includes(userEmail))) return true;
+      return false;
+    });
+    if (keyMatch) {
+      return {
+        isActivated: true,
+        keyMatch,
+        courseTitle: keyMatch.courseTitle || 'Ai master class course by ai clipzone'
+      };
+    }
+  }
+
+  // 2. Check conversation's own course activation flags
+  if (convData) {
+    if (convData.activeCourse && convData.activeCourse.trim() !== '') {
+      return { isActivated: true, courseTitle: convData.activeCourse };
+    }
+    if (Array.isArray(convData.purchasedCourses) && convData.purchasedCourses.length > 0) {
+      return { isActivated: true, courseTitle: convData.purchasedCourses[0] };
+    }
+    if (convData.isCourseActivated) {
+      return { isActivated: true, courseTitle: 'Premium Course' };
+    }
+  }
+
+  return { isActivated: false };
+};
+
 export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   showToast,
   instituteName = 'AI CLIPZONE',
-  instituteLogoUrl = ''
+  instituteLogoUrl = '',
+  allActivationKeys = []
 }) => {
   const [conversations, setConversations] = useState<SupportConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
@@ -60,11 +124,12 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   const [isLoadingConvs, setIsLoadingConvs] = useState(true);
   const [isLoadingMsgs, setIsLoadingMsgs] = useState(false);
   const [convToDelete, setConvToDelete] = useState<SupportConversation | null>(null);
+  const [isPurgingNonActive, setIsPurgingNonActive] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Real-time listener for all student conversations
+  // 1. Real-time listener: strictly load ONLY course activated student conversations
   useEffect(() => {
     setIsLoadingConvs(true);
     const convsRef = collection(db, 'support_conversations');
@@ -76,30 +141,82 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         const loaded: SupportConversation[] = [];
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
-          let resolvedName = d.userName;
-          if (!resolvedName || resolvedName.trim().toLowerCase() === 'student learner' || resolvedName.trim().toLowerCase() === 'student') {
-            if (d.userEmail) {
-              const ep = d.userEmail.split('@')[0];
-              resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
-            } else {
-              resolvedName = 'Student';
-            }
+          const check = verifyCourseActivated(docSnap.id, d.userEmail, d, allActivationKeys);
+
+          // STRICT FILTER: Keep ONLY course activated users, remove/exclude all others!
+          if (!check.isActivated) {
+            return;
           }
+
+          // Smart real name resolver: prioritize clean real name, then key match, then email
+          let resolvedName = cleanRealName(d.userName);
+          if (!resolvedName && check.keyMatch) {
+            resolvedName = cleanRealName(check.keyMatch.studentName) || cleanRealName(check.keyMatch.claimedByName);
+          }
+          if (!resolvedName && d.userEmail) {
+            const ep = d.userEmail.split('@')[0];
+            resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
+          }
+          if (!resolvedName) {
+            resolvedName = 'Student';
+          }
+
+          const activeCourseTitle = check.courseTitle || d.activeCourse || (d.purchasedCourses?.[0]) || 'Ai master class course by ai clipzone';
+
           loaded.push({
             id: docSnap.id,
             userId: d.userId || docSnap.id,
             userName: resolvedName,
-            userEmail: d.userEmail || '',
+            userEmail: d.userEmail || (check.keyMatch?.claimedByEmail || ''),
             userPhone: d.userPhone || '',
+            activeCourse: activeCourseTitle,
+            purchasedCourses: [activeCourseTitle],
             lastMessage: d.lastMessage || '',
             lastMessageAt: d.lastMessageAt || Date.now(),
             lastSender: d.lastSender || 'user',
             unreadAdminCount: d.unreadAdminCount || 0,
             unreadUserCount: d.unreadUserCount || 0,
             createdAt: d.createdAt || Date.now(),
-            updatedAt: d.updatedAt || Date.now()
-          });
+            updatedAt: d.updatedAt || Date.now(),
+            activationCode: check.keyMatch?.code || ''
+          } as any);
         });
+
+        // Merge users from activation keys who bought courses so admin sees all buyers like WhatsApp contacts
+        const existingIds = new Set(loaded.map((c) => c.id));
+        if (Array.isArray(allActivationKeys)) {
+          allActivationKeys.forEach((key: any) => {
+            const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
+            if (!isUsed) return;
+            const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
+            if (buyerId && !existingIds.has(buyerId)) {
+              existingIds.add(buyerId);
+              const realName = cleanRealName(key.studentName) || cleanRealName(key.claimedByName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
+              const courseTitle = key.courseTitle || 'Ai master class course by ai clipzone';
+              loaded.push({
+                id: buyerId,
+                userId: buyerId,
+                userName: realName,
+                userEmail: key.claimedByEmail || '',
+                userPhone: '',
+                activeCourse: courseTitle,
+                purchasedCourses: [courseTitle],
+                lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
+                lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
+                lastSender: 'system',
+                unreadAdminCount: 0,
+                unreadUserCount: 0,
+                createdAt: key.createdAt || Date.now(),
+                updatedAt: key.claimedAt || Date.now(),
+                activationCode: key.code || key.id
+              } as any);
+            }
+          });
+        }
+
+        // Sort by lastMessageAt descending
+        loaded.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
         setConversations(loaded);
         setIsLoadingConvs(false);
 
@@ -115,7 +232,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [allActivationKeys]);
 
   // 2. Real-time listener for messages in the selected conversation
   useEffect(() => {

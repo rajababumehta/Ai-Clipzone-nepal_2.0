@@ -2433,6 +2433,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               showToast={showToast}
               instituteName={siteSettings.instituteName || 'AI CLIPZONE'}
               instituteLogoUrl={siteSettings.instituteLogoUrl}
+              allActivationKeys={allActivationKeys}
             />
           )}
 
