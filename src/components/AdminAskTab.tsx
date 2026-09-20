@@ -76,10 +76,19 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         const loaded: SupportConversation[] = [];
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
+          let resolvedName = d.userName;
+          if (!resolvedName || resolvedName.trim().toLowerCase() === 'student learner' || resolvedName.trim().toLowerCase() === 'student') {
+            if (d.userEmail) {
+              const ep = d.userEmail.split('@')[0];
+              resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
+            } else {
+              resolvedName = 'Student';
+            }
+          }
           loaded.push({
             id: docSnap.id,
             userId: d.userId || docSnap.id,
-            userName: d.userName || 'Student Learner',
+            userName: resolvedName,
             userEmail: d.userEmail || '',
             userPhone: d.userPhone || '',
             lastMessage: d.lastMessage || '',
@@ -202,16 +211,25 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         status: 'sent'
       });
 
-      // 2. Update conversation doc
+      // 2. Update conversation doc - preserve student real name
+      const targetConv = conversations.find(c => c.id === selectedConvId);
       const convRef = doc(db, 'support_conversations', selectedConvId);
-      await updateDoc(convRef, {
-        lastMessage: text,
-        lastMessageAt: now,
-        lastSender: 'admin',
-        unreadAdminCount: 0,
-        unreadUserCount: increment(1),
-        updatedAt: now
-      });
+      await setDoc(
+        convRef,
+        {
+          id: selectedConvId,
+          userId: targetConv?.userId || selectedConvId,
+          userName: targetConv?.userName && targetConv.userName !== 'Student Learner' ? targetConv.userName : (targetConv?.userEmail ? targetConv.userEmail.split('@')[0] : 'Student'),
+          userEmail: targetConv?.userEmail || '',
+          lastMessage: text,
+          lastMessageAt: now,
+          lastSender: 'admin',
+          unreadAdminCount: 0,
+          unreadUserCount: increment(1),
+          updatedAt: now
+        },
+        { merge: true }
+      );
 
       showToast('जवाफ पठाइयो! (Reply delivered to student)', 'success');
     } catch (err) {

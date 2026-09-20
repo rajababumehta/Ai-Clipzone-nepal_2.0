@@ -17,6 +17,11 @@ async function startServer() {
   // Body parser
   app.use(express.json());
 
+  // Health check endpoint for Cloud Run and container liveness probes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: Date.now() });
+  });
+
   // Initialize server-side Gemini client
   let ai: GoogleGenAI | null = null;
   const key = process.env.GEMINI_API_KEY;

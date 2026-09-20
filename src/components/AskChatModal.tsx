@@ -279,10 +279,30 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         const loaded: SupportConversation[] = [];
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
+          // Smart real name resolver: prioritize clean real name, then activation key match, then email
+          let resolvedName = cleanRealName(d.userName);
+          if (!resolvedName && Array.isArray(allActivationKeys)) {
+            const keyMatch = allActivationKeys.find((k: any) =>
+              (k.claimedByUid && (k.claimedByUid === docSnap.id || k.claimedByUid === d.userId)) ||
+              (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()) ||
+              (k.claimedByEmail && docSnap.id.includes(k.claimedByEmail))
+            );
+            if (keyMatch) {
+              resolvedName = cleanRealName(keyMatch.claimedByName) || cleanRealName(keyMatch.studentName);
+            }
+          }
+          if (!resolvedName && d.userEmail) {
+            const ep = d.userEmail.split('@')[0];
+            resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
+          }
+          if (!resolvedName) {
+            resolvedName = 'Student';
+          }
+
           loaded.push({
             id: docSnap.id,
             userId: d.userId || docSnap.id,
-            userName: d.userName || 'Student Learner',
+            userName: resolvedName,
             userEmail: d.userEmail || '',
             userPhone: d.userPhone || '',
             purchasedCourses: d.purchasedCourses || (d.activeCourse ? [d.activeCourse] : []),
@@ -303,12 +323,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         if (Array.isArray(allActivationKeys)) {
           allActivationKeys.forEach((key: any) => {
             const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
+            const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
+
             if (buyerId && !existingUserIds.has(buyerId)) {
               existingUserIds.add(buyerId);
               loaded.push({
                 id: buyerId,
                 userId: buyerId,
-                userName: key.claimedByName || key.claimedByEmail?.split('@')[0] || 'Course Buyer',
+                userName: keyRealName,
                 userEmail: key.claimedByEmail || '',
                 purchasedCourses: [key.courseTitle || 'Premium Course'],
                 lastMessage: `Activated Code: ${key.code || key.id}`,
@@ -320,9 +342,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 updatedAt: key.claimedAt || Date.now()
               });
             } else if (buyerId && existingUserIds.has(buyerId)) {
-              const found = loaded.find(c => c.id === buyerId);
-              if (found && key.courseTitle && !found.purchasedCourses?.includes(key.courseTitle)) {
-                found.purchasedCourses = [...(found.purchasedCourses || []), key.courseTitle];
+              const found = loaded.find(c => c.id === buyerId || c.userId === buyerId);
+              if (found) {
+                // If the existing conversation doc had an empty or generic placeholder name, restore real name!
+                if ((!cleanRealName(found.userName) || found.userName === 'Student') && keyRealName) {
+                  found.userName = keyRealName;
+                }
+                if (!found.userEmail && key.claimedByEmail) {
+                  found.userEmail = key.claimedByEmail;
+                }
+                if (key.courseTitle && !found.purchasedCourses?.includes(key.courseTitle)) {
+                  found.purchasedCourses = [...(found.purchasedCourses || []), key.courseTitle];
+                }
               }
             }
           });
@@ -576,11 +607,34 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         status: 'sent'
       });
 
-      // 2. Update conversation doc
+      // 2. Update conversation doc - strictly preserve real student name so it never resets to Student Learner
+      const targetConv = adminConversations.find(c => c.id === selectedAdminConvId);
+      let realUserName = cleanRealName(targetConv?.userName);
+      if (!realUserName && Array.isArray(allActivationKeys)) {
+        const keyMatch = allActivationKeys.find((k: any) => 
+          (k.claimedByUid && (k.claimedByUid === selectedAdminConvId || k.claimedByUid === targetConv?.userId)) ||
+          (k.claimedByEmail && targetConv?.userEmail && k.claimedByEmail.toLowerCase() === targetConv.userEmail.toLowerCase())
+        );
+        if (keyMatch) {
+          realUserName = cleanRealName(keyMatch.claimedByName) || cleanRealName(keyMatch.studentName);
+        }
+      }
+      if (!realUserName && targetConv?.userEmail) {
+        const ep = targetConv.userEmail.split('@')[0];
+        realUserName = ep.charAt(0).toUpperCase() + ep.slice(1);
+      }
+      if (!realUserName) realUserName = 'Student';
+
       const convRef = doc(db, 'support_conversations', selectedAdminConvId);
       await setDoc(
         convRef,
         {
+          id: selectedAdminConvId,
+          userId: targetConv?.userId || selectedAdminConvId,
+          userName: realUserName,
+          userEmail: targetConv?.userEmail || '',
+          userPhone: targetConv?.userPhone || '',
+          purchasedCourses: targetConv?.purchasedCourses || [],
           lastMessage: text,
           lastMessageAt: now,
           lastSender: 'admin',

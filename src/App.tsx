@@ -1524,8 +1524,12 @@ export default function App() {
         return;
       }
 
-      // Automatically get Student Name assigned by Admin to this key
-      const assignedStudentName = keyData?.studentName || keyData?.claimedByEmail || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+      // Automatically get Student Name assigned by Admin to this key, strictly preserving real names
+      const keyStudentName = keyData?.studentName && keyData.studentName.trim() !== 'Student Learner' ? keyData.studentName.trim() : '';
+      const existingRealName = (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
+        (authName && authName !== 'Student Learner' ? authName : '') ||
+        (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '');
+      const assignedStudentName = keyStudentName || existingRealName || (keyData?.claimedByEmail ? (keyData.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + keyData.claimedByEmail.split('@')[0].slice(1)) : '') || 'Student';
 
       // Ensure student session profile is initialized with assigned name (with 1.5s timeout guard)
       let activeUser = currentUser;
@@ -1691,7 +1695,7 @@ export default function App() {
     const courseTitle = selectedCourseData ? selectedCourseData.title : (courses[0]?.title || 'All Courses Access');
     const finalCourseId = selectedCourseData ? selectedCourseData.id : (courses[0]?.id || 'course-all');
 
-    const studentName = (studentNameArg !== undefined ? studentNameArg : genStudentName).trim() || 'Student Learner';
+    const studentName = (studentNameArg !== undefined ? studentNameArg : genStudentName).trim();
     const duration = durationArg || genSelectedDuration || '1year';
 
     // Generate readable random secret code
