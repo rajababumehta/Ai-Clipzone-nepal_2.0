@@ -28,7 +28,10 @@ import {
   GraduationCap,
   FileText,
   Bell,
-  MessageSquare
+  MessageSquare,
+  CheckSquare,
+  Square,
+  ListChecks
 } from 'lucide-react';
 
 import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem } from '../types';
@@ -62,6 +65,7 @@ interface AdminDashboardModalProps {
   onCreateCourseClick: () => void;
   onEditCourseClick: (course: Course) => void;
   onDeleteCourseClick: (courseId: string) => Promise<void>;
+  onBatchDeleteCourses?: (courseIds: string[]) => Promise<void>;
   onSaveCourse?: (course: Course) => Promise<void>;
   // Push Notifications
   notifications?: PushNotificationItem[];
@@ -92,6 +96,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onCreateCourseClick,
   onEditCourseClick,
   onDeleteCourseClick,
+  onBatchDeleteCourses,
   onSaveCourse,
   notifications,
   onSendNotification,
@@ -122,6 +127,60 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [courseToDeleteAdmin, setCourseToDeleteAdmin] = useState<Course | null>(null);
   const [adminDeleteConfirmText, setAdminDeleteConfirmText] = useState('');
   const [isAdminDeletingCourse, setIsAdminDeletingCourse] = useState(false);
+
+  // Batch Select Courses state
+  const [isBatchModeCourses, setIsBatchModeCourses] = useState(false);
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchDeleteConfirmText, setBatchDeleteConfirmText] = useState('');
+  const [isBatchDeletingCourses, setIsBatchDeletingCourses] = useState(false);
+
+  // Synchronize selectedCourseIds with current courses
+  useEffect(() => {
+    if (selectedCourseIds.length > 0) {
+      const validIds = new Set(courses.map(c => c.id));
+      setSelectedCourseIds(prev => prev.filter(id => validIds.has(id)));
+    }
+  }, [courses]);
+
+  const handleToggleSelectCourse = (courseId: string) => {
+    setSelectedCourseIds(prev =>
+      prev.includes(courseId) ? prev.filter(id => id !== courseId) : [...prev, courseId]
+    );
+  };
+
+  const handleSelectAllCourses = () => {
+    if (selectedCourseIds.length === courses.length) {
+      setSelectedCourseIds([]);
+    } else {
+      setSelectedCourseIds(courses.map(c => c.id));
+    }
+  };
+
+  const handleExecuteBatchDelete = async () => {
+    if (selectedCourseIds.length === 0) return;
+    if (batchDeleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
+
+    try {
+      setIsBatchDeletingCourses(true);
+      if (onBatchDeleteCourses) {
+        await onBatchDeleteCourses(selectedCourseIds);
+      } else {
+        for (const cId of selectedCourseIds) {
+          await onDeleteCourseClick(cId);
+        }
+      }
+      setSelectedCourseIds([]);
+      setShowBatchDeleteModal(false);
+      setBatchDeleteConfirmText('');
+      setIsBatchModeCourses(false);
+    } catch (e) {
+      console.error('Batch delete error:', e);
+      showToast('कोर्षहरू मेटाउँदा त्रुटि भयो (Error deleting courses)', 'error');
+    } finally {
+      setIsBatchDeletingCourses(false);
+    }
+  };
 
   // When initialTab changes, update activeTab
   useEffect(() => {
@@ -2330,83 +2389,197 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
-                  <h4 className="text-sm font-black text-slate-900">
-                    📚 Dynamic Course Catalog ({courses?.length || 0} courses)
+                  <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <span>📚 Dynamic Course Catalog</span>
+                    <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-bold">
+                      {courses?.length || 0}
+                    </span>
                   </h4>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
                     Add new courses with custom chapters, Drive/YouTube videos, price tags, and thumbnail graphics.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onCreateCourseClick();
-                  }}
-                  className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider shrink-0"
-                >
-                  <Plus className="w-4 h-4" /> Add New Course
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBatchModeCourses(prev => !prev);
+                      if (isBatchModeCourses) {
+                        setSelectedCourseIds([]);
+                      }
+                    }}
+                    className={`font-extrabold py-2.5 px-3.5 rounded-xl text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider ${
+                      isBatchModeCourses 
+                        ? 'bg-purple-100 text-purple-800 border border-purple-300 hover:bg-purple-200' 
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    <ListChecks className="w-4 h-4 text-purple-600" />
+                    {isBatchModeCourses ? 'Exit Batch Select' : 'Batch Select'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onCreateCourseClick();
+                    }}
+                    className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider shrink-0"
+                  >
+                    <Plus className="w-4 h-4" /> Add New Course
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {courses.map((course) => (
-                  <div 
-                    key={course.id}
-                    className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-start gap-3 hover:border-purple-300 transition"
-                  >
-                    <img 
-                      src={course.image} 
-                      alt={course.title} 
-                      className="w-20 h-20 rounded-xl object-cover border border-slate-100 shrink-0 bg-slate-100"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400';
+              {/* Batch Selection Action Bar */}
+              {isBatchModeCourses && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-purple-900 text-white p-3.5 rounded-2xl shadow-lg border border-purple-700 flex flex-wrap items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllCourses}
+                      className="flex items-center gap-1.5 text-xs font-black bg-purple-800 hover:bg-purple-700 px-3 py-1.5 rounded-xl border border-purple-600 transition cursor-pointer"
+                    >
+                      {selectedCourseIds.length === courses.length && courses.length > 0 ? (
+                        <>
+                          <CheckSquare className="w-4 h-4 text-amber-300" /> Deselect All
+                        </>
+                      ) : (
+                        <>
+                          <Square className="w-4 h-4 text-purple-300" /> Select All ({courses.length})
+                        </>
+                      )}
+                    </button>
+
+                    <span className="text-xs font-extrabold text-purple-200">
+                      <span className="text-white font-black text-sm bg-purple-800 px-2 py-0.5 rounded-lg border border-purple-600 mr-1.5">
+                        {selectedCourseIds.length}
+                      </span> 
+                      of {courses.length} courses selected
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={selectedCourseIds.length === 0}
+                      onClick={() => {
+                        setBatchDeleteConfirmText('');
+                        setShowBatchDeleteModal(true);
                       }}
-                    />
-                    <div className="grow space-y-1 overflow-hidden">
-                      <div className="flex items-center gap-2">
-                        <span className="text-purple-700 bg-purple-50 text-[10px] font-black px-2 py-0.5 rounded border border-purple-200">
-                          {course.price}
-                        </span>
-                        <span className="text-slate-500 text-[10px] font-bold">
-                          🎬 {course.videos?.length || 0} Videos
-                        </span>
-                        <span className="text-rose-600 bg-rose-50 text-[10px] font-bold px-1.5 py-0.5 rounded border border-rose-200">
-                          📕 {course.pdfs?.length || 0} PDFs
-                        </span>
-                      </div>
-                      <h5 className="text-xs font-black text-slate-900 truncate">
-                        {course.title}
-                      </h5>
-                      <p className="text-[10px] text-slate-400 font-medium line-clamp-1">
-                        ID: {course.id}
-                      </p>
-                      
-                      <div className="flex items-center gap-2 pt-2">
+                      className="bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs px-4 py-2 rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Bulk Delete ({selectedCourseIds.length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCourseIds([]);
+                        setIsBatchModeCourses(false);
+                      }}
+                      className="text-xs text-purple-300 hover:text-white px-2.5 py-2 font-bold cursor-pointer transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {courses.map((course) => {
+                  const isSelected = selectedCourseIds.includes(course.id);
+                  return (
+                    <div 
+                      key={course.id}
+                      onClick={() => {
+                        if (isBatchModeCourses) {
+                          handleToggleSelectCourse(course.id);
+                        }
+                      }}
+                      className={`relative bg-white border rounded-2xl p-4 shadow-xs flex items-start gap-3 transition ${
+                        isBatchModeCourses ? 'cursor-pointer select-none' : ''
+                      } ${
+                        isSelected 
+                          ? 'border-purple-500 bg-purple-50/50 ring-2 ring-purple-500/50 shadow-md' 
+                          : 'border-slate-200 hover:border-purple-300'
+                      }`}
+                    >
+                      {/* Checkbox button */}
+                      {isBatchModeCourses && (
                         <button
                           type="button"
-                          onClick={() => {
-                            onClose();
-                            onEditCourseClick(course);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectCourse(course.id);
                           }}
-                          className="bg-slate-100 hover:bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                          className="absolute top-3 right-3 p-1 rounded-lg text-purple-600 hover:bg-purple-100 transition z-10 cursor-pointer"
                         >
-                          <Edit3 className="w-3 h-3" /> Edit
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-purple-600 fill-purple-100" />
+                          ) : (
+                            <Square className="w-5 h-5 text-slate-400 hover:text-purple-600" />
+                          )}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCourseToDeleteAdmin(course);
-                            setAdminDeleteConfirmText('');
-                          }}
-                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
-                        >
-                          <Trash2 className="w-3 h-3" /> Delete
-                        </button>
+                      )}
+
+                      <img 
+                        src={course.image} 
+                        alt={course.title} 
+                        className="w-20 h-20 rounded-xl object-cover border border-slate-100 shrink-0 bg-slate-100"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400';
+                        }}
+                      />
+                      <div className={`grow space-y-1 overflow-hidden ${isBatchModeCourses ? 'pr-6' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-purple-700 bg-purple-50 text-[10px] font-black px-2 py-0.5 rounded border border-purple-200">
+                            {course.price}
+                          </span>
+                          <span className="text-slate-500 text-[10px] font-bold">
+                            🎬 {course.videos?.length || 0} Videos
+                          </span>
+                          <span className="text-rose-600 bg-rose-50 text-[10px] font-bold px-1.5 py-0.5 rounded border border-rose-200">
+                            📕 {course.pdfs?.length || 0} PDFs
+                          </span>
+                        </div>
+                        <h5 className="text-xs font-black text-slate-900 truncate">
+                          {course.title}
+                        </h5>
+                        <p className="text-[10px] text-slate-400 font-medium line-clamp-1">
+                          ID: {course.id}
+                        </p>
+                        
+                        <div className="flex items-center gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onEditCourseClick(course);
+                            }}
+                            className="bg-slate-100 hover:bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                          >
+                            <Edit3 className="w-3 h-3" /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCourseToDeleteAdmin(course);
+                              setAdminDeleteConfirmText('');
+                            }}
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2633,7 +2806,103 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </motion.div>
             </div>
           )}
-          {/* CONFIRM DELETE ALL KEYS BULK MODAL */}
+        </AnimatePresence>
+
+        {/* Bulk Course Permanent Delete Confirmation Dialog */}
+        <AnimatePresence>
+          {showBatchDeleteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-rose-200 text-left space-y-4 font-sans max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center gap-3 text-rose-600">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center border border-rose-200 shrink-0">
+                    <Trash2 className="w-6 h-6 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">
+                      Confirm Bulk Course Deletion
+                    </h3>
+                    <p className="text-xs text-rose-600 font-bold">
+                      एकैपटक {selectedCourseIds.length} वटा कोर्षहरू मेटाउन पुष्टि गर्नुहोस्
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 text-xs text-rose-900">
+                  <p className="font-extrabold text-slate-900 flex items-center justify-between">
+                    <span>मेटाउन लागिएका कोर्षहरू ({selectedCourseIds.length} Selected):</span>
+                  </p>
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                    {courses
+                      .filter(c => selectedCourseIds.includes(c.id))
+                      .map((course) => (
+                        <div 
+                          key={course.id} 
+                          className="flex items-center justify-between bg-white px-3 py-1.5 rounded-xl border border-rose-200 text-xs font-bold text-slate-800"
+                        >
+                          <span className="truncate mr-2 font-black text-rose-900">{course.title}</span>
+                          <span className="text-[10px] text-slate-500 font-mono shrink-0">{course.price}</span>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-[11px] text-rose-700 pt-1 leading-relaxed font-medium">
+                    ⚠️ यी सबै कोर्षहरू, तिनका भिडियो/पिडिएफ सामग्रीहरू तथा सम्बन्धित एक्टिभेसन किहरू स्थायी रूपमा हटाइनेछ। दुर्घटनावश मेटाउनबाट बच्न तल <span className="font-black text-rose-900 underline">DELETE</span> टाइप गर्नुहोस्।
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Type <span className="text-rose-600 font-mono font-black">DELETE</span> to confirm bulk delete:
+                  </label>
+                  <input
+                    type="text"
+                    value={batchDeleteConfirmText}
+                    onChange={(e) => setBatchDeleteConfirmText(e.target.value)}
+                    placeholder="Type DELETE here..."
+                    autoFocus
+                    disabled={isBatchDeletingCourses}
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-rose-500 rounded-xl px-4 py-2.5 text-sm font-mono font-black tracking-widest text-rose-600 placeholder-slate-400 outline-hidden text-center"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    disabled={isBatchDeletingCourses}
+                    onClick={() => {
+                      setShowBatchDeleteModal(false);
+                      setBatchDeleteConfirmText('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Cancel (रद्द गर्नुहोस्)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={batchDeleteConfirmText.trim().toUpperCase() !== 'DELETE' || isBatchDeletingCourses}
+                    onClick={handleExecuteBatchDelete}
+                    className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isBatchDeletingCourses ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    {isBatchDeletingCourses 
+                      ? `Deleting ${selectedCourseIds.length} Courses...` 
+                      : `Delete ${selectedCourseIds.length} Courses`}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* CONFIRM DELETE ALL KEYS BULK MODAL */}
+        <AnimatePresence>
           {showDeleteAllKeysModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
               <motion.div

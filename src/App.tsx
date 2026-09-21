@@ -2735,6 +2735,88 @@ export default function App() {
     }
   };
 
+  // Handle Batch Deletion of multiple courses at once in a single bulk operation
+  const handleBatchDeleteCourses = async (courseIds: string[]) => {
+    if (!courseIds || courseIds.length === 0) return;
+    try {
+      // 1. Immediately update local deleted blacklist state & storage
+      const localDeleted: string[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+      const newBlacklist = Array.from(new Set([...localDeleted, ...courseIds]));
+      localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(newBlacklist));
+      setDeletedCourseIds(newBlacklist);
+
+      // 2. Purge from courses state and dynamic cache
+      setCourses(prev => {
+        const updatedList = prev.filter(c => !courseIds.includes(c.id));
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+        localStorage.setItem('clipzone_courses_initialized', 'true');
+        return updatedList;
+      });
+
+      // 3. Clean up active activated courses state and storage
+      const localActivated: string[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+      const updatedActivated = localActivated.filter((id: string) => !courseIds.includes(id));
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+      setActiveCourseIds(prev => prev.filter(id => !courseIds.includes(id)));
+
+      // 4. Close any open views or modals referencing these courses
+      if (selectedCourse && courseIds.includes(selectedCourse.id)) {
+        setSelectedCourse(null);
+      }
+      if (courseToDelete && courseIds.includes(courseToDelete.id)) {
+        setCourseToDelete(null);
+      }
+
+      // 5. Delete course documents permanently from Firestore using writeBatch
+      const batch = writeBatch(db);
+      for (const id of courseIds) {
+        batch.delete(doc(db, 'courses', id));
+      }
+      await batch.commit();
+
+      // 6. Delete any secret activation keys created for these courses
+      for (const id of courseIds) {
+        try {
+          const keysQuery = query(collection(db, 'activation_keys'), where('courseId', '==', id));
+          const keysSnap = await getDocs(keysQuery);
+          for (const kDoc of keysSnap.docs) {
+            await deleteDoc(doc(db, 'activation_keys', kDoc.id));
+          }
+        } catch (keyErr) {
+          console.warn('Keys cleanup error on batch delete:', keyErr);
+        }
+      }
+
+      // 7. Persist deleted courseIds in system config so it is permanently blacklisted
+      try {
+        await setDoc(doc(db, 'system', 'config'), {
+          courses_seeded: true,
+          deletedCourseIds: arrayUnion(...courseIds)
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Config deleted ids set error:', e);
+      }
+
+      showToast(`${courseIds.length} वटा कोर्षहरू सफलतापूर्वक हटाइयो! (${courseIds.length} courses deleted!)`, 'success');
+    } catch (err) {
+      console.error('Failed to batch delete courses:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      showToast(`Error batch deleting courses: ${errorMessage}`, 'error');
+    }
+  };
+
   // Filter testimonials based on course category and search query
   const filteredTestimonials = allTestimonials.filter((item) => {
     let matchesCourse = true;
@@ -5843,6 +5925,7 @@ export default function App() {
         onCreateCourseClick={handleCreateCourseClick}
         onEditCourseClick={handleEditCourseClick}
         onDeleteCourseClick={handleDeleteCourse}
+        onBatchDeleteCourses={handleBatchDeleteCourses}
         onSaveCourse={handleSaveCourseDirect}
         notifications={notifications}
         onSendNotification={handleSendNotification}
