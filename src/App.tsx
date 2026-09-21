@@ -3378,24 +3378,6 @@ export default function App() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowAdminMenu(false);
-                      setAdminInitialTab('ask');
-                      setShowAdminDashboard(true);
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition-colors flex items-center justify-between cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      💬 Ask Messages
-                    </span>
-                    {adminUnreadCount > 0 && (
-                      <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-1 ring-zinc-950 shadow-xs" title="New user messages">
-                        {adminUnreadCount > 99 ? '99+' : adminUnreadCount}
-                      </span>
-                    )}
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
                       setIsAdminActivated(false);
                       localStorage.removeItem('clipzone_admin_activated');
                       setShowAdminMenu(false);
@@ -3418,7 +3400,7 @@ export default function App() {
                   showToast('Welcome Home! 🏠', 'info');
                 }}
                 className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'home' && !isAskOpen
+                  currentView === 'home'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
                     : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
                 }`}
@@ -3432,7 +3414,7 @@ export default function App() {
                   showToast('Welcome to Your Classroom! 🎓', 'info');
                 }}
                 className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
-                  currentView === 'classroom' && !isAskOpen
+                  currentView === 'classroom'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
                     : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
                 }`}
@@ -3440,29 +3422,6 @@ export default function App() {
                 🎓 Course Page
                 {activeCourseIds.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping border border-black" />
-                )}
-              </button>
-              <button
-                id="desktop-nav-ask"
-                onClick={() => {
-                  setIsChatOpen(false);
-                  setIsAskOpen(prev => !prev);
-                  if (!isAskOpen && !isUserAdminSession) {
-                    setStudentUnreadCount(0);
-                  }
-                }}
-                className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
-                  isAskOpen
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
-                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
-                <span>Ask</span>
-                {hasAskUnread && (
-                  <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-1.5 -right-2 shadow-md animate-pulse" title="New messages">
-                    {askBadgeText}
-                  </span>
                 )}
               </button>
             </div>
@@ -3563,28 +3522,6 @@ export default function App() {
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
-                          setIsChatOpen(false);
-                          setIsAskOpen(true);
-                          if (!isUserAdminSession) {
-                            setStudentUnreadCount(0);
-                          }
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center justify-between cursor-pointer"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <MessageCircle className="w-4 h-4 text-blue-400" />
-                          <span>💬 Ask & Support</span>
-                        </span>
-                        {hasAskUnread && (
-                          <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-1 ring-zinc-950 shadow-xs" title="New messages">
-                            {askBadgeText}
-                          </span>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
                           setShowProfileModal(true);
                         }}
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
@@ -3645,7 +3582,7 @@ export default function App() {
                 showToast('My Classroom! 🎓', 'info');
               }}
               className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
-                currentView === 'classroom' && !isAskOpen
+                currentView === 'classroom'
                   ? 'bg-blue-600 text-white shadow-md font-black'
                   : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
               }`}
@@ -3653,29 +3590,6 @@ export default function App() {
               🎓 Classroom
               {activeCourseIds.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              )}
-            </button>
-            <button
-              id="mobile-header-nav-ask"
-              onClick={() => {
-                setIsChatOpen(false);
-                setIsAskOpen(prev => !prev);
-                if (!isAskOpen && !isUserAdminSession) {
-                  setStudentUnreadCount(0);
-                }
-              }}
-              className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
-                isAskOpen
-                  ? 'bg-blue-600 text-white shadow-md font-black'
-                  : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
-              }`}
-            >
-              <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
-              <span>Ask</span>
-              {hasAskUnread && (
-                <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-1.5 -right-1 shadow-md animate-pulse" title="New messages">
-                  {askBadgeText}
-                </span>
               )}
             </button>
           </div>
