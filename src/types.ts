@@ -92,6 +92,7 @@ export interface SiteSettingsConfig {
   showNoticeBanner?: boolean;
   supportEmail?: string;
   supportPhone?: string;
+  contactPhone?: string;
   certificateTitle?: string;
   certificateSubtitle?: string;
   certificateInstituteName?: string;

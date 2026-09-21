@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, FormEvent, MouseEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -62,7 +62,7 @@ import {
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
@@ -514,9 +514,9 @@ export default function App() {
     } catch (e) {}
   }, [isRunningInAppMode]);
 
-  // Realtime listener for broadcast push notifications
+  // Realtime listener for broadcast push notifications (paginated/limited to 50 newest for high scale)
   useEffect(() => {
-    const notifQuery = collection(db, 'notifications');
+    const notifQuery = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
       try {
         const list: PushNotificationItem[] = [];

@@ -187,7 +187,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [certificateCeoName, setCertificateCeoName] = useState(siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
   const [certificateCeoTitle, setCertificateCeoTitle] = useState(siteSettings.certificateCeoTitle || 'Founder & CEO');
   const [certificateCeoSignatureUrl, setCertificateCeoSignatureUrl] = useState(siteSettings.certificateCeoSignatureUrl || '');
-  const [certificateTheme, setCertificateTheme] = useState<'blue' | 'cyber-purple' | 'emerald' | 'crimson' | 'gold'>(siteSettings.certificateTheme || 'blue');
+  const [certificateTheme, setCertificateTheme] = useState<'blue' | 'cyber-purple' | 'emerald' | 'crimson' | 'gold'>((siteSettings.certificateTheme as any) || 'blue');
   const [certificateStampUrl, setCertificateStampUrl] = useState(siteSettings.certificateStampUrl || '');
   const [certificateSealText, setCertificateSealText] = useState(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
 
@@ -233,7 +233,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
     setCertificateCeoTitle(siteSettings.certificateCeoTitle || 'Founder & CEO');
     setCertificateCeoSignatureUrl(siteSettings.certificateCeoSignatureUrl || '');
-    setCertificateTheme(siteSettings.certificateTheme || 'blue');
+    setCertificateTheme((siteSettings.certificateTheme as any) || 'blue');
     setCertificateStampUrl(siteSettings.certificateStampUrl || '');
     setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
     setApkDownloadUrl(siteSettings.apkDownloadUrl || '');
@@ -2310,7 +2310,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     setCertificateCeoName(DEFAULT_SITE_SETTINGS.certificateCeoName || 'Founder/CEO (AI Clipzone)');
                     setCertificateCeoTitle(DEFAULT_SITE_SETTINGS.certificateCeoTitle || 'Founder & CEO');
                     setCertificateCeoSignatureUrl(DEFAULT_SITE_SETTINGS.certificateCeoSignatureUrl || '');
-                    setCertificateTheme(DEFAULT_SITE_SETTINGS.certificateTheme || 'blue');
+                    setCertificateTheme((DEFAULT_SITE_SETTINGS.certificateTheme as any) || 'blue');
                     setCertificateStampUrl(DEFAULT_SITE_SETTINGS.certificateStampUrl || '');
                     setCertificateSealText(DEFAULT_SITE_SETTINGS.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
                     showToast('Reset certificate design parameters to defaults. Click Save to apply.', 'info');

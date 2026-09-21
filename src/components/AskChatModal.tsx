@@ -29,7 +29,8 @@ import {
   updateDoc, 
   query, 
   orderBy,
-  increment
+  increment,
+  limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
@@ -229,7 +230,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     if (!isOpen || isAdmin || !targetUid) return;
 
     const messagesRef = collection(db, 'support_conversations', targetUid, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(100));
 
     const unsubscribe = onSnapshot(
       q,
@@ -299,7 +300,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
     setIsLoadingAdminConvs(true);
     const convsRef = collection(db, 'support_conversations');
-    const q = query(convsRef, orderBy('lastMessageAt', 'desc'));
+    const q = query(convsRef, orderBy('lastMessageAt', 'desc'), limit(300));
 
     const unsubscribe = onSnapshot(
       q,
@@ -447,7 +448,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
 
     const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(100));
 
     const unsubscribe = onSnapshot(
       q,
@@ -1213,11 +1214,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {siteSettings.contactPhone && (
+                  {(siteSettings.supportPhone || siteSettings.contactPhone) && (
                     <a
-                      href={`tel:${siteSettings.contactPhone}`}
+                      href={`tel:${siteSettings.supportPhone || siteSettings.contactPhone}`}
                       className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition"
-                      title={`Call ${siteSettings.contactPhone}`}
+                      title={`Call ${siteSettings.supportPhone || siteSettings.contactPhone}`}
                     >
                       <Phone className="w-4 h-4" />
                     </a>

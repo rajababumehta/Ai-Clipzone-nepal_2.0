@@ -27,7 +27,8 @@ import {
   query, 
   orderBy,
   increment,
-  getDocs 
+  getDocs,
+  limit 
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { SupportConversation, SupportMessage } from '../types';
@@ -133,7 +134,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   useEffect(() => {
     setIsLoadingConvs(true);
     const convsRef = collection(db, 'support_conversations');
-    const q = query(convsRef, orderBy('lastMessageAt', 'desc'));
+    const q = query(convsRef, orderBy('lastMessageAt', 'desc'), limit(300));
 
     const unsubscribe = onSnapshot(
       q,
@@ -285,7 +286,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
     setIsLoadingMsgs(true);
     const messagesRef = collection(db, 'support_conversations', selectedConvId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(100));
 
     const unsubscribe = onSnapshot(
       q,
