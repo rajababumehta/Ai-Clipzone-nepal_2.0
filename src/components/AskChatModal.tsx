@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowLeft, 
@@ -133,13 +133,38 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const adminReplyInputRef = useRef<HTMLInputElement>(null);
 
   // --------------------------------------------------------------------------
+  // CANONICAL STUDENT USER ID: strictly ensure student messages use the same permanent conversation doc
+  // --------------------------------------------------------------------------
+  const effectiveUserId = useMemo(() => {
+    if (isAdmin) return currentUserId;
+    const cleanName = cleanRealName(studentName) || cleanRealName(initialStudentName);
+    if (Array.isArray(allActivationKeys)) {
+      const match = allActivationKeys.find((k: any) => {
+        if (k.claimedByUid && k.claimedByUid === currentUserId) return true;
+        if (cleanName && k.studentName && k.studentName.trim().toLowerCase() === cleanName.toLowerCase()) return true;
+        if (cleanName && k.claimedByName && k.claimedByName.trim().toLowerCase() === cleanName.toLowerCase()) return true;
+        if (userEmail && k.claimedByEmail && k.claimedByEmail.toLowerCase() === userEmail.toLowerCase()) return true;
+        return false;
+      });
+      if (match?.claimedByUid) {
+        try {
+          localStorage.setItem('clipzone_student_uid', match.claimedByUid);
+        } catch (e) {}
+        return match.claimedByUid;
+      }
+    }
+    return currentUserId;
+  }, [isAdmin, currentUserId, studentName, initialStudentName, userEmail, allActivationKeys]);
+
+  // --------------------------------------------------------------------------
   // WHATSAPP "CLEAR CHAT FROM OWN ONLY" STATES
   // WhatsApp Rule: Conversation records are NEVER permanently deleted from database.
   // Each user (student or admin) can clear chat from their OWN view only.
   // --------------------------------------------------------------------------
   const [studentClearedAt, setStudentClearedAt] = useState<number>(() => {
-    if (typeof window === 'undefined' || !currentUserId) return 0;
-    return Number(localStorage.getItem(`clipzone_chat_cleared_user_${currentUserId}`) || 0);
+    const targetUid = effectiveUserId || currentUserId;
+    if (typeof window === 'undefined' || !targetUid) return 0;
+    return Number(localStorage.getItem(`clipzone_chat_cleared_user_${targetUid}`) || 0);
   });
   const [studentMenuOpen, setStudentMenuOpen] = useState(false);
   const [showStudentClearConfirm, setShowStudentClearConfirm] = useState(false);
@@ -157,18 +182,20 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
   }, [initialStudentName]);
 
-  // Sync student clearedAt timestamp whenever currentUserId changes
+  // Sync student clearedAt timestamp whenever effectiveUserId changes
   useEffect(() => {
-    if (currentUserId) {
-      const local = Number(localStorage.getItem(`clipzone_chat_cleared_user_${currentUserId}`) || 0);
+    const targetUid = effectiveUserId || currentUserId;
+    if (targetUid) {
+      const local = Number(localStorage.getItem(`clipzone_chat_cleared_user_${targetUid}`) || 0);
       setStudentClearedAt(local);
     }
-  }, [currentUserId]);
+  }, [effectiveUserId, currentUserId]);
 
   // Listen to student conversation doc for remote cleared timestamp
   useEffect(() => {
-    if (!isOpen || isAdmin || !currentUserId) return;
-    const convRef = doc(db, 'support_conversations', currentUserId);
+    const targetUid = effectiveUserId || currentUserId;
+    if (!isOpen || isAdmin || !targetUid) return;
+    const convRef = doc(db, 'support_conversations', targetUid);
     const unsub = onSnapshot(convRef, (docSnap) => {
       if (docSnap.exists()) {
         const d = docSnap.data();
@@ -178,7 +205,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       }
     });
     return () => unsub();
-  }, [isOpen, isAdmin, currentUserId]);
+  }, [isOpen, isAdmin, effectiveUserId, currentUserId]);
 
   // Sync admin clearedAt timestamp whenever selected conversation changes
   useEffect(() => {
@@ -198,9 +225,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // 1. STUDENT MODE: Listener for student's direct messages with AI CLIPZONE
   // ==========================================================================
   useEffect(() => {
-    if (!isOpen || isAdmin || !currentUserId) return;
+    const targetUid = effectiveUserId || currentUserId;
+    if (!isOpen || isAdmin || !targetUid) return;
 
-    const messagesRef = collection(db, 'support_conversations', currentUserId, 'messages');
+    const messagesRef = collection(db, 'support_conversations', targetUid, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     const unsubscribe = onSnapshot(
@@ -211,7 +239,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           const data = docSnap.data();
           loadedMsgs.push({
             id: docSnap.id,
-            conversationId: currentUserId,
+            conversationId: targetUid,
             sender: data.sender || 'user',
             senderName: data.senderName || 'Student',
             text: data.text || '',
@@ -237,7 +265,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
         // Reset student's unread counter on the conversation document
         try {
-          const convRef = doc(db, 'support_conversations', currentUserId);
+          const convRef = doc(db, 'support_conversations', targetUid);
           updateDoc(convRef, {
             unreadUserCount: 0
           }).catch(() => {});
@@ -249,7 +277,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, currentUserId]);
+  }, [isOpen, isAdmin, effectiveUserId, currentUserId]);
 
   // Filter messages based on WhatsApp-style local cleared timestamp (never deleted from DB)
   const displayedStudentMessages = studentMessages.filter(
@@ -276,19 +304,30 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const loaded: SupportConversation[] = [];
+        // Map to ensure strictly ONE conversation per student - never duplicate contacts
+        const studentContactMap = new Map<string, SupportConversation>();
+
+        const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
+          const cName = cleanRealName(name).toLowerCase();
+          if (cName) return `name_${cName}`;
+          if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
+          if (code) return `code_${code.toLowerCase()}`;
+          return `uid_${uid}`;
+        };
+
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
           // Smart real name resolver: prioritize clean real name, then activation key match, then email
           let resolvedName = cleanRealName(d.userName);
-          if (!resolvedName && Array.isArray(allActivationKeys)) {
-            const keyMatch = allActivationKeys.find((k: any) =>
+          let matchedKey: any = null;
+          if (Array.isArray(allActivationKeys)) {
+            matchedKey = allActivationKeys.find((k: any) =>
               (k.claimedByUid && (k.claimedByUid === docSnap.id || k.claimedByUid === d.userId)) ||
               (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()) ||
               (k.claimedByEmail && docSnap.id.includes(k.claimedByEmail))
             );
-            if (keyMatch) {
-              resolvedName = cleanRealName(keyMatch.claimedByName) || cleanRealName(keyMatch.studentName);
+            if (!resolvedName && matchedKey) {
+              resolvedName = cleanRealName(matchedKey.claimedByName) || cleanRealName(matchedKey.studentName);
             }
           }
           if (!resolvedName && d.userEmail) {
@@ -299,11 +338,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             resolvedName = 'Student';
           }
 
-          loaded.push({
+          const convObj: SupportConversation = {
             id: docSnap.id,
             userId: d.userId || docSnap.id,
             userName: resolvedName,
-            userEmail: d.userEmail || '',
+            userEmail: d.userEmail || (matchedKey?.claimedByEmail || ''),
             userPhone: d.userPhone || '',
             purchasedCourses: d.purchasedCourses || (d.activeCourse ? [d.activeCourse] : []),
             lastMessage: d.lastMessage || '',
@@ -315,49 +354,71 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             updatedAt: d.updatedAt || Date.now(),
             clearedByUserAt: d.clearedByUserAt || 0,
             clearedByAdminAt: d.clearedByAdminAt || 0
-          });
+          };
+
+          const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', docSnap.id, matchedKey?.code);
+          const existing = studentContactMap.get(dedupKey);
+
+          if (!existing) {
+            studentContactMap.set(dedupKey, convObj);
+          } else {
+            // Merge duplicate into the single contact thread, keeping the one with newest message
+            if ((convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
+              studentContactMap.set(dedupKey, {
+                ...existing,
+                ...convObj,
+                purchasedCourses: Array.from(new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])]))
+              });
+            }
+          }
         });
 
         // Merge users from activation keys who bought courses so admin sees all buyers like WhatsApp contacts
-        const existingUserIds = new Set(loaded.map(c => c.id));
         if (Array.isArray(allActivationKeys)) {
           allActivationKeys.forEach((key: any) => {
+            const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
+            if (!isUsed) return;
             const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
-            const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
+            if (!buyerId) return;
 
-            if (buyerId && !existingUserIds.has(buyerId)) {
-              existingUserIds.add(buyerId);
-              loaded.push({
+            const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
+            const dedupKey = getStudentKey(keyRealName, key.claimedByEmail || '', buyerId, key.code || key.id);
+            const courseTitle = key.courseTitle || 'Ai master class course by ai clipzone';
+
+            const existing = studentContactMap.get(dedupKey);
+
+            if (!existing) {
+              studentContactMap.set(dedupKey, {
                 id: buyerId,
                 userId: buyerId,
                 userName: keyRealName,
                 userEmail: key.claimedByEmail || '',
-                purchasedCourses: [key.courseTitle || 'Premium Course'],
-                lastMessage: `Activated Code: ${key.code || key.id}`,
+                userPhone: '',
+                purchasedCourses: [courseTitle],
+                lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
                 lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
                 lastSender: 'user',
                 unreadAdminCount: 0,
                 unreadUserCount: 0,
                 createdAt: key.createdAt || Date.now(),
-                updatedAt: key.claimedAt || Date.now()
-              });
-            } else if (buyerId && existingUserIds.has(buyerId)) {
-              const found = loaded.find(c => c.id === buyerId || c.userId === buyerId);
-              if (found) {
-                // If the existing conversation doc had an empty or generic placeholder name, restore real name!
-                if ((!cleanRealName(found.userName) || found.userName === 'Student') && keyRealName) {
-                  found.userName = keyRealName;
-                }
-                if (!found.userEmail && key.claimedByEmail) {
-                  found.userEmail = key.claimedByEmail;
-                }
-                if (key.courseTitle && !found.purchasedCourses?.includes(key.courseTitle)) {
-                  found.purchasedCourses = [...(found.purchasedCourses || []), key.courseTitle];
-                }
+                updatedAt: key.claimedAt || Date.now(),
+                clearedByUserAt: 0,
+                clearedByAdminAt: 0
+              } as any);
+            } else {
+              // Existing contact found - update metadata, NEVER duplicate
+              if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
+                existing.userName = keyRealName;
+              }
+              if (courseTitle && !existing.purchasedCourses?.includes(courseTitle)) {
+                existing.purchasedCourses = [...(existing.purchasedCourses || []), courseTitle];
               }
             }
           });
         }
+
+        const loaded = Array.from(studentContactMap.values());
+        loaded.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 
         setAdminConversations(loaded);
         setIsLoadingAdminConvs(false);
@@ -452,12 +513,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // WHATSAPP "CLEAR CHAT FROM OWN ONLY" HANDLERS
   // --------------------------------------------------------------------------
   const handleStudentClearChat = async () => {
+    const targetUid = effectiveUserId || currentUserId;
     const now = Date.now();
     setStudentClearedAt(now);
-    if (currentUserId) {
-      localStorage.setItem(`clipzone_chat_cleared_user_${currentUserId}`, String(now));
+    if (targetUid) {
+      localStorage.setItem(`clipzone_chat_cleared_user_${targetUid}`, String(now));
       try {
-        const convRef = doc(db, 'support_conversations', currentUserId);
+        const convRef = doc(db, 'support_conversations', targetUid);
         await updateDoc(convRef, {
           clearedByUserAt: now
         });
@@ -469,11 +531,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   };
 
   const handleStudentRestoreChat = async () => {
+    const targetUid = effectiveUserId || currentUserId;
     setStudentClearedAt(0);
-    if (currentUserId) {
-      localStorage.removeItem(`clipzone_chat_cleared_user_${currentUserId}`);
+    if (targetUid) {
+      localStorage.removeItem(`clipzone_chat_cleared_user_${targetUid}`);
       try {
-        const convRef = doc(db, 'support_conversations', currentUserId);
+        const convRef = doc(db, 'support_conversations', targetUid);
         await updateDoc(convRef, {
           clearedByUserAt: 0
         });
@@ -529,8 +592,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       return;
     }
 
+    const targetUid = effectiveUserId || currentUserId;
     const text = (textToSend !== undefined ? textToSend : studentInputText).trim();
-    if (!text || isStudentSending || !currentUserId) return;
+    if (!text || isStudentSending || !targetUid) return;
 
     setIsStudentSending(true);
     setStudentInputText('');
@@ -544,9 +608,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
     try {
       // 1. Add message with status 'sent' and isSeen: false (single/double grey tick initially)
-      const messagesRef = collection(db, 'support_conversations', currentUserId, 'messages');
+      const messagesRef = collection(db, 'support_conversations', targetUid, 'messages');
       await addDoc(messagesRef, {
-        conversationId: currentUserId,
+        conversationId: targetUid,
         sender: 'user',
         senderName: finalStudentName,
         text,
@@ -555,13 +619,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         status: 'sent'
       });
 
-      // 2. Set/update conversation doc
-      const convRef = doc(db, 'support_conversations', currentUserId);
+      // 2. Set/update conversation doc with strictly the same single conversation ID
+      const convRef = doc(db, 'support_conversations', targetUid);
       await setDoc(
         convRef,
         {
-          id: currentUserId,
-          userId: currentUserId,
+          id: targetUid,
+          userId: targetUid,
           userName: finalStudentName,
           userEmail: userEmail || '',
           activeCourse: activeCourseName || '',

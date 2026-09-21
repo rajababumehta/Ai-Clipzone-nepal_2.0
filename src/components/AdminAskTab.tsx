@@ -138,7 +138,17 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const loaded: SupportConversation[] = [];
+        // Map to ensure strictly ONE conversation per student - never duplicate contacts
+        const studentContactMap = new Map<string, SupportConversation>();
+
+        const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
+          const cName = cleanRealName(name).toLowerCase();
+          if (cName) return `name_${cName}`;
+          if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
+          if (code) return `code_${code.toLowerCase()}`;
+          return `uid_${uid}`;
+        };
+
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
           const check = verifyCourseActivated(docSnap.id, d.userEmail, d, allActivationKeys);
@@ -163,7 +173,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
           const activeCourseTitle = check.courseTitle || d.activeCourse || (d.purchasedCourses?.[0]) || 'Ai master class course by ai clipzone';
 
-          loaded.push({
+          const convObj: SupportConversation = {
             id: docSnap.id,
             userId: d.userId || docSnap.id,
             userName: resolvedName,
@@ -179,21 +189,41 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             createdAt: d.createdAt || Date.now(),
             updatedAt: d.updatedAt || Date.now(),
             activationCode: check.keyMatch?.code || ''
-          } as any);
+          } as any;
+
+          const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', docSnap.id, check.keyMatch?.code);
+          const existing = studentContactMap.get(dedupKey);
+
+          if (!existing) {
+            studentContactMap.set(dedupKey, convObj);
+          } else {
+            // Merge duplicate into the single contact thread, keeping the one with newest message
+            if ((convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
+              studentContactMap.set(dedupKey, {
+                ...existing,
+                ...convObj,
+                purchasedCourses: Array.from(new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])]))
+              });
+            }
+          }
         });
 
         // Merge users from activation keys who bought courses so admin sees all buyers like WhatsApp contacts
-        const existingIds = new Set(loaded.map((c) => c.id));
         if (Array.isArray(allActivationKeys)) {
           allActivationKeys.forEach((key: any) => {
             const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
             if (!isUsed) return;
             const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
-            if (buyerId && !existingIds.has(buyerId)) {
-              existingIds.add(buyerId);
-              const realName = cleanRealName(key.studentName) || cleanRealName(key.claimedByName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
-              const courseTitle = key.courseTitle || 'Ai master class course by ai clipzone';
-              loaded.push({
+            if (!buyerId) return;
+
+            const realName = cleanRealName(key.studentName) || cleanRealName(key.claimedByName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
+            const dedupKey = getStudentKey(realName, key.claimedByEmail || '', buyerId, key.code || key.id);
+            const courseTitle = key.courseTitle || 'Ai master class course by ai clipzone';
+
+            const existing = studentContactMap.get(dedupKey);
+
+            if (!existing) {
+              studentContactMap.set(dedupKey, {
                 id: buyerId,
                 userId: buyerId,
                 userName: realName,
@@ -210,10 +240,22 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 updatedAt: key.claimedAt || Date.now(),
                 activationCode: key.code || key.id
               } as any);
+            } else {
+              // Existing contact found - update metadata, NEVER duplicate
+              if (key.code && !(existing as any).activationCode) {
+                (existing as any).activationCode = key.code;
+              }
+              if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
+                existing.userName = realName;
+              }
+              if (courseTitle && !existing.purchasedCourses?.includes(courseTitle)) {
+                existing.purchasedCourses = [...(existing.purchasedCourses || []), courseTitle];
+              }
             }
           });
         }
 
+        const loaded = Array.from(studentContactMap.values());
         // Sort by lastMessageAt descending
         loaded.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 

@@ -723,6 +723,26 @@ export default function App() {
     };
   }, []);
 
+  // Helper: Normalize and reject generic placeholder names
+  const cleanRealName = (name?: string | null): string => {
+    if (!name) return '';
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    if (
+      lower === 'student learner' ||
+      lower === 'student' ||
+      lower === 'learner' ||
+      lower === 'user' ||
+      lower === 'guest' ||
+      lower === 'anonymous' ||
+      lower === 'null' ||
+      lower === 'undefined'
+    ) {
+      return '';
+    }
+    return trimmed;
+  };
+
   const getOrCreateDeviceId = () => {
     let devId = '';
     try {
@@ -751,11 +771,40 @@ export default function App() {
   };
 
   const getOrCreateLocalUser = (displayName: string) => {
-    let uid = localStorage.getItem('clipzone_student_uid');
+    // 1. Check if an existing activated key matches this student to guarantee persistent canonical UID
+    let matchedUid = '';
+    try {
+      const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+      const localKeys = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+      const cleanTarget = cleanRealName(displayName).toLowerCase();
+      
+      if (Array.isArray(allActivationKeys)) {
+        const match = allActivationKeys.find((k: any) => {
+          if (activeCodes.includes(k.code || k.id)) return true;
+          if (cleanTarget && k.studentName && k.studentName.trim().toLowerCase() === cleanTarget) return true;
+          if (cleanTarget && k.claimedByName && k.claimedByName.trim().toLowerCase() === cleanTarget) return true;
+          return false;
+        });
+        if (match?.claimedByUid) {
+          matchedUid = match.claimedByUid;
+        }
+      }
+      if (!matchedUid && Array.isArray(localKeys)) {
+        const match = localKeys.find((k: any) => k.claimedByUid);
+        if (match?.claimedByUid) {
+          matchedUid = match.claimedByUid;
+        }
+      }
+    } catch (e) {}
+
+    let uid = matchedUid || localStorage.getItem('clipzone_student_uid');
     if (!uid) {
       uid = 'local_' + Math.random().toString(36).substring(2, 11);
-      localStorage.setItem('clipzone_student_uid', uid);
     }
+    try {
+      localStorage.setItem('clipzone_student_uid', uid);
+    } catch (e) {}
+
     return {
       uid,
       displayName,
@@ -1575,6 +1624,12 @@ export default function App() {
       let unlockedCourseId = keyData?.courseId || (courses && courses[0]?.id) || 'course-1';
       let unlockedCourseTitle = keyData?.courseTitle || (courses && courses[0]?.title) || 'Premiere Pro Course';
 
+      // Guarantee stable permanent student UID across re-logins and devices
+      const permanentStudentUid = keyData?.claimedByUid || activeUser?.uid || localStorage.getItem('clipzone_student_uid') || ('local_' + Math.random().toString(36).substring(2, 11));
+      try {
+        localStorage.setItem('clipzone_student_uid', permanentStudentUid);
+      } catch (e) {}
+
       // Attempt to update status in Firestore with 1.5s timeout guard
       if (keyDocRef) {
         try {
@@ -1586,7 +1641,7 @@ export default function App() {
               deviceClaimedAt: Date.now(),
               claimedByEmail: assignedStudentName,
               studentName: assignedStudentName,
-              claimedByUid: activeUser?.uid || 'local_student',
+              claimedByUid: permanentStudentUid,
               claimedAt: Date.now(),
               forceLogoutAt: 0,
               expiresAt: Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000)
@@ -1597,6 +1652,20 @@ export default function App() {
           console.warn('Failed or timed out syncing claimed key status to cloud:', dbErr);
         }
       }
+
+      // Link/ensure canonical single conversation document exists for this student
+      try {
+        const convDocRef = doc(db, 'support_conversations', permanentStudentUid);
+        setDoc(convDocRef, {
+          id: permanentStudentUid,
+          userId: permanentStudentUid,
+          userName: assignedStudentName,
+          userEmail: assignedStudentName,
+          activeCourse: unlockedCourseTitle,
+          purchasedCourses: [unlockedCourseTitle],
+          updatedAt: Date.now()
+        }, { merge: true }).catch(() => {});
+      } catch (e) {}
 
       // Save locally to make it 100% stable offline-first
       const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
@@ -7475,7 +7544,30 @@ export default function App() {
         onClose={() => setIsAskOpen(false)}
         isRunningInAppMode={isRunningInAppMode}
         siteSettings={siteSettings}
-        currentUserId={currentUser?.uid || getOrCreateDeviceId()}
+        currentUserId={
+          (() => {
+            if (isAdminActivated || isFirebaseUserAdmin(currentUser?.email)) {
+              return currentUser?.uid || getOrCreateDeviceId();
+            }
+            try {
+              const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
+              const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+              if (Array.isArray(allActivationKeys)) {
+                const match = allActivationKeys.find((k: any) => {
+                  if (activeCodes.includes(k.code || k.id)) return true;
+                  if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                  if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                  return false;
+                });
+                if (match?.claimedByUid) {
+                  localStorage.setItem('clipzone_student_uid', match.claimedByUid);
+                  return match.claimedByUid;
+                }
+              }
+            } catch (e) {}
+            return localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
+          })()
+        }
         initialStudentName={
           userActivationKeys.find(k => k.studentName && k.studentName !== 'Student Learner')?.studentName ||
           (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
