@@ -73,6 +73,7 @@ interface AdminDashboardModalProps {
   onDeleteNotification?: (id: string) => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask';
+  adminUnreadAskCount?: number;
 }
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
@@ -102,7 +103,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onSendNotification,
   onDeleteNotification,
   showToast: showToastProp,
-  initialTab = 'keys'
+  initialTab = 'keys',
+  adminUnreadAskCount = 0
 }) => {
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     if (typeof showToastProp === 'function') {
@@ -784,7 +786,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
           <button
             onClick={() => setActiveTab('ask')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
               activeTab === 'ask'
                 ? 'bg-blue-600 text-white shadow-md font-bold'
                 : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
@@ -792,6 +794,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           >
             <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
             💬 Ask (User Messages)
+            {adminUnreadAskCount > 0 && (
+              <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-zinc-900 absolute -top-1 -right-1 animate-pulse shadow-sm" title="New unread student messages" />
+            )}
           </button>
         </div>
 

@@ -2372,30 +2372,107 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAskOpen, setIsAskOpen] = useState(false);
   const [studentUnreadCount, setStudentUnreadCount] = useState(0);
+  const [adminUnreadCount, setAdminUnreadCount] = useState(0);
 
-  // Real-time listener for user unread replies from Admin
+  // Helper boolean: is the current active session an admin
+  const isUserAdminSession = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+  const hasAskUnread = isUserAdminSession ? adminUnreadCount > 0 : studentUnreadCount > 0;
+
+  // 1. Real-time listener for Admin: tracks unread messages sent by users/students
   useEffect(() => {
-    try {
-      const devId = getOrCreateDeviceId();
-      const uId = currentUser?.uid || devId;
-      if (!uId) return;
+    const isUserAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    if (!isUserAdmin) {
+      setAdminUnreadCount(0);
+      return;
+    }
 
-      const convRef = doc(db, 'support_conversations', uId);
-      const unsub = onSnapshot(convRef, (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setStudentUnreadCount(data?.unreadUserCount || 0);
-        } else {
-          setStudentUnreadCount(0);
-        }
+    try {
+      const convsRef = collection(db, 'support_conversations');
+      const unsub = onSnapshot(convsRef, (snapshot) => {
+        let totalUnread = 0;
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data && typeof data.unreadAdminCount === 'number' && data.unreadAdminCount > 0) {
+            totalUnread += data.unreadAdminCount;
+          }
+        });
+        setAdminUnreadCount(totalUnread);
       }, (err) => {
-        console.warn('Support conversation listener error:', err);
+        console.warn('Admin support conversation listener error:', err);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Error setting up support conversation listener:', e);
+      console.warn('Error setting up admin support conversation listener:', e);
     }
-  }, [currentUser]);
+  }, [isAdminActivated, currentUser]);
+
+  // 2. Real-time listener for Student: tracks unread replies sent by Admin
+  useEffect(() => {
+    const isUserAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    if (isUserAdmin) {
+      setStudentUnreadCount(0);
+      return;
+    }
+
+    try {
+      const devId = getOrCreateDeviceId();
+      const localStudentUid = localStorage.getItem('clipzone_student_uid');
+      let matchedUid = '';
+      if (Array.isArray(allActivationKeys) && allActivationKeys.length > 0) {
+        const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
+        let activeCodes: string[] = [];
+        try { activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]'); } catch {}
+        const match = allActivationKeys.find((k: any) => {
+          if (activeCodes.includes(k.code || k.id)) return true;
+          if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
+          if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
+          if (currentUser?.email && k.claimedByEmail && k.claimedByEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
+          return false;
+        });
+        if (match?.claimedByUid) {
+          matchedUid = match.claimedByUid;
+        }
+      }
+
+      const candidateUids = Array.from(new Set([
+        matchedUid,
+        localStudentUid,
+        currentUser?.uid,
+        devId
+      ].filter(Boolean))) as string[];
+
+      if (candidateUids.length === 0) return;
+
+      const unsubs: (() => void)[] = [];
+      const countsMap = new Map<string, number>();
+
+      candidateUids.forEach((cUid) => {
+        const convRef = doc(db, 'support_conversations', cUid);
+        const unsub = onSnapshot(convRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            countsMap.set(cUid, data?.unreadUserCount || 0);
+          } else {
+            countsMap.set(cUid, 0);
+          }
+          let maxUnread = 0;
+          countsMap.forEach((cnt) => {
+            if (cnt > maxUnread) maxUnread = cnt;
+          });
+          setStudentUnreadCount(maxUnread);
+        }, (err) => {
+          console.warn('Student support conversation listener error:', err);
+        });
+        unsubs.push(unsub);
+      });
+
+      return () => {
+        unsubs.forEach(u => u());
+      };
+    } catch (e) {
+      console.warn('Error setting up student support conversation listener:', e);
+    }
+  }, [currentUser, isAdminActivated, allActivationKeys, authName]);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -3299,6 +3376,22 @@ export default function App() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
+                      setShowAdminMenu(false);
+                      setAdminInitialTab('ask');
+                      setShowAdminDashboard(true);
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition-colors flex items-center justify-between cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      💬 Ask Messages
+                    </span>
+                    {adminUnreadCount > 0 && (
+                      <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-zinc-950 animate-pulse shadow-xs" title="New user messages" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setIsAdminActivated(false);
                       localStorage.removeItem('clipzone_admin_activated');
                       setShowAdminMenu(false);
@@ -3321,7 +3414,7 @@ export default function App() {
                   showToast('Welcome Home! 🏠', 'info');
                 }}
                 className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'home'
+                  currentView === 'home' && !isAskOpen
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
                     : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
                 }`}
@@ -3335,7 +3428,7 @@ export default function App() {
                   showToast('Welcome to Your Classroom! 🎓', 'info');
                 }}
                 className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
-                  currentView === 'classroom'
+                  currentView === 'classroom' && !isAskOpen
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
                     : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
                 }`}
@@ -3343,6 +3436,27 @@ export default function App() {
                 🎓 Course Page
                 {activeCourseIds.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping border border-black" />
+                )}
+              </button>
+              <button
+                id="desktop-nav-ask"
+                onClick={() => {
+                  setIsChatOpen(false);
+                  setIsAskOpen(prev => !prev);
+                  if (!isAskOpen && !isUserAdminSession) {
+                    setStudentUnreadCount(0);
+                  }
+                }}
+                className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
+                  isAskOpen
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
+                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
+                <span>Ask</span>
+                {hasAskUnread && (
+                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black absolute -top-0.5 -right-0.5 animate-pulse shadow-xs" title="New message - Click to view" />
                 )}
               </button>
             </div>
@@ -3443,6 +3557,26 @@ export default function App() {
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
+                          setIsChatOpen(false);
+                          setIsAskOpen(true);
+                          if (!isUserAdminSession) {
+                            setStudentUnreadCount(0);
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <MessageCircle className="w-4 h-4 text-blue-400" />
+                          <span>💬 Ask & Support</span>
+                        </span>
+                        {hasAskUnread && (
+                          <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-zinc-950 animate-pulse shadow-xs" title="New message" />
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
                           setShowProfileModal(true);
                         }}
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
@@ -3503,7 +3637,7 @@ export default function App() {
                 showToast('My Classroom! 🎓', 'info');
               }}
               className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
-                currentView === 'classroom'
+                currentView === 'classroom' && !isAskOpen
                   ? 'bg-blue-600 text-white shadow-md font-black'
                   : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
               }`}
@@ -3511,6 +3645,27 @@ export default function App() {
               🎓 Classroom
               {activeCourseIds.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              )}
+            </button>
+            <button
+              id="mobile-header-nav-ask"
+              onClick={() => {
+                setIsChatOpen(false);
+                setIsAskOpen(prev => !prev);
+                if (!isAskOpen && !isUserAdminSession) {
+                  setStudentUnreadCount(0);
+                }
+              }}
+              className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
+                isAskOpen
+                  ? 'bg-blue-600 text-white shadow-md font-black'
+                  : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
+              }`}
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
+              <span>Ask</span>
+              {hasAskUnread && (
+                <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black animate-pulse shadow-xs" title="New message" />
               )}
             </button>
           </div>
@@ -5932,6 +6087,7 @@ export default function App() {
         onDeleteNotification={handleDeleteNotification}
         showToast={showToast}
         initialTab={adminInitialTab}
+        adminUnreadAskCount={adminUnreadCount}
       />
 
       {/* CONFIRM LOGOUT ALL USER DEVICES MODAL */}
@@ -7756,6 +7912,9 @@ export default function App() {
                 setShowProfileModal(false);
                 setIsChatOpen(false);
                 setIsAskOpen(prev => !prev);
+                if (!isAskOpen && !isUserAdminSession) {
+                  setStudentUnreadCount(0);
+                }
               }}
               className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
                 isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
@@ -7763,8 +7922,8 @@ export default function App() {
             >
               <div className="relative flex items-center justify-center">
                 <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-                {studentUnreadCount > 0 && (
-                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
+                {hasAskUnread && (
+                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" title="New message" />
                 )}
               </div>
               <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>

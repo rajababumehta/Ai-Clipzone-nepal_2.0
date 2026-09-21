@@ -906,7 +906,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 {initialLetter}
                               </div>
                               {hasUnread && (
-                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-[#00a884] text-[11px] font-black text-[#111b21] flex items-center justify-center px-1 shadow-sm">
+                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-rose-500 text-[11px] font-black text-white flex items-center justify-center px-1 shadow-md ring-2 ring-[#111b21] animate-pulse">
                                   {conv.unreadAdminCount}
                                 </span>
                               )}
