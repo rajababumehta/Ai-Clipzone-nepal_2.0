@@ -795,7 +795,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
             💬 Ask (User Messages)
             {adminUnreadAskCount > 0 && (
-              <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-zinc-900 absolute -top-1 -right-1 animate-pulse shadow-sm" title="New unread student messages" />
+              <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-zinc-900 absolute -top-1.5 -right-1.5 shadow-sm animate-pulse" title="New unread student messages">
+                {adminUnreadAskCount > 99 ? '99+' : adminUnreadAskCount}
+              </span>
             )}
           </button>
         </div>

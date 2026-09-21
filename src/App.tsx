@@ -2376,7 +2376,9 @@ export default function App() {
 
   // Helper boolean: is the current active session an admin
   const isUserAdminSession = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-  const hasAskUnread = isUserAdminSession ? adminUnreadCount > 0 : studentUnreadCount > 0;
+  const askUnreadCount = isUserAdminSession ? adminUnreadCount : studentUnreadCount;
+  const hasAskUnread = askUnreadCount > 0;
+  const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
 
   // 1. Real-time listener for Admin: tracks unread messages sent by users/students
   useEffect(() => {
@@ -3386,7 +3388,9 @@ export default function App() {
                       💬 Ask Messages
                     </span>
                     {adminUnreadCount > 0 && (
-                      <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-zinc-950 animate-pulse shadow-xs" title="New user messages" />
+                      <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-1 ring-zinc-950 shadow-xs" title="New user messages">
+                        {adminUnreadCount > 99 ? '99+' : adminUnreadCount}
+                      </span>
                     )}
                   </button>
                   <button 
@@ -3456,7 +3460,9 @@ export default function App() {
                 <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
                 <span>Ask</span>
                 {hasAskUnread && (
-                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black absolute -top-0.5 -right-0.5 animate-pulse shadow-xs" title="New message - Click to view" />
+                  <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-1.5 -right-2 shadow-md animate-pulse" title="New messages">
+                    {askBadgeText}
+                  </span>
                 )}
               </button>
             </div>
@@ -3570,7 +3576,9 @@ export default function App() {
                           <span>💬 Ask & Support</span>
                         </span>
                         {hasAskUnread && (
-                          <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-zinc-950 animate-pulse shadow-xs" title="New message" />
+                          <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-1 ring-zinc-950 shadow-xs" title="New messages">
+                            {askBadgeText}
+                          </span>
                         )}
                       </button>
 
@@ -3665,7 +3673,9 @@ export default function App() {
               <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
               <span>Ask</span>
               {hasAskUnread && (
-                <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black animate-pulse shadow-xs" title="New message" />
+                <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-1.5 -right-1 shadow-md animate-pulse" title="New messages">
+                  {askBadgeText}
+                </span>
               )}
             </button>
           </div>
@@ -7923,7 +7933,9 @@ export default function App() {
               <div className="relative flex items-center justify-center">
                 <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
                 {hasAskUnread && (
-                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" title="New message" />
+                  <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
+                    {askBadgeText}
+                  </span>
                 )}
               </div>
               <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>

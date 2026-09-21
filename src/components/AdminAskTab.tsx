@@ -547,8 +547,8 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                         {firstLetter}
                       </div>
                       {hasUnread && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-[10px] font-black text-white flex items-center justify-center shadow-xs animate-pulse">
-                          {conv.unreadAdminCount}
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-[10px] font-black text-white flex items-center justify-center shadow-xs ring-1 ring-black animate-pulse">
+                          {conv.unreadAdminCount > 99 ? '99+' : conv.unreadAdminCount}
                         </span>
                       )}
                     </div>
