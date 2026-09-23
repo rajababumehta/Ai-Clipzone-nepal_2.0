@@ -201,6 +201,10 @@ export default function App() {
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
   const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
 
+  // Student logout confirmation verification modal (Requires typing "CONFIRM")
+  const [showStudentLogoutConfirmModal, setShowStudentLogoutConfirmModal] = useState(false);
+  const [studentLogoutConfirmInput, setStudentLogoutConfirmInput] = useState('');
+
   // Dynamic Payment & QR Code configuration
   const [paymentConfig, setPaymentConfig] = useState<PaymentQrConfig>(() => {
     try {
@@ -3472,83 +3476,86 @@ export default function App() {
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 mt-2 w-52 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
+                      className="absolute right-0 mt-2 w-48 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
                     >
-                      {/* Notifications item - ONLY in PWA App Mode */}
-                      {isRunningInAppMode && (
+                      {isRunningInAppMode ? (
+                        /* IN PWA APP MODE: ONLY SHOW LOG OUT */
                         <button
+                          id="pwa-header-user-logout-btn"
                           onClick={() => {
                             setShowUserMenu(false);
-                            setShowNotifCenterModal(true);
+                            setStudentLogoutConfirmInput('');
+                            setShowStudentLogoutConfirmModal(true);
                           }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-purple-400 transition flex items-center justify-between cursor-pointer"
+                          className="w-full text-left px-3.5 py-3 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-black text-xs group"
                         >
-                          <span className="flex items-center gap-2.5">
-                            <Bell className="w-4 h-4 text-purple-400" />
-                            <span>📢 Notifications</span>
-                          </span>
-                          {unreadNotifCount > 0 && (
-                            <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                              {unreadNotifCount} new
+                          <LogOut className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+                          <span>🚪 Log Out</span>
+                        </button>
+                      ) : (
+                        /* IN WEBSITE MODE: Standard Website navigation items */
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setCurrentView('home');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              showToast('Welcome Home! 🏠', 'info');
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
+                          >
+                            🏠 Home Page
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setCurrentView('classroom');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              showToast('Your Course Classroom! 🎓', 'info');
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
+                          >
+                            🎓 Course Page
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setShowProfileModal(true);
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
+                          >
+                            <span className="flex items-center gap-2">👤 Profile Page</span>
+                            <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Verified Account">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" />
                             </span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              handleInstallPwa();
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-950/40 text-blue-300 transition flex items-center gap-2.5 cursor-pointer font-extrabold border-t border-zinc-800/80 mt-0.5"
+                          >
+                            📲 Install App Mode
+                          </button>
+
+                          {(currentUser || localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0) && (
+                            <button
+                              onClick={() => {
+                                setShowUserMenu(false);
+                                setStudentLogoutConfirmInput('');
+                                setShowStudentLogoutConfirmModal(true);
+                              }}
+                              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold border-t border-zinc-800/80 mt-1"
+                            >
+                              <LogOut className="w-4 h-4 text-rose-400" />
+                              <span>🚪 Log Out</span>
+                            </button>
                           )}
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setCurrentView('home');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                          showToast('Welcome Home! 🏠', 'info');
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        🏠 Home Page
-                      </button>
-                      
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setCurrentView('classroom');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                          showToast('Your Course Classroom! 🎓', 'info');
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        🎓 Course Page
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setShowProfileModal(true);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
-                      >
-                        <span className="flex items-center gap-2">👤 Profile Page</span>
-                        <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Verified Account">
-                          <Check className="w-2.5 h-2.5 stroke-[3]" />
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          handleInstallPwa();
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-950/40 text-blue-300 transition flex items-center gap-2.5 cursor-pointer font-extrabold border-t border-zinc-800/80 mt-0.5"
-                      >
-                        📲 Install App Mode
-                      </button>
-
-                      {currentUser && (
-                        <button
-                          onClick={handleStudentLogout}
-                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold border-t border-zinc-800/80 mt-1"
-                        >
-                          🚪 Log Out
-                        </button>
+                        </>
                       )}
                     </motion.div>
                   )}
@@ -5684,7 +5691,10 @@ export default function App() {
                       Country: <span className="text-white font-black">Nepal 🇳🇵</span>
                     </div>
                     <button
-                      onClick={handleStudentLogout}
+                      onClick={() => {
+                        setStudentLogoutConfirmInput('');
+                        setShowStudentLogoutConfirmModal(true);
+                      }}
                       className="text-rose-400 hover:text-rose-300 font-black uppercase tracking-wider cursor-pointer"
                     >
                       🚪 Log Out
@@ -6092,6 +6102,108 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* STUDENT CONFIRM LOGOUT VERIFICATION MODAL (TYPE "CONFIRM") */}
+      <AnimatePresence>
+        {showStudentLogoutConfirmModal && (
+          <div className="fixed inset-0 z-[3600] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setShowStudentLogoutConfirmModal(false);
+                setStudentLogoutConfirmInput('');
+              }}
+              className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 15 }}
+              className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl text-white z-10 space-y-5"
+            >
+              <div className="flex items-center justify-between pb-3.5 border-b border-zinc-800/80">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                    <LogOut className="w-5 h-5 text-rose-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">Confirm Log Out</h3>
+                    <p className="text-[11px] text-zinc-400 font-medium">सुरक्षा प्रमाणीकरण (Verification)</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowStudentLogoutConfirmModal(false);
+                    setStudentLogoutConfirmInput('');
+                  }}
+                  className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+                  के तपाईं यो डिभाइसबाट लगआउट गर्न निश्चित हुनुहुन्छ? अगाडि बढ्नको लागि कृपया तल <span className="font-mono font-black text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900/60 tracking-wider">CONFIRM</span> टाइप गर्नुहोस्:
+                </p>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (studentLogoutConfirmInput.trim().toUpperCase() === 'CONFIRM') {
+                      setShowStudentLogoutConfirmModal(false);
+                      setStudentLogoutConfirmInput('');
+                      handleStudentLogout();
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <input
+                      id="student-logout-confirm-input"
+                      type="text"
+                      autoFocus
+                      autoCapitalize="characters"
+                      value={studentLogoutConfirmInput}
+                      onChange={(e) => setStudentLogoutConfirmInput(e.target.value)}
+                      placeholder='Type "CONFIRM"'
+                      className="w-full bg-zinc-900 border border-zinc-700/80 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/30 rounded-xl px-3.5 py-3 text-center text-sm font-black uppercase tracking-widest text-white placeholder-zinc-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStudentLogoutConfirmModal(false);
+                        setStudentLogoutConfirmInput('');
+                      }}
+                      className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs py-3 rounded-xl border border-zinc-800 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={studentLogoutConfirmInput.trim().toUpperCase() !== 'CONFIRM'}
+                      className={`flex-1 flex items-center justify-center gap-1.5 font-black text-xs py-3 rounded-xl transition cursor-pointer shadow-md ${
+                        studentLogoutConfirmInput.trim().toUpperCase() === 'CONFIRM'
+                          ? 'bg-red-600 hover:bg-red-700 active:scale-95 text-white shadow-red-600/30'
+                          : 'bg-zinc-800/80 text-zinc-500 cursor-not-allowed border border-zinc-700/40 opacity-60'
+                      }`}
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Log Out</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}
