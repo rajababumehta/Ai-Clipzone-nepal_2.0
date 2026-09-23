@@ -1391,6 +1391,7 @@ export default function App() {
     setAuthName('');
     setShowProfileModal(false);
     setShowUserMenu(false);
+    setIsAskOpen(false);
 
     // Release device claims in Firestore for active codes so Session shows "⚪ Logged Out"
     const codesToRelease = new Set<string>();
@@ -7941,31 +7942,33 @@ export default function App() {
               <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
             </button>
 
-            {/* 4. Ask (Message to AI CLIPZONE) */}
-            <button
-              id="app-nav-ask"
-              onClick={() => {
-                setShowProfileModal(false);
-                setIsChatOpen(false);
-                setIsAskOpen(prev => !prev);
-                if (!isAskOpen && !isUserAdminSession) {
-                  setStudentUnreadCount(0);
-                }
-              }}
-              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
-              }`}
-            >
-              <div className="relative flex items-center justify-center">
-                <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-                {hasAskUnread && (
-                  <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
-                    {askBadgeText}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
-            </button>
+            {/* 4. Ask (Message to AI CLIPZONE) - Only visible if user has an activated course or is admin */}
+            {(activeCourseIds.length > 0 || isUserAdminSession) && (
+              <button
+                id="app-nav-ask"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setIsChatOpen(false);
+                  setIsAskOpen(prev => !prev);
+                  if (!isAskOpen && !isUserAdminSession) {
+                    setStudentUnreadCount(0);
+                  }
+                }}
+                className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
+                  isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+                }`}
+              >
+                <div className="relative flex items-center justify-center">
+                  <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+                  {hasAskUnread && (
+                    <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
+                      {askBadgeText}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
+              </button>
+            )}
 
             {/* 5. Account */}
             <button
