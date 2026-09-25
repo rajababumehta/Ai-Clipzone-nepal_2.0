@@ -7,8 +7,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="AI Clipzone" />
-    <meta name="application-name" content="AI Clipzone Nepal" />
+    <meta name="apple-mobile-web-app-title" content="Ai Clipzone" />
+    <meta name="application-name" content="Ai Clipzone" />
     <link rel="icon" type="image/svg+xml" href="/pwa-icon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
@@ -39,8 +39,7 @@
     <meta name="twitter:description" content="Master AI video creation, prompt engineering &amp; digital tools with practical online courses on AI Clipzone." />
     <meta name="twitter:image" content="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh7aJwyICAKblH7QvXyJ2rlMp69h1WQKLqUZscgVpXPB5rtceSU6qTJ3toQOJO4ZLJbpJd0OSSAGDCz0ehv0E3lZIXFvGOwq2OE4hQ0lxkEYw5awj68gqPYi4KX5_OkIB0zKWRwKlp7RKX8WBO1Elw5iJ21XCWjp65lemWCZPCCiyYI8vnoLpZ0m-zLPBwl/s1074/IMG_20260817_134049_273.png" />
 
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Great+Vibes&family=Playfair+Display:ital,wght@0,600;0,800;1,700&display=swap" rel="stylesheet">
 
@@ -84,8 +83,12 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js').then(function(reg) {
-            console.log('PWA ServiceWorker registered successfully:', reg.scope);
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+            console.log('PWA ServiceWorker registered successfully with scope:', reg.scope);
+            // Check for updates periodically
+            if (reg.update) {
+              reg.update();
+            }
           }).catch(function(err) {
             console.warn('PWA ServiceWorker registration failed:', err);
           });

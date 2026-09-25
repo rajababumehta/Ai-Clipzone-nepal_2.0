@@ -1,61 +1,113 @@
 {
-  "short_name": "Ai Clipzone",
+  "id": "/",
   "name": "Ai Clipzone",
-  "description": "Nepal's #1 AI Learning Platform - Master AI Video Creation, Prompt Engineering & Digital Skills.",
-  "start_url": "/?mode=app",
+  "short_name": "Clipzone",
+  "description": "Ai Clipzone - AI powered video and clip generation app",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "fullscreen", "minimal-ui"],
-  "orientation": "portrait-primary",
-  "background_color": "#000000",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
   "theme_color": "#000000",
-  "categories": ["education", "productivity", "utilities"],
+  "background_color": "#ffffff",
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "launch_handler": {
+    "client_mode": "auto"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
   "icons": [
     {
-      "src": "/pwa-512x512.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
-    },
-    {
       "src": "/pwa-192x192.png",
-      "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/pwa-rounded-512x512.png",
       "type": "image/png",
-      "sizes": "512x512",
       "purpose": "any"
     },
     {
-      "src": "/apple-touch-icon.png",
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
       "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
       "sizes": "180x180",
+      "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/pwa-icon.svg",
+      "sizes": "512x512",
       "type": "image/svg+xml",
-      "sizes": "any",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Ai Clipzone Desktop Dashboard"
+    },
+    {
+      "src": "/screenshots/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ai Clipzone Mobile App"
     }
   ],
   "shortcuts": [
     {
-      "name": "Home",
-      "short_name": "Home",
-      "description": "Browse AI Courses",
-      "url": "/?mode=app",
-      "icons": [{ "src": "/pwa-icon.svg", "sizes": "192x192" }]
+      "name": "Explore Courses",
+      "short_name": "Courses",
+      "description": "Browse AI video creation & prompt engineering courses",
+      "url": "/?tab=courses",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
-      "name": "Classroom",
+      "name": "My Classroom",
       "short_name": "Classroom",
-      "description": "Access Enrolled Courses & Lectures",
-      "url": "/?mode=app&tab=classroom",
-      "icons": [{ "src": "/pwa-icon.svg", "sizes": "192x192" }]
+      "description": "Access your enrolled AI courses & lectures",
+      "url": "/?tab=classroom",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
