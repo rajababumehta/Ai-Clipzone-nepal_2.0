@@ -2377,11 +2377,20 @@ export default function App() {
   const [studentUnreadCount, setStudentUnreadCount] = useState(0);
   const [adminUnreadCount, setAdminUnreadCount] = useState(0);
 
-  // Helper boolean: is the current active session an admin
+  // Helper boolean: is the current active session an admin & course activation check
   const isUserAdminSession = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+  const hasCourseActivated = activeCourseIds.length > 0;
+  const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
   const askUnreadCount = isUserAdminSession ? adminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
+
+  // Auto-close Ask modal if user does not have an activated course
+  useEffect(() => {
+    if (!isCourseActiveUser && isAskOpen) {
+      setIsAskOpen(false);
+    }
+  }, [isCourseActiveUser, isAskOpen]);
 
   // 1. Real-time listener for Admin: tracks unread messages sent by users/students
   useEffect(() => {
@@ -5193,43 +5202,45 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Certificate Banner */}
-                  <div className="bg-blue-950/40 border border-blue-500/30 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-sm">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                        <Award className="w-5 h-5 text-white" />
+                  {/* Certificate Banner - Only displayed when user has an activated course */}
+                  {isCourseActiveUser && (
+                    <div className="bg-blue-950/40 border border-blue-500/30 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-sm">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                          <Award className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="text-xs font-black text-white truncate">Course Certificate 📜</h5>
+                          <p className="text-[10px] text-zinc-400 font-medium truncate">आफ्नो नाम र भर्ना मिति सहितको प्रमाणपत्र</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h5 className="text-xs font-black text-white truncate">Course Certificate 📜</h5>
-                        <p className="text-[10px] text-zinc-400 font-medium truncate">आफ्नो नाम र भर्ना मिति सहितको प्रमाणपत्र</p>
-                      </div>
+                      <button
+                        onClick={() => {
+                          const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
+                          if (!isLoggedIn) {
+                            showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्!', 'info');
+                            setShowCodeInputModal(true);
+                            return;
+                          }
+                          const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student';
+                          const activeCourse = courses.find(c => activeCourseIds.includes(c.id)) || courses[0];
+                          if (activeCourse) {
+                            setSelectedCertCourseId(activeCourse.id);
+                            setCertificateCourseTitle(activeCourse.certificateCourseTitle || activeCourse.title);
+                          } else {
+                            setCertificateCourseTitle('AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
+                          }
+                          setCertificateStudentName(studentName);
+                          setCertificateIssueDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+                          setShowProfileModal(false);
+                          setShowCertificateModal(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-wider px-3 py-2 rounded-xl transition cursor-pointer shadow-md shadow-blue-500/20 shrink-0 flex items-center gap-1"
+                      >
+                        View Certificate 📜
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
-                        if (!isLoggedIn) {
-                          showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्!', 'info');
-                          setShowCodeInputModal(true);
-                          return;
-                        }
-                        const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student';
-                        const activeCourse = courses.find(c => activeCourseIds.includes(c.id)) || courses[0];
-                        if (activeCourse) {
-                          setSelectedCertCourseId(activeCourse.id);
-                          setCertificateCourseTitle(activeCourse.certificateCourseTitle || activeCourse.title);
-                        } else {
-                          setCertificateCourseTitle('AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
-                        }
-                        setCertificateStudentName(studentName);
-                        setCertificateIssueDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
-                        setShowProfileModal(false);
-                        setShowCertificateModal(true);
-                      }}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-wider px-3 py-2 rounded-xl transition cursor-pointer shadow-md shadow-blue-500/20 shrink-0 flex items-center gap-1"
-                    >
-                      View Certificate 📜
-                    </button>
-                  </div>
+                  )}
 
                   {/* Unlocked / Enrolled Courses catalog list with Enrolled & Expiry Dates */}
                   <div>
@@ -6926,51 +6937,53 @@ export default function App() {
         onRequestPermissionPrompt={() => setShowNotifPromptModal(true)}
       />
 
-      {/* ASK & LIVE SUPPORT CHAT MODAL ("Message to AI CLIPZONE") */}
-      <AskChatModal
-        isOpen={isAskOpen}
-        onClose={() => setIsAskOpen(false)}
-        isRunningInAppMode={true}
-        siteSettings={siteSettings}
-        currentUserId={
-          (() => {
-            if (isAdminActivated || isFirebaseUserAdmin(currentUser?.email)) {
-              return currentUser?.uid || getOrCreateDeviceId();
-            }
-            try {
-              const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
-              const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
-              if (Array.isArray(allActivationKeys)) {
-                const match = allActivationKeys.find((k: any) => {
-                  if (activeCodes.includes(k.code || k.id)) return true;
-                  if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
-                  if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
-                  return false;
-                });
-                if (match?.claimedByUid) {
-                  localStorage.setItem('clipzone_student_uid', match.claimedByUid);
-                  return match.claimedByUid;
-                }
+      {/* ASK & LIVE SUPPORT CHAT MODAL ("Message to AI CLIPZONE") - ONLY FOR ACTIVATED USERS */}
+      {isCourseActiveUser && (
+        <AskChatModal
+          isOpen={isAskOpen}
+          onClose={() => setIsAskOpen(false)}
+          isRunningInAppMode={true}
+          siteSettings={siteSettings}
+          currentUserId={
+            (() => {
+              if (isAdminActivated || isFirebaseUserAdmin(currentUser?.email)) {
+                return currentUser?.uid || getOrCreateDeviceId();
               }
-            } catch (e) {}
-            return localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
-          })()
-        }
-        initialStudentName={
-          userActivationKeys.find(k => k.studentName && k.studentName !== 'Student Learner')?.studentName ||
-          (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
-          (authName && authName !== 'Student Learner' ? authName : '') ||
-          (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '') ||
-          ''
-        }
-        userEmail={currentUser?.email || ''}
-        activeCourseName={courses.find(c => activeCourseIds.includes(c.id))?.title || ''}
-        hasActivatedCourse={activeCourseIds.length > 0}
-        onOpenActivationModal={() => setShowCodeInputModal(true)}
-        showToast={showToast}
-        isAdmin={isAdminActivated || isFirebaseUserAdmin(currentUser?.email)}
-        allActivationKeys={allActivationKeys}
-      />
+              try {
+                const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
+                const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+                if (Array.isArray(allActivationKeys)) {
+                  const match = allActivationKeys.find((k: any) => {
+                    if (activeCodes.includes(k.code || k.id)) return true;
+                    if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                    if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                    return false;
+                  });
+                  if (match?.claimedByUid) {
+                    localStorage.setItem('clipzone_student_uid', match.claimedByUid);
+                    return match.claimedByUid;
+                  }
+                }
+              } catch (e) {}
+              return localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
+            })()
+          }
+          initialStudentName={
+            userActivationKeys.find(k => k.studentName && k.studentName !== 'Student Learner')?.studentName ||
+            (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
+            (authName && authName !== 'Student Learner' ? authName : '') ||
+            (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '') ||
+            ''
+          }
+          userEmail={currentUser?.email || ''}
+          activeCourseName={courses.find(c => activeCourseIds.includes(c.id))?.title || ''}
+          hasActivatedCourse={activeCourseIds.length > 0}
+          onOpenActivationModal={() => setShowCodeInputModal(true)}
+          showToast={showToast}
+          isAdmin={isAdminActivated || isFirebaseUserAdmin(currentUser?.email)}
+          allActivationKeys={allActivationKeys}
+        />
+      )}
 
       {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA FOR UNIFIED APP EXPERIENCE */}
       <nav 
@@ -7020,59 +7033,63 @@ export default function App() {
             <span className="text-[10.5px] font-semibold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Certificate */}
-          <button
-            id="app-nav-certificate"
-            onClick={() => {
-              setIsAskOpen(false);
-              setShowProfileModal(false);
-              const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
-              if (!isLoggedIn) {
-                showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्! (Please sign in to view certificate)', 'info');
-                setShowCodeInputModal(true);
-                return;
-              }
-              const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
-              const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0] || courses[0];
-              const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
-              const activeCode = currentCourse ? getCourseActivationCode(currentCourse.id) : (userActivationKeys[0]?.code || 'AICLIP-CERT-2026');
-              const cleanTitle = (currentCourse?.title || 'AI Master Course').replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
-              setCertificateCourseTitle(cleanTitle);
-              setCertificateStudentName(studentName);
-              setCertificateIssueDate('2083/01/14');
-              setCertificateCode(activeCode);
-              setShowCertificateModal(true);
-            }}
-            className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300"
-          >
-            <Award className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
-            <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
-          </button>
+          {/* 3. Certificate - Shown only if user has an activated course */}
+          {isCourseActiveUser && (
+            <button
+              id="app-nav-certificate"
+              onClick={() => {
+                setIsAskOpen(false);
+                setShowProfileModal(false);
+                const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
+                if (!isLoggedIn) {
+                  showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्! (Please sign in to view certificate)', 'info');
+                  setShowCodeInputModal(true);
+                  return;
+                }
+                const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
+                const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0] || courses[0];
+                const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+                const activeCode = currentCourse ? getCourseActivationCode(currentCourse.id) : (userActivationKeys[0]?.code || 'AICLIP-CERT-2026');
+                const cleanTitle = (currentCourse?.title || 'AI Master Course').replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                setCertificateCourseTitle(cleanTitle);
+                setCertificateStudentName(studentName);
+                setCertificateIssueDate('2083/01/14');
+                setCertificateCode(activeCode);
+                setShowCertificateModal(true);
+              }}
+              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300"
+            >
+              <Award className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
+              <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
+            </button>
+          )}
 
-          {/* 4. Ask (Live Support & Help) */}
-          <button
-            id="app-nav-ask"
-            onClick={() => {
-              setShowProfileModal(false);
-              setIsAskOpen(prev => !prev);
-              if (!isAskOpen && !isUserAdminSession) {
-                setStudentUnreadCount(0);
-              }
-            }}
-            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              isAskOpen && !showProfileModal ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
-            }`}
-          >
-            <div className="relative flex items-center justify-center">
-              <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-              {hasAskUnread && (
-                <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
-                  {askBadgeText}
-                </span>
-              )}
-            </div>
-            <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
-          </button>
+          {/* 4. Ask (Live Support & Help) - Shown only if user has an activated course */}
+          {isCourseActiveUser && (
+            <button
+              id="app-nav-ask"
+              onClick={() => {
+                setShowProfileModal(false);
+                setIsAskOpen(prev => !prev);
+                if (!isAskOpen && !isUserAdminSession) {
+                  setStudentUnreadCount(0);
+                }
+              }}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
+                isAskOpen && !showProfileModal ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+              }`}
+            >
+              <div className="relative flex items-center justify-center">
+                <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+                {hasAskUnread && (
+                  <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
+                    {askBadgeText}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
+            </button>
+          )}
 
           {/* 5. Account */}
           <button
