@@ -2516,6 +2516,17 @@ export default function App() {
       if (inApp) {
         setIsAppInstalled(true);
       }
+
+      // Check query params for deep-link / PWA shortcuts (e.g. ?tab=course or ?tab=classroom)
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        const tab = searchParams.get('tab');
+        if (tab === 'course' || tab === 'classroom') {
+          setCurrentView('classroom');
+        } else if (tab === 'home' || tab === 'courses') {
+          setCurrentView('home');
+        }
+      }
     }
 
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -3111,7 +3122,7 @@ export default function App() {
     // Certificate Download & Fixes
     if (q.includes('certificate') || q.includes('प्रमाणपत्र') || q.includes('सर्टिफिकेट') || q.includes('download') || q.includes('verify')) {
       return `📜 <strong>Course Certificate कसरी Download गर्ने?</strong><br/><br/>
-      १. आफ्नो <strong>Course Classroom</strong> खोल्नुहोस्।<br/>
+      १. आफ्नो <strong>Course</strong> खोल्नुहोस्।<br/>
       २. कोर्षको कार्डमा रहेको <strong>"📜 Course Certificate"</strong> बटनमा क्लिक गर्नुहोस्।<br/>
       ३. आफ्नो नाम टाइप गर्नुहोस् र <strong>"Generate & Print Certificate"</strong> मा थिचेर PDF/Image डाउनलोड गर्नुहोस्।<br/>
       • <i>नोट:</i> प्रमाण पत्रमा तपाईंको कोर्षको आधिकारीक Unique Code र <strong>"by ${siteSettings.instituteName || 'AI Clipzone Nepal'}"</strong> छाप समावेस हुनेछ!`;
@@ -3416,7 +3427,7 @@ export default function App() {
                 onClick={() => {
                   setCurrentView('classroom');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
-                  showToast('Welcome to Your Classroom! 🎓', 'info');
+                  showToast('Welcome to Your Course! 🎓', 'info');
                 }}
                 className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
                   currentView === 'classroom'
@@ -3513,7 +3524,7 @@ export default function App() {
                               setShowUserMenu(false);
                               setCurrentView('classroom');
                               window.scrollTo({ top: 0, behavior: 'smooth' });
-                              showToast('Your Course Classroom! 🎓', 'info');
+                              showToast('Your Course! 🎓', 'info');
                             }}
                             className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
                           >
@@ -3587,7 +3598,7 @@ export default function App() {
               onClick={() => {
                 setCurrentView('classroom');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
-                showToast('My Classroom! 🎓', 'info');
+                showToast('My Course! 🎓', 'info');
               }}
               className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
                 currentView === 'classroom'
@@ -3595,7 +3606,7 @@ export default function App() {
                   : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
               }`}
             >
-              🎓 Classroom
+              🎓 Course
               {activeCourseIds.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
               )}
@@ -4121,7 +4132,7 @@ export default function App() {
                         >
                           {activeCourseIds.includes(course.id) ? (
                             <>
-                              🎓 Go to Classroom
+                              🎓 Go to Course
                               <ArrowRight className="w-4 h-4" />
                             </>
                           ) : (
@@ -7888,7 +7899,7 @@ export default function App() {
               <span className="text-[10.5px] font-semibold tracking-tight">Home</span>
             </button>
 
-            {/* 2. Classroom */}
+            {/* 2. Course */}
             <button
               id="app-nav-classroom"
               onClick={() => {
@@ -7909,7 +7920,7 @@ export default function App() {
                 {/* Green Notification Dot from Screenshot */}
                 <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
               </div>
-              <span className="text-[10.5px] font-semibold tracking-tight">Classroom</span>
+              <span className="text-[10.5px] font-semibold tracking-tight">Course</span>
             </button>
 
             {/* 3. Certificate */}

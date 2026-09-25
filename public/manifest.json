@@ -226,10 +226,10 @@
       ]
     },
     {
-      "name": "My Classroom",
-      "short_name": "Classroom",
+      "name": "My Course",
+      "short_name": "Course",
       "description": "Access your enrolled AI courses & lectures",
-      "url": "/?tab=classroom",
+      "url": "/?tab=course",
       "icons": [
         {
           "src": "/pwa-192x192.png",
