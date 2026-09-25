@@ -3332,7 +3332,7 @@ export default function App() {
       </div>
 
       {/* Main Container for Course List */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-12">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-16 md:pb-24">
 
         {/* Course Catalog Title & Grid Section */}
         <section id="courses-section" className="pt-2 scroll-mt-24">
@@ -4358,42 +4358,49 @@ export default function App() {
           </div>
         </section>
 
-        {/* Contact Us Section */}
-        <section className="mt-20">
-          <div className="bg-zinc-900/90 rounded-3xl p-6 md:p-12 shadow-2xl border border-zinc-800">
-            <div className="text-center mb-10">
-              <span className="bg-blue-500/20 text-blue-300 font-extrabold text-xs tracking-wider uppercase px-4 py-1.5 rounded-full border border-blue-500/30">
-                Help & Support
+        {/* Contact Us Section - Enhanced Modern Design */}
+        <section className="mt-20 scroll-mt-24">
+          <div className="relative rounded-3xl p-6 md:p-12 shadow-2xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/90 via-zinc-950 to-black overflow-hidden backdrop-blur-md">
+            {/* Ambient decorative lighting */}
+            <div className="absolute -top-24 -right-24 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="text-center mb-10 relative z-10">
+              <span className="inline-flex items-center gap-1.5 bg-blue-500/15 text-blue-400 font-extrabold text-xs tracking-wider uppercase px-4 py-1.5 rounded-full border border-blue-500/30 shadow-xs">
+                <span>💬 Help & Live Support</span>
               </span>
-              <h3 className="text-2xl md:text-4xl font-extrabold text-white mt-3 tracking-tight">
-                Contact Us
+              <h3 className="text-2xl md:text-4xl lg:text-5xl font-black text-white mt-3 tracking-tight">
+                Contact & Support
               </h3>
-              <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-emerald-500 mx-auto rounded-full mt-3 shadow-xs shadow-blue-500/50"></div>
-              <p className="text-zinc-400 mt-3 text-sm md:text-base">
-                कुनै पनि प्रश्न वा तत्काल भर्नाको लागि हामीलाई सिधै सम्पर्क गर्नुहोस्
+              <div className="w-20 h-1 bg-gradient-to-r from-blue-500 via-emerald-400 to-teal-400 mx-auto rounded-full mt-3.5 shadow-sm shadow-blue-500/40"></div>
+              <p className="text-zinc-400 mt-3 text-sm md:text-base max-w-xl mx-auto font-medium leading-relaxed">
+                कुनै पनि समस्या, सोधपुछ वा तत्काल भर्नाको लागि हामीलाई सिधै सम्पर्क गर्नुहोस्।
               </p>
             </div>
 
             {/* Support channels grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10 relative z-10">
               
               {/* WhatsApp Call Card */}
               <a 
                 href={`https://wa.me/${getFormattedWhatsappNumber(paymentConfig.whatsappNumber || siteSettings.supportPhone)}`} 
                 target="_blank" 
-                rel="noopener noreferrer"
-                className="group p-6 rounded-2xl border-2 border-emerald-500/20 hover:border-emerald-400 bg-emerald-950/20 hover:bg-emerald-950/40 transition duration-300 flex items-start gap-4"
+                rel="noopener noreferrer" 
+                className="group p-6 rounded-3xl border border-emerald-500/30 hover:border-emerald-400/80 bg-gradient-to-br from-emerald-950/40 via-zinc-900 to-zinc-950 hover:bg-emerald-950/50 transition-all duration-300 flex items-start gap-4 shadow-lg hover:shadow-emerald-500/15 hover:-translate-y-0.5"
               >
-                <div className="w-12 h-12 rounded-xl bg-emerald-500 text-black flex items-center justify-center shrink-0">
-                  <Send className="w-6 h-6" />
+                <div className="w-13 h-13 rounded-2xl bg-emerald-500 text-zinc-950 flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+                  <Send className="w-6 h-6 stroke-[2.5]" />
                 </div>
-                <div>
-                  <strong className="text-white font-extrabold text-lg group-hover:text-emerald-300 transition-colors">
-                    WhatsApp / Call
+                <div className="min-w-0">
+                  <strong className="text-white font-black text-lg group-hover:text-emerald-300 transition-colors flex items-center gap-1.5">
+                    WhatsApp
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                   </strong>
-                  <span className="text-zinc-300 block text-sm font-semibold mt-1">{paymentConfig.whatsappNumber || siteSettings.supportPhone || '976-3323268'}</span>
-                  <span className="text-xs text-emerald-400 font-extrabold mt-1 inline-block">
-                    ◆ Active support (Replies in 5 mins)
+                  <span className="text-zinc-300 block text-sm font-bold font-mono mt-1 tracking-tight truncate">
+                    {paymentConfig.whatsappNumber || siteSettings.supportPhone || '976-3323268'}
+                  </span>
+                  <span className="text-[11px] text-emerald-400 font-extrabold mt-1.5 inline-block">
+                    ⚡ Instant replies (in 5 mins)
                   </span>
                 </div>
               </a>
@@ -4402,19 +4409,21 @@ export default function App() {
               <a 
                 href="https://www.facebook.com/profile.php?id=61583901232576&mibextid=ZbWKwL" 
                 target="_blank" 
-                rel="noopener noreferrer"
-                className="group p-6 rounded-2xl border-2 border-blue-500/20 hover:border-blue-400 bg-blue-950/20 hover:bg-blue-950/40 transition duration-300 flex items-start gap-4"
+                rel="noopener noreferrer" 
+                className="group p-6 rounded-3xl border border-blue-500/30 hover:border-blue-400/80 bg-gradient-to-br from-blue-950/40 via-zinc-900 to-zinc-950 hover:bg-blue-950/50 transition-all duration-300 flex items-start gap-4 shadow-lg hover:shadow-blue-500/15 hover:-translate-y-0.5"
               >
-                <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-                  <Facebook className="w-6 h-6" />
+                <div className="w-13 h-13 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                  <Facebook className="w-6 h-6 stroke-[2.5]" />
                 </div>
-                <div>
-                  <strong className="text-white font-extrabold text-lg group-hover:text-blue-300 transition-colors">
+                <div className="min-w-0">
+                  <strong className="text-white font-black text-lg group-hover:text-blue-300 transition-colors">
                     Facebook Page
                   </strong>
-                  <span className="text-zinc-400 block text-xs mt-1">{siteSettings.instituteName || "AI Clipzone Nepal"}</span>
-                  <span className="text-xs text-blue-400 font-extrabold mt-1 inline-block">
-                    Follow us for news & coupon codes
+                  <span className="text-zinc-400 block text-xs mt-1 truncate">
+                    {siteSettings.instituteName || "AI Clipzone Nepal"}
+                  </span>
+                  <span className="text-[11px] text-blue-400 font-extrabold mt-1.5 inline-block">
+                    📢 Updates, reels & discount codes
                   </span>
                 </div>
               </a>
@@ -4422,18 +4431,20 @@ export default function App() {
               {/* Email Card */}
               <a 
                 href={`mailto:${siteSettings.supportEmail || 'ai.clipzone.edu@gmail.com'}`} 
-                className="group p-6 rounded-2xl border-2 border-blue-500/20 hover:border-blue-400 bg-blue-950/20 hover:bg-blue-950/40 transition duration-300 flex items-start gap-4"
+                className="group p-6 rounded-3xl border border-indigo-500/30 hover:border-indigo-400/80 bg-gradient-to-br from-indigo-950/40 via-zinc-900 to-zinc-950 hover:bg-indigo-950/50 transition-all duration-300 flex items-start gap-4 shadow-lg hover:shadow-indigo-500/15 hover:-translate-y-0.5"
               >
-                <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-                  <Mail className="w-6 h-6" />
+                <div className="w-13 h-13 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30 group-hover:scale-105 transition-transform">
+                  <Mail className="w-6 h-6 stroke-[2.5]" />
                 </div>
-                <div>
-                  <strong className="text-white font-extrabold text-lg group-hover:text-blue-300 transition-colors">
-                    Email Support
+                <div className="min-w-0">
+                  <strong className="text-white font-black text-lg group-hover:text-indigo-300 transition-colors">
+                    Email Desk
                   </strong>
-                  <span className="text-zinc-400 block text-xs mt-1">{siteSettings.supportEmail || "ai.clipzone.edu@gmail.com"}</span>
-                  <span className="text-xs text-blue-400 font-extrabold mt-1 inline-block">
-                    Official queries & feedback
+                  <span className="text-zinc-400 block text-xs mt-1 truncate">
+                    {siteSettings.supportEmail || "ai.clipzone.edu@gmail.com"}
+                  </span>
+                  <span className="text-[11px] text-indigo-400 font-extrabold mt-1.5 inline-block">
+                    ✉️ Official queries & verification
                   </span>
                 </div>
               </a>
@@ -4441,39 +4452,39 @@ export default function App() {
             </div>
 
             {/* Quick Contact Message Form */}
-            <div className="bg-zinc-950/80 p-6 md:p-10 rounded-2xl border border-zinc-800/80">
-              <h4 className="text-xl font-bold text-center text-white mb-6 flex items-center justify-center gap-2">
+            <div className="bg-zinc-950/90 p-6 md:p-10 rounded-3xl border border-zinc-800/80 shadow-2xl relative z-10 backdrop-blur-md">
+              <h4 className="text-lg md:text-xl font-black text-center text-white mb-6 flex items-center justify-center gap-2">
                 <MessageSquare className="w-5 h-5 text-blue-400" />
-                Send Quick Message on WhatsApp
+                Send Quick Direct Message to Admin
               </h4>
 
               <form onSubmit={handleSendContactMessage} className="space-y-4 max-w-xl mx-auto">
                 <div>
-                  <label className="block text-xs font-bold uppercase text-zinc-400 mb-1.5">तपाईंको नाम (Full Name) *</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">तपाईंको नाम (Full Name) *</label>
                   <input 
                     type="text" 
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     placeholder="तपाईंको नाम लेख्नुहोस्..."
-                    className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm transition outline-hidden"
+                    className="w-full bg-zinc-900/90 border border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-2xl px-4 py-3.5 text-sm transition outline-hidden font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-zinc-400 mb-1.5">फोन नम्बर (WhatsApp Number) - Optional</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">फोन नम्बर (WhatsApp Number) - Optional</label>
                   <input 
                     type="tel" 
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
-                    placeholder="सम्पर्क फोन नम्बर लेख्नुहोस्..."
-                    className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm transition outline-hidden"
+                    placeholder="९८XXXXXXXX..."
+                    className="w-full bg-zinc-900/90 border border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-2xl px-4 py-3.5 text-sm transition outline-hidden font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-zinc-400 mb-1.5">कोर्ष छान्नुहोस् (Select Course) *</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">कोर्ष छान्नुहोस् (Select Course) *</label>
                   <select 
                     value={contactCourse}
                     onChange={(e) => setContactCourse(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm transition outline-hidden font-semibold"
+                    className="w-full bg-zinc-900/90 border border-zinc-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-2xl px-4 py-3.5 text-sm transition outline-hidden font-semibold cursor-pointer"
                   >
                     <option value="General Inquiry / सामान्य सोधपुछ">General Inquiry / सामान्य सोधपुछ</option>
                     {courses.map((course) => (
@@ -4484,30 +4495,30 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-zinc-400 mb-1.5">तपाईंको सन्देश (Your Message) *</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">तपाईंको सन्देश (Your Message) *</label>
                   <textarea 
                     value={contactMsg}
                     onChange={(e) => setContactMsg(e.target.value)}
                     rows={4}
                     placeholder="कोर्ष सम्बन्धी केही सोध्न मन छ भने यहाँ लेख्नुहोस्..."
-                    className="w-full bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm transition outline-hidden"
+                    className="w-full bg-zinc-900/90 border border-zinc-800 text-white placeholder-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-2xl px-4 py-3.5 text-sm transition outline-hidden font-medium resize-none"
                   />
                 </div>
                 
                 <div className="pt-2">
                   <button 
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 px-6 rounded-xl shadow-lg shadow-blue-500/20 transition duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                    className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-blue-500/25 transition duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] text-sm"
                   >
-                    <Send className="w-4 h-4" /> 📤 Send Message
+                    <Send className="w-4 h-4 stroke-[2.5]" /> 📤 Send Message (WhatsApp)
                   </button>
                 </div>
               </form>
             </div>
 
             {/* Business Hours Information */}
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-950 p-6 rounded-2xl border border-zinc-800 text-center max-w-xl mx-auto">
-              <div className="sm:border-r sm:border-zinc-800 pb-4 sm:pb-0">
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-950/70 p-6 rounded-2xl border border-zinc-800/80 text-center max-w-xl mx-auto relative z-10 backdrop-blur-xs">
+              <div className="sm:border-r sm:border-zinc-800/80 pb-4 sm:pb-0">
                 <h5 className="font-extrabold text-white flex items-center justify-center gap-1.5 text-sm">
                   <Clock className="w-4 h-4 text-blue-400" /> Business Hours
                 </h5>
@@ -4518,21 +4529,21 @@ export default function App() {
                 <span className="text-emerald-400 font-extrabold text-sm flex items-center gap-1">
                   ⚡ Instant WhatsApp Support
                 </span>
-                <p className="text-zinc-400 text-xs mt-2">
+                <p className="text-zinc-400 text-xs mt-2 font-medium">
                   हामी प्राय: ५ मिनेट भित्रै जवाफ पठाउनेछौं!
                 </p>
               </div>
             </div>
 
             {/* Trust and safety badges */}
-            <div className="mt-10 flex flex-wrap justify-center items-center gap-6 text-zinc-400 opacity-90 border-t border-zinc-800/80 pt-8">
-              <div className="flex items-center gap-1 text-xs font-bold text-zinc-400">
+            <div className="mt-10 flex flex-wrap justify-center items-center gap-6 text-zinc-400 opacity-90 border-t border-zinc-800/80 pt-8 relative z-10">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-400">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" /> Secure eSewa / QR Checkout
               </div>
-              <div className="flex items-center gap-1 text-xs font-bold text-zinc-400">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-400">
                 <GraduationCap className="w-4 h-4 text-blue-400" /> Standard Certificate Issued
               </div>
-              <div className="flex items-center gap-1 text-xs font-bold text-zinc-400">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-400">
                 <Headphones className="w-4 h-4 text-emerald-400" /> Lifelong Learning Access
               </div>
             </div>
@@ -4544,8 +4555,8 @@ export default function App() {
 
       </main>
 
-      {/* FOOTER */}
-      <footer className="bg-black text-zinc-400 text-xs md:text-sm py-12 border-t border-zinc-800/80 w-full mt-auto">
+      {/* FOOTER - Elevated with ample clearance for full-screen bottom bar */}
+      <footer className="bg-black/95 text-zinc-400 text-xs md:text-sm pt-12 pb-32 md:pb-36 border-t border-zinc-800/80 w-full mt-auto relative z-10 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-left">
             <h5 className="text-white font-extrabold text-base tracking-tight mb-2 flex items-center gap-2 justify-center md:justify-start">
@@ -4559,16 +4570,33 @@ export default function App() {
               )}
               <span>{siteSettings.instituteName || 'AI Clipzone Nepal'} 🇳🇵</span>
             </h5>
-            <p className="text-zinc-500 text-xs">
+            <p className="text-zinc-500 text-xs leading-relaxed">
               © {new Date().getFullYear()} {siteSettings.instituteName || 'AI Clipzone'}. All rights reserved. Nepal's Premium AI Learning platform.
             </p>
           </div>
-          <div className="flex gap-4">
-            <a href={`https://wa.me/${getFormattedWhatsappNumber(paymentConfig.whatsappNumber || siteSettings.supportPhone)}`} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">WhatsApp</a>
-            <span>•</span>
-            <a href="https://www.facebook.com/profile.php?id=61583901232576&mibextid=ZbWKwL" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">Facebook</a>
-            <span>•</span>
-            <a href={`mailto:${siteSettings.supportEmail || 'ai.clipzone.edu@gmail.com'}`} className="hover:text-blue-400 transition-colors">Email</a>
+          <div className="flex items-center gap-2.5 flex-wrap justify-center">
+            <a 
+              href={`https://wa.me/${getFormattedWhatsappNumber(paymentConfig.whatsappNumber || siteSettings.supportPhone)}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-emerald-400 hover:border-emerald-500/40 transition-all text-xs font-semibold flex items-center gap-1.5 shadow-2xs"
+            >
+              <span>💬 WhatsApp</span>
+            </a>
+            <a 
+              href="https://www.facebook.com/profile.php?id=61583901232576&mibextid=ZbWKwL" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-blue-400 hover:border-blue-500/40 transition-all text-xs font-semibold flex items-center gap-1.5 shadow-2xs"
+            >
+              <span>🌐 Facebook</span>
+            </a>
+            <a 
+              href={`mailto:${siteSettings.supportEmail || 'ai.clipzone.edu@gmail.com'}`} 
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-indigo-400 hover:border-indigo-500/40 transition-all text-xs font-semibold flex items-center gap-1.5 shadow-2xs"
+            >
+              <span>✉️ Email</span>
+            </a>
           </div>
         </div>
       </footer>
@@ -6985,13 +7013,13 @@ export default function App() {
         />
       )}
 
-      {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA FOR UNIFIED APP EXPERIENCE */}
+      {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA WITH EXPANDED FULL-SCREEN DESKTOP VIEW */}
       <nav 
         id="native-app-bottom-bar"
         aria-label="App Navigation Bar" 
-        className="fixed bottom-0 inset-x-0 z-[4900] bg-black/95 border-t border-zinc-800/90 shadow-[0_-10px_35px_rgba(0,0,0,0.9)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-md"
+        className="fixed bottom-0 inset-x-0 z-[4900] bg-zinc-950/95 border-t border-zinc-800/90 shadow-[0_-12px_45px_rgba(0,0,0,0.95)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-2xl"
       >
-        <div className="max-w-md mx-auto px-1 py-1.5 flex items-center justify-around">
+        <div className="w-full max-w-md md:max-w-5xl lg:max-w-6xl mx-auto px-2 md:px-6 py-1.5 md:py-2.5 flex items-center justify-around md:gap-3 lg:gap-5">
           {/* 1. Home */}
           <button
             id="app-nav-home"
@@ -7001,14 +7029,14 @@ export default function App() {
               setCurrentView('home');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
+            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
               currentView === 'home' && !isAskOpen && !showProfileModal
-                ? 'text-blue-400 font-bold'
-                : 'text-zinc-400 hover:text-zinc-200'
+                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
+                : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
-            <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-            <span className="text-[10.5px] font-semibold tracking-tight">Home</span>
+            <Home className={`w-5 h-5 mb-0.5 md:mb-0 shrink-0 ${currentView === 'home' && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Home</span>
           </button>
 
           {/* 2. Course */}
@@ -7020,17 +7048,17 @@ export default function App() {
               setCurrentView('classroom');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
+            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
               currentView === 'classroom' && !isAskOpen && !showProfileModal
-                ? 'text-blue-400 font-bold'
-                : 'text-zinc-400 hover:text-zinc-200'
+                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
+                : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
-            <div className="relative flex items-center justify-center">
-              <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+            <div className="relative flex items-center justify-center shrink-0">
+              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
-            <span className="text-[10.5px] font-semibold tracking-tight">Course</span>
+            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
           {/* 3. Certificate - Shown only if user has an activated course */}
@@ -7057,10 +7085,10 @@ export default function App() {
                 setCertificateCode(activeCode);
                 setShowCertificateModal(true);
               }}
-              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300"
+              className="flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent"
             >
-              <Award className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
-              <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
+              <Award className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
+              <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold text-zinc-400 hover:text-blue-300 tracking-tight">Certificate</span>
             </button>
           )}
 
@@ -7075,19 +7103,21 @@ export default function App() {
                   setStudentUnreadCount(0);
                 }
               }}
-              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                isAskOpen && !showProfileModal ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+              className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
+                isAskOpen && !showProfileModal 
+                  ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15' 
+                  : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
               }`}
             >
-              <div className="relative flex items-center justify-center">
-                <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <div className="relative flex items-center justify-center shrink-0">
+                <MessageCircle className={`w-5 h-5 mb-0.5 md:mb-0 ${isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
                 {hasAskUnread && (
                   <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
                     {askBadgeText}
                   </span>
                 )}
               </div>
-              <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
+              <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Ask</span>
             </button>
           )}
 
@@ -7098,12 +7128,14 @@ export default function App() {
               setIsAskOpen(false);
               setShowProfileModal(true);
             }}
-            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              showProfileModal && !isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
+              showProfileModal && !isAskOpen 
+                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15' 
+                : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
-            <User className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
-            <span className="text-[10.5px] font-semibold tracking-tight">Account</span>
+            <User className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
+            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Account</span>
           </button>
         </div>
       </nav>
