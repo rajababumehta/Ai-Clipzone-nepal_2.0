@@ -1,14 +1,25 @@
 // AI Clipzone Nepal - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v3';
+const CACHE_NAME = 'aiclipzone-pwa-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/pwa-icon.svg',
+  '/pwa-48x48.png',
+  '/pwa-72x72.png',
+  '/pwa-96x96.png',
+  '/pwa-128x128.png',
+  '/pwa-144x144.png',
+  '/pwa-152x152.png',
   '/pwa-192x192.png',
+  '/pwa-256x256.png',
+  '/pwa-384x384.png',
   '/pwa-512x512.png',
+  '/pwa-1024x1024.png',
   '/pwa-maskable-192x192.png',
+  '/pwa-maskable-384x384.png',
   '/pwa-maskable-512x512.png',
+  '/pwa-maskable-1024x1024.png',
   '/apple-touch-icon.png',
   '/screenshots/screenshot-desktop.png',
   '/screenshots/screenshot-mobile.png',
