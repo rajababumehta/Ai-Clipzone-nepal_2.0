@@ -1,7 +1,7 @@
 {
   "id": "/",
   "name": "Ai Clipzone",
-  "short_name": "Clipzone",
+  "short_name": "Ai Clipzone",
   "description": "Ai Clipzone - AI powered video and clip generation app",
   "lang": "en",
   "dir": "ltr",
@@ -77,8 +77,8 @@
   ],
   "widgets": [
     {
-      "name": "AI Clipzone",
-      "short_name": "Clipzone",
+      "name": "Ai Clipzone",
+      "short_name": "Ai Clipzone",
       "description": "Quick access to AI video generator and courses",
       "tag": "clipzone-widget",
       "template": "widget-template",

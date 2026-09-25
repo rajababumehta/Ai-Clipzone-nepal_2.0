@@ -2526,7 +2526,7 @@ export default function App() {
     const handleAppInstalled = () => {
       setIsAppInstalled(true);
       setDeferredPrompt(null);
-      showToast(`🎉 ${siteSettings.instituteName || 'AI Clipzone Nepal'} App Successfully Installed!`, 'success');
+      showToast(`🎉 ${siteSettings.instituteName || 'Ai Clipzone'} App Successfully Installed!`, 'success');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);

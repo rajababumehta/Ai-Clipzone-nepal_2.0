@@ -1,5 +1,5 @@
-// AI Clipzone Nepal - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v5';
+// Ai Clipzone - Advanced PWA Service Worker
+const CACHE_NAME = 'aiclipzone-pwa-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
