@@ -20,7 +20,6 @@ import {
   Star, 
   ChevronDown, 
   X, 
-  Bot, 
   User, 
   Check,
   BookOpen,
@@ -2373,8 +2372,7 @@ export default function App() {
   const [contactCourse, setContactCourse] = useState('General Inquiry / सामान्य सोधपुछ');
   const [contactMsg, setContactMsg] = useState('');
 
-  // AI Chat Assistant state
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  // Ask & Live Support chat state
   const [isAskOpen, setIsAskOpen] = useState(false);
   const [studentUnreadCount, setStudentUnreadCount] = useState(0);
   const [adminUnreadCount, setAdminUnreadCount] = useState(0);
@@ -2480,22 +2478,6 @@ export default function App() {
       console.warn('Error setting up student support conversation listener:', e);
     }
   }, [currentUser, isAdminActivated, allActivationKeys, authName]);
-
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      sender: 'bot',
-      text: 'नमस्ते! 👋\nम AI Clipzone Nepal को Advanced AI Assistant हुँ।\nहाम्रा कोर्सहरू, Activation Key, Certificate, eSewa Payment वा AI Tools (Midjourney, Suno, CapCut) सम्बन्धी केही पनि सोध्नुहोस्!',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isSpeechActive, setIsSpeechActive] = useState(false);
-  const [activeChatCategory, setActiveChatCategory] = useState<'all' | 'activation' | 'prompts' | 'payment' | 'video'>('all');
-  const [showPromptBuilder, setShowPromptBuilder] = useState(false);
-  const [promptTopic, setPromptTopic] = useState('');
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // PWA Installation states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -2985,11 +2967,6 @@ export default function App() {
     }
   }, [showQrModal, selectedCourse, paymentConfig]);
 
-  // Scroll to bottom of chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, isChatOpen]);
-
   // Toggle single FAQ accordion
   const toggleFaq = (index: number) => {
     setOpenFaqs((prev) => ({
@@ -3017,73 +2994,6 @@ export default function App() {
     showToast('तपाईंको सन्देश WhatsApp मा पठाइयो।', 'success');
   };
 
-  const speakBotResponse = (text: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      if (isSpeechActive) {
-        setIsSpeechActive(false);
-        return;
-      }
-      const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      const voices = window.speechSynthesis.getVoices();
-      const neOrHiVoice = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi') || v.lang.includes('en'));
-      if (neOrHiVoice) utterance.voice = neOrHiVoice;
-      utterance.onend = () => setIsSpeechActive(false);
-      utterance.onerror = () => setIsSpeechActive(false);
-      window.speechSynthesis.speak(utterance);
-      setIsSpeechActive(true);
-      showToast('भ्वाइस रिडिङ सुरु भयो 🔊 (Reading response aloud)', 'info');
-    } catch (e) {
-      console.warn('Speech synthesis error:', e);
-    }
-  };
-
-  const handleCopyChatMessage = (text: string) => {
-    const clean = text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
-    navigator.clipboard.writeText(clean);
-    showToast('जवाफ कपी गरियो! (Copied to clipboard)', 'info');
-  };
-
-  const handleClearChatHistory = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeechActive(false);
-    setChatMessages([
-      {
-        sender: 'bot',
-        text: `नमस्ते! 👋\nम ${siteSettings.instituteName || 'AI Clipzone Nepal'} को Advanced AI Assistant हुँ।\nहाम्रा कोर्सहरू, Activation Key, Certificate, eSewa Payment वा AI Tools सम्बन्धी केही पनि सोध्नुहोस्!`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
-    showToast('च्याट रिसेट गरियो 🔄', 'info');
-  };
-
-  const handleGeneratePromptTool = (topic: string) => {
-    if (!topic.trim()) return;
-    const promptText = `✨ <strong>AI Master Prompt Results for "${topic}":</strong><br/><br/>
-    🎨 <strong>1. Midjourney v6 / DALL-E Photo Prompt:</strong><br/>
-    <span class="text-blue-400 font-mono text-xs block bg-zinc-900 p-2 rounded border border-blue-500/30 mt-1 select-all">/imagine prompt: Ultra-realistic 8k cinematic studio portrait of ${topic}, hyper-detailed lighting, 85mm lens f/1.4, Octane Render, 32k resolution --ar 16:9 --style raw --v 6.0</span><br/>
-    
-    📝 <strong>2. ChatGPT Script & Hook Prompt:</strong><br/>
-    <span class="text-indigo-400 font-mono text-xs block bg-zinc-900 p-2 rounded border border-indigo-500/30 mt-1 select-all">Act as a viral content creator. Write a high-retention 60-second video script about "${topic}". Include a 3-second hook, visual B-roll cues, and strong Call To Action.</span><br/>
-    
-    🎵 <strong>3. Suno AI Music Prompt:</strong><br/>
-    <span class="text-emerald-400 font-mono text-xs block bg-zinc-900 p-2 rounded border border-emerald-500/30 mt-1 select-all">[Genre: Modern Nepali Electro Folk, Mood: Energetic, Tempo: 120 BPM, Lead: Clear Vocal] "${topic}"</span>`;
-
-    setChatMessages(prev => [
-      ...prev,
-      { sender: 'user', text: `Generate AI Prompts for: ${topic}`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
-      { sender: 'bot', text: promptText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    ]);
-    setShowPromptBuilder(false);
-    setPromptTopic('');
-  };
-
   // WhatsApp Number & Purchase helper
   const getFormattedWhatsappNumber = (rawNumber?: string) => {
     const num = (rawNumber || paymentConfig.whatsappNumber || siteSettings.supportPhone || '9763323268').replace(/\D/g, '');
@@ -3095,168 +3005,6 @@ export default function App() {
     const number = getFormattedWhatsappNumber(paymentConfig.whatsappNumber);
     const text = course.message || `नमस्ते! म "${course.title}" (${course.price}) खरिद गर्न चाहन्छु। कृपया मलाई भुक्तानी विवरण र Secret Activation Key पठाइदिनुहोस्।`;
     return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
-  };
-
-  const getLocalAIResponse = (query: string): string => {
-    const q = query.toLowerCase().trim();
-    const currentWaNumber = paymentConfig.whatsappNumber || siteSettings.supportPhone || '976-3323268';
-    const waLink = `https://wa.me/${getFormattedWhatsappNumber(currentWaNumber)}`;
-    
-    // Greeting
-    if (q === 'hi' || q === 'hello' || q === 'namaste' || q.includes('नमस्ते') || q === 'hey') {
-      return `नमस्ते! 🙏 ${siteSettings.instituteName || 'AI Clipzone Nepal'} को आधिकारिक AI Assistant मा यहाँलाई स्वागत छ। म यहाँलाई हाम्रा प्रिमियम AI कोर्षहरू, Activation Code, Certificate, eSewa Payment र AI Tools (Midjourney, ChatGPT, Suno AI, CapCut) सम्बन्धी जुनसुकै सहयोग गर्न तयार छु! 😊`;
-    }
-
-    // Code / Activation Key / Invalid Key
-    if (q.includes('code') || q.includes('activation') || q.includes('की') || q.includes('कोड') || q.includes('invalid') || q.includes('अमान्य') || q.includes('key')) {
-      return `🔑 <strong>Course Activation Code सम्बन्धी जानकारी:</strong><br/><br/>
-      • <strong>कोड कसरी पाइन्छ?</strong> भुक्तानी (eSewa ID: ${paymentConfig.esewaId || '9763323268'}) गरिसकेपछि स्क्रीनसट WhatsApp (<a href="${waLink}" target="_blank" class="text-purple-600 font-extrabold underline">${currentWaNumber}</a>) मा पठाउनासाथ तपाईंलाई गोप्य Activation Code उपलब्ध गराइन्छ।<br/>
-      • <strong>कोड कसरी प्रयोग गर्ने?</strong> माथिल्लो मेनुमा रहेको <strong>"🔑 Activate Code"</strong> बटन थिचेर आफ्नो कोड हाल्नुहोस्।<br/>
-      • <strong>Invalid / Error देखाए के गर्ने?</strong><br/>
-      1. कोडका अंग्रेजी अक्षरहरू Capital Letter (ठूलो अक्षर) मा छन् कि छैनन् चेक गर्नुहोस्।<br/>
-      2. कोडको अगाडि वा पछाडि अनावश्यक Space परेको छ भने हटाउनुहोस्।<br/>
-      3. सुरक्षा नीति अनुसार एउटा कोड <strong>एक पटकमा १ वटा मोवाइल/डिभाइसमा मात्र</strong> चल्दछ। यदि नयाँ डिभाइसमा खोल्नुभएको छ भने पुरानो डिभाइस लगआउट हुनुपर्छ।<br/>
-      4. थप समस्या भए सिधै हाम्रो <strong>WhatsApp (<a href="${waLink}" target="_blank" class="text-purple-600 font-extrabold underline">${currentWaNumber}</a>)</strong> मा म्यासेज गर्नुहोस्!`;
-    }
-
-    // Certificate Download & Fixes
-    if (q.includes('certificate') || q.includes('प्रमाणपत्र') || q.includes('सर्टिफिकेट') || q.includes('download') || q.includes('verify')) {
-      return `📜 <strong>Course Certificate कसरी Download गर्ने?</strong><br/><br/>
-      १. आफ्नो <strong>Course</strong> खोल्नुहोस्।<br/>
-      २. कोर्षको कार्डमा रहेको <strong>"📜 Course Certificate"</strong> बटनमा क्लिक गर्नुहोस्।<br/>
-      ३. आफ्नो नाम टाइप गर्नुहोस् र <strong>"Generate & Print Certificate"</strong> मा थिचेर PDF/Image डाउनलोड गर्नुहोस्।<br/>
-      • <i>नोट:</i> प्रमाण पत्रमा तपाईंको कोर्षको आधिकारीक Unique Code र <strong>"by ${siteSettings.instituteName || 'AI Clipzone Nepal'}"</strong> छाप समावेस हुनेछ!`;
-    }
-
-    // AI Prompt Generator / Prompts
-    if (q.includes('prompt') || q.includes('प्रम्प्ट') || q.includes('midjourney') || q.includes('chatgpt') || q.includes('ai tool')) {
-      return `🤖 <strong>AI Master Prompt बनाउने तरिका:</strong><br/><br/>
-      तपाईंले हाम्रो च्याटको माथिल्लो toolbar मा रहेको <strong>"✨ Prompt Tool (Wand Icon)"</strong> थिचेर वा कुनै पनि विषय टाइप गरेर मिनेटमै Midjourney, ChatGPT र Suno AI को लागि उत्कृष्ट Prompts प्राप्त गर्न सक्नुहुन्छ!<br/><br/>
-      <strong>Midjourney Prompt Formula:</strong><br/>
-      <code>[Subject] + [Environment/Background] + [Lighting & Style] + [Camera Lens & Aspect Ratio]</code><br/>
-      उदाहरण: <i>/imagine prompt: Futuristic AI robot in Kathmandu street, 8k cinematic lighting, 85mm lens --ar 16:9</i>`;
-    }
-
-    // Pricing
-    if (q.includes('price') || q.includes('कति') || q.includes('मूल्य') || q.includes('paisa') || q.includes('cost') || q.includes('rs') || q.includes('rupees') || q.includes('rate')) {
-      return `हाम्रा प्रिमियम कोर्षहरू र तिनको विशेष अफर मूल्यहरू यस प्रकार छन्:<br/><br/>
-      1. <strong>AI Master Class by ${siteSettings.instituteName || 'AI Clipzone'}:</strong> मात्र Rs. 449 (Hindi, 30+ AI Tools)<br/>
-      2. <strong>YouTube Blueprint Course:</strong> मात्र Rs. 549 (Hindi & Nepali, YouTube Growth)<br/>
-      3. <strong>AI Video, Image & Song Creation:</strong> मात्र Rs. 350 (Nepali)<br/>
-      4. <strong>AI Song Creation Course:</strong> मात्र Rs. 299 (Nepali/Hindi)<br/>
-      5. <strong>AI Presentation Making Course:</strong> मात्र Rs. 199 (Nepali/Hindi, Slides Creator)<br/><br/>
-      <i>सबै कोर्षहरूमा लाइफटाइम एक्सेस र सर्टिफिकेट उपलब्ध छ। खरिद गर्न "WhatsApp बाट किन्नुहोस्" वा "QR Pay" बटनमा क्लिक गर्नुहोस्!</i>`;
-    }
-
-    // Payment / How to buy / eSewa
-    if (q.includes('payment') || q.includes('तिर्ने') || q.includes('किन्ने') || q.includes('buy') || q.includes('esewa') || q.includes('khalti') || q.includes('qr') || q.includes('pay') || q.includes('purchase')) {
-      return `भुक्तानी गर्न अत्यन्तै सजिलो छ! तपाईंले <strong>eSewa (ID: ${paymentConfig.esewaId || '9763323268'} - ${paymentConfig.accountName || 'Ayush Chaurasiya'}) वा Bank Transfer</strong> मार्फत QR स्क्यान गरेर तिर्न सक्नुहुन्छ। <br/><br/>
-      <strong>प्रक्रिया:</strong><br/>
-      १. कोर्ष सेक्सनमा गएर <strong>"WhatsApp बाट किन्नुहोस्"</strong> वा <strong>"QR Pay"</strong> बटन थिच्नुहोस्।<br/>
-      २. त्यहाँ देखाइएको QR स्क्यान गरी eSewa वा Mobile Banking बाट तोकिएको शुल्क भुक्तानी गर्नुहोस्।<br/>
-      ३. भुक्तानी गरिसकेपछि स्क्रीनसट हाम्रो आधिकारिक <strong>WhatsApp (<a href="${waLink}" target="_blank" class="text-purple-600 font-extrabold underline">${currentWaNumber}</a>)</strong> मा पठाउनुहोस् र कोर्षको तत्काल पहुँच पाउनुहोस्।`;
-    }
-
-    // Contact / Support / WhatsApp / Phone
-    if (q.includes('contact') || q.includes('whatsapp') || q.includes('फोन') || q.includes('नम्बर') || q.includes('phone') || q.includes('number') || q.includes('support') || q.includes('help')) {
-      return `हाम्रो आधिकारिक सम्पर्क विवरणहरू यस प्रकार छन्:<br/>
-      • <strong>WhatsApp:</strong> <a href="${waLink}" target="_blank" class="text-purple-600 font-extrabold underline">${currentWaNumber}</a><br/>
-      • <strong>सपोर्ट समय:</strong> २४/७ (तपाईं जुनसुकै बेला पनि म्यासेज पठाउन सक्नुहुन्छ)<br/><br/>
-      तपाईंले भुक्तानी गरेपछि स्क्रीनसट यही WhatsApp नम्बरमा पठाउनुपर्नेछ।`;
-    }
-
-    // Recorded or Live
-    if (q.includes('recorded') || q.includes('live') || q.includes('भिडियो') || q.includes('class') || q.includes('क्लास')) {
-      return `हाम्रा सबै कोर्षहरू पूर्ण रूपमा <strong>Recorded HD Lectures</strong> हुन्। यसमा कुनै पनि Live Class को झन्झट छैन। तपाईंले आफ्नो फुर्सदको समयमा (बिहान, दिउँसो, वा राती) जुनसुकै बेला पनि सजिलै भिडियोहरू हेरेर सिक्न सक्नुहुन्छ र दोहोर्याएर हेर्न पनि पाउनुहुन्छ।`;
-    }
-
-    // Access or Lifetime
-    if (q.includes('lifetime') || q.includes('एक्सेस') || q.includes('access') || q.includes('कति दिन') || q.includes('समय')) {
-      return `हो! कोर्ष खरिद गरेपछि तपाईंले <strong>Lifetime Access (आजीवन पहुँच)</strong> पाउनुहुन्छ। भविष्यमा थपिने सबै नयाँ भिडियोहरू र अपडेटहरू पनि तपाईंले बिल्कुलै नि:शुल्क पाउनुहुनेछ।`;
-    }
-
-    // Specific Course: Dhruv Rathee style
-    if (q.includes('dhruv') || q.includes('rathee') || q.includes('master') || q.includes('30+')) {
-      return `<strong>AI Master Class (Hindi & Nepali) - मात्र Rs. 449:</strong><br/>
-      यो कोर्षमा ChatGPT, Midjourney, Runway, ElevenLabs, Leonardo AI जस्ता ३० भन्दा बढी प्रिमियम AI tools को पूर्ण प्रयोगात्मक जानकारी समावेस छ।`;
-    }
-
-    // Specific Course: Song / Music / Suno
-    if (q.includes('song') || q.includes('music') || q.includes('गीत') || q.includes('संगीत') || q.includes('suno')) {
-      return `<strong>AI Song Creation Course - मात्र Rs. 299 (Nepali/Hindi):</strong><br/>
-      यसमा Suno v3/v4 को प्रयोग गरी आफ्नै लिरिक्स बनाउने, संगीत कम्पोज गर्ने, धून तयार गर्ने, भ्वाइस क्लोनिङ गर्ने र व्यावसायिक गीतहरू उत्पादन गर्ने तरिका सिकाइन्छ।`;
-    }
-
-    // Specific Course: Video / CapCut / Avatar
-    if (q.includes('video') || q.includes('भिडियो सम्पादन') || q.includes('avatar') || q.includes('एनिमेसन') || q.includes('capcut')) {
-      return `<strong>AI Video, Image & Song Creation - मात्र Rs. 350 (Nepali):</strong><br/>
-      यो नेपाली भाषाको पूर्ण कोर्ष हो जसमा Talking Avatar भिडियोहरू बनाउने, Text-to-Video, CapCut Transitions, र प्रोफेसनल एनिमेटेड भिडियो सम्पादन गर्न सिकाइन्छ।`;
-    }
-
-    // Specific Course: Presentation / Slides / PPT
-    if (q.includes('presentation') || q.includes('slides') || q.includes('ppt') || q.includes('पावरपोइन्ट')) {
-      return `<strong>AI Presentation Making Course - मात्र Rs. 199 (Nepali/Hindi):</strong><br/>
-      यसमा Gamma App, Tome, PowerPoint AI को प्रयोग गरी उत्कृष्ट एनिमेटेड स्लाइड र व्यावसायिक कलेज/अफिस प्रस्तुतीकरणहरू मिनेटमै बनाउन सिकाइन्छ।`;
-    }
-
-    return `धन्यवाद! कोर्ष तुरुन्त खरिद गर्न, Activation Code re-issue गर्न वा थप जानकारीका लागि कृपया हाम्रो आधिकारिक <strong>WhatsApp नम्बर <a href="${waLink}" target="_blank" class="text-purple-600 font-extrabold underline">${currentWaNumber}</a></strong> मा सिधै सम्पर्क गर्नुहोस्। हामी तपाईंलाई तत्काल सहयोग गर्नेछौं!`;
-  };
-
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = textToSend || chatInput;
-    if (!text.trim() || isTyping) return;
-
-    // Add user message
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userMsg: ChatMessage = { sender: 'user', text, timestamp };
-    
-    setChatMessages(prev => [...prev, userMsg]);
-    if (!textToSend) setChatInput('');
-    setIsTyping(true);
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: text,
-          history: chatMessages.map(msg => ({ sender: msg.sender, text: msg.text }))
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Server returned non-ok status');
-      }
-
-      const data = await response.json();
-      const botReply = data.reply || getLocalAIResponse(text);
-      
-      setChatMessages(prev => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: botReply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    } catch (error) {
-      console.warn('Chat API Error, falling back to local KB:', error);
-      
-      // Fallback seamlessly to the highly accurate local responder instead of breaking!
-      const botReply = getLocalAIResponse(text);
-      setChatMessages(prev => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: botReply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    } finally {
-      setIsTyping(false);
-    }
   };
 
   // Open QR modal from Course Modal
@@ -6760,606 +6508,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING AI CHAT ASSISTANT BUTTON - Desktop helper, on mobile native bottom bar Ask tab is used */}
-      <div className="hidden sm:block fixed bottom-6 left-6 z-[990]">
-        <button 
-          id="floating-ai-agent-fab"
-          onClick={() => {
-            setIsAskOpen(false);
-            setIsChatOpen(prev => !prev);
-          }}
-          className="w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/30 ring-2 ring-blue-400/40 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative"
-          aria-label="AI Chat Assistant"
-          title="AI Chat Assistant"
-        >
-          {isChatOpen ? (
-            <X className="w-6 h-6" />
-          ) : (
-            <>
-              <Bot className="w-7 h-7 animate-bounce mt-0.5" />
-              <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">1</span>
-              </span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* CHATBOT ASSISTANT - Full Screen Native App View in App Mode / Mobile & Floating Card in Desktop */}
-      <AnimatePresence>
-        {isChatOpen && (
-          (isRunningInAppMode || (typeof window !== 'undefined' && window.innerWidth < 640)) ? (
-            /* FULL SCREEN NATIVE MOBILE APP VIEW FOR APP MODE & MOBILE WEB */
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 30 }}
-              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-              className="fixed inset-0 z-[4800] bg-black flex flex-col pb-[64px] pt-[env(safe-area-inset-top,0px)] select-none text-zinc-100 overflow-hidden"
-            >
-              {/* Native App Top Header Bar */}
-              <div className="bg-black border-b border-zinc-800 px-3.5 py-2.5 flex items-center justify-between shrink-0 shadow-md">
-                <div className="flex items-center gap-2.5">
-                  <button
-                    onClick={() => setIsChatOpen(false)}
-                    className="p-2 -ml-1.5 text-zinc-300 hover:text-white rounded-full active:bg-white/10 transition cursor-pointer flex items-center justify-center"
-                    aria-label="Back to App"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-
-                  <div className="w-9 h-9 bg-zinc-900 border border-blue-500/30 rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 shadow-xs">
-                    {siteSettings.instituteLogoUrl ? (
-                      <img 
-                        src={siteSettings.instituteLogoUrl} 
-                        alt="Bot" 
-                        className="w-7 h-7 object-contain rounded"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                    ) : (
-                      <Bot className="w-5 h-5 text-blue-400" />
-                    )}
-                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-black animate-pulse"></span>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-sm tracking-tight text-white flex items-center gap-1.5">
-                      {siteSettings.instituteName || 'AI Clipzone'} Assistant
-                      <span className="bg-blue-500/20 text-blue-300 text-[9px] px-1.5 py-0.2 rounded-full font-black border border-blue-500/30">PRO AI 2.5</span>
-                    </h4>
-                    <span className="text-[10.5px] text-emerald-400 font-semibold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      अनलाइन • 24/7 Smart Study Help
-                    </span>
-                  </div>
-                </div>
-
-                {/* Header Action Tools */}
-                <div className="flex items-center gap-1 text-zinc-300">
-                  <button
-                    onClick={() => speakBotResponse(chatMessages[chatMessages.length - 1]?.text || '')}
-                    title={isSpeechActive ? "Stop Voice" : "Voice Reader"}
-                    className={`p-2 rounded-xl transition cursor-pointer ${isSpeechActive ? 'bg-blue-500 text-white animate-pulse' : 'hover:bg-white/10 hover:text-white'}`}
-                  >
-                    {isSpeechActive ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                  </button>
-
-                  <button
-                    onClick={() => setShowPromptBuilder(!showPromptBuilder)}
-                    title="AI Prompt Builder Tool"
-                    className={`p-2 rounded-xl transition cursor-pointer ${showPromptBuilder ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-white/10 hover:text-white'}`}
-                  >
-                    <Wand2 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={handleClearChatHistory}
-                    title="Reset Chat"
-                    className="p-2 hover:bg-white/10 hover:text-white rounded-xl transition cursor-pointer"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Advanced Prompt Builder Mini Panel */}
-              {showPromptBuilder && (
-                <div className="bg-zinc-950 p-3 text-white border-b border-blue-500/20 shrink-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-blue-400 flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5" /> AI Master Prompt Generator
-                    </span>
-                    <button onClick={() => setShowPromptBuilder(false)} className="text-zinc-400 hover:text-white text-xs cursor-pointer">बन्द गर्नुहोस्</button>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={promptTopic}
-                      onChange={(e) => setPromptTopic(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleGeneratePromptTool(promptTopic);
-                      }}
-                      placeholder="विषय लेख्नुहोस् (उदा: Midjourney Avatar, Suno Nepali Song, YouTube Script)..."
-                      className="grow bg-[#121316] border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-hidden focus:border-purple-500"
-                    />
-                    <button
-                      onClick={() => handleGeneratePromptTool(promptTopic)}
-                      className="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 shadow-md"
-                    >
-                      Generate ✨
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Native Category Filter Chips */}
-              <div className="bg-[#121316] p-2.5 border-b border-zinc-800/80 flex items-center gap-2 overflow-x-auto text-xs font-bold text-zinc-400 shrink-0 scrollbar-none">
-                <button
-                  onClick={() => setActiveChatCategory('all')}
-                  className={`px-3 py-1.5 rounded-full transition cursor-pointer whitespace-nowrap active:scale-95 ${activeChatCategory === 'all' ? 'bg-purple-600 text-white shadow-xs' : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'}`}
-                >
-                  🔥 FAQs & Help
-                </button>
-                <button
-                  onClick={() => setActiveChatCategory('activation')}
-                  className={`px-3 py-1.5 rounded-full transition cursor-pointer whitespace-nowrap active:scale-95 ${activeChatCategory === 'activation' ? 'bg-purple-600 text-white shadow-xs' : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'}`}
-                >
-                  🔑 Activation Code
-                </button>
-                <button
-                  onClick={() => setActiveChatCategory('prompts')}
-                  className={`px-3 py-1.5 rounded-full transition cursor-pointer whitespace-nowrap active:scale-95 ${activeChatCategory === 'prompts' ? 'bg-purple-600 text-white shadow-xs' : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'}`}
-                >
-                  🤖 AI Prompts
-                </button>
-                <button
-                  onClick={() => setActiveChatCategory('payment')}
-                  className={`px-3 py-1.5 rounded-full transition cursor-pointer whitespace-nowrap active:scale-95 ${activeChatCategory === 'payment' ? 'bg-purple-600 text-white shadow-xs' : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'}`}
-                >
-                  💳 eSewa Payment
-                </button>
-              </div>
-
-              {/* Native Chat Messages Body */}
-              <div className="grow overflow-y-auto p-4 space-y-4 bg-[#0d0e12]">
-                {chatMessages.map((msg, idx) => (
-                  <div 
-                    key={idx}
-                    className={`flex items-start gap-2.5 ${msg.sender === 'user' ? 'justify-end' : ''}`}
-                  >
-                    {msg.sender === 'bot' && (
-                      <div className="w-8 h-8 rounded-xl bg-purple-950/80 border border-purple-500/30 text-purple-300 flex items-center justify-center shrink-0 text-xs mt-0.5 shadow-xs">
-                        <Bot className="w-4 h-4" />
-                      </div>
-                    )}
-                    
-                    <div className="max-w-[85%] flex flex-col group">
-                      <div 
-                        className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
-                          msg.sender === 'user' 
-                            ? 'bg-purple-600 text-white rounded-tr-none shadow-md' 
-                            : 'bg-[#181920] text-zinc-100 border border-zinc-800 rounded-tl-none shadow-xs'
-                        }`}
-                        dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>') }}
-                      />
-                      
-                      {/* Action buttons under message */}
-                      <div className={`flex items-center gap-2 mt-1.5 text-[10.5px] text-zinc-500 font-medium ${msg.sender === 'user' ? 'justify-end' : 'justify-between'}`}>
-                        <span>{msg.timestamp}</span>
-                        {msg.sender === 'bot' && (
-                          <div className="flex items-center gap-2 text-zinc-400">
-                            <button
-                              onClick={() => handleCopyChatMessage(msg.text)}
-                              className="hover:text-purple-400 flex items-center gap-1 cursor-pointer py-0.5 px-1.5 rounded bg-zinc-800/50"
-                              title="Copy text"
-                            >
-                              <Copy className="w-3 h-3" /> Copy
-                            </button>
-                            <button
-                              onClick={() => speakBotResponse(msg.text)}
-                              className="hover:text-purple-400 flex items-center gap-1 cursor-pointer py-0.5 px-1.5 rounded bg-zinc-800/50"
-                              title="Listen"
-                            >
-                              <Volume2 className="w-3 h-3" /> Listen
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {msg.sender === 'user' && (
-                      <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5 shadow-xs">
-                        <User className="w-4 h-4" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {isTyping && (
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-purple-950/80 border border-purple-500/30 text-purple-300 flex items-center justify-center shrink-0 text-xs">
-                      <Bot className="w-4 h-4 text-purple-400 animate-pulse" />
-                    </div>
-                    <div className="max-w-[80%] flex flex-col">
-                      <div className="bg-[#181920] text-zinc-200 border border-zinc-800 p-3.5 rounded-2xl rounded-tl-none shadow-xs flex items-center gap-2">
-                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              {/* Native Bottom Input Bar */}
-              <div className="p-3 bg-[#16171d] border-t border-zinc-800/90 shrink-0">
-                {/* Suggestions chips */}
-                <div className="flex flex-wrap gap-1.5 mb-2.5 max-h-20 overflow-y-auto scrollbar-none">
-                  {(activeChatCategory === 'all' || activeChatCategory === 'payment') && (
-                    <button 
-                      onClick={() => handleSendMessage('Price कति हो?')}
-                      className="bg-zinc-800/90 hover:bg-purple-900/60 active:scale-95 text-zinc-300 text-xs font-semibold py-1.5 px-3 rounded-full border border-zinc-700 transition cursor-pointer"
-                    >
-                      Price कति हो? 🏷️
-                    </button>
-                  )}
-                  {(activeChatCategory === 'all' || activeChatCategory === 'activation') && (
-                    <button 
-                      onClick={() => handleSendMessage('Activation Code कहाँ पाइन्छ?')}
-                      className="bg-zinc-800/90 hover:bg-purple-900/60 active:scale-95 text-zinc-300 text-xs font-semibold py-1.5 px-3 rounded-full border border-zinc-700 transition cursor-pointer"
-                    >
-                      Activation Code? 🔑
-                    </button>
-                  )}
-                  {(activeChatCategory === 'all' || activeChatCategory === 'prompts') && (
-                    <button 
-                      onClick={() => handleSendMessage('Midjourney AI Prompt कसरी बनाउने?')}
-                      className="bg-zinc-800/90 hover:bg-purple-900/60 active:scale-95 text-zinc-300 text-xs font-semibold py-1.5 px-3 rounded-full border border-zinc-700 transition cursor-pointer"
-                    >
-                      Midjourney Prompts 🎨
-                    </button>
-                  )}
-                  {(activeChatCategory === 'all' || activeChatCategory === 'payment') && (
-                    <button 
-                      onClick={() => handleSendMessage('Payment कसरी गर्ने?')}
-                      className="bg-zinc-800/90 hover:bg-purple-900/60 active:scale-95 text-zinc-300 text-xs font-semibold py-1.5 px-3 rounded-full border border-zinc-700 transition cursor-pointer"
-                    >
-                      eSewa QR Payment 💳
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => handleSendMessage('Certificate कसरी Download गर्ने?')}
-                    className="bg-zinc-800/90 hover:bg-purple-900/60 active:scale-95 text-zinc-300 text-xs font-semibold py-1.5 px-3 rounded-full border border-zinc-700 transition cursor-pointer"
-                  >
-                    Certificate Download 📜
-                  </button>
-                </div>
-
-                {/* Input Text Form */}
-                <div className="flex gap-2 items-center">
-                  <input 
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSendMessage();
-                    }}
-                    placeholder="AI सँग केही सोध्नुहोस्..."
-                    className="grow bg-[#0d0e12] border border-zinc-700 focus:border-purple-500 rounded-full px-4 py-2.5 text-sm text-white placeholder-zinc-500 transition outline-hidden font-medium"
-                  />
-                  <button 
-                    onClick={() => handleSendMessage()}
-                    className="w-10 h-10 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white rounded-full flex items-center justify-center shrink-0 shadow-md transition cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ) : (
-            /* FLOATING DESKTOP POPUP CARD FOR WEB BROWSER MODE */
-            <div 
-              className="fixed inset-0 z-[5500] flex flex-col justify-end sm:justify-end sm:items-start p-0 sm:p-6 bg-black/60 backdrop-blur-xs sm:bg-transparent pointer-events-auto"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  setIsChatOpen(false);
-                }
-              }}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 40 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 40 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-                className="w-full sm:w-[410px] h-[85vh] sm:h-[580px] max-h-[92vh] bg-black rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col pointer-events-auto"
-              >
-                {/* Top Header Bar */}
-                <div className="bg-zinc-950 text-white p-3.5 sm:p-4 flex items-center justify-between border-b border-zinc-800 shrink-0">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 bg-blue-500/10 rounded-xl flex items-center justify-center border border-blue-500/30 relative overflow-hidden shrink-0">
-                      {siteSettings.instituteLogoUrl ? (
-                        <img 
-                          src={siteSettings.instituteLogoUrl} 
-                          alt="Bot" 
-                          className="w-7 h-7 object-contain rounded"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                      ) : (
-                        <Bot className="w-5 h-5 text-blue-400" />
-                      )}
-                      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-zinc-950 animate-pulse"></span>
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-xs md:text-sm tracking-tight text-white flex items-center gap-1.5">
-                        {siteSettings.instituteName || 'AI Clipzone'} Assistant
-                        <span className="bg-blue-500/20 text-blue-300 text-[9px] px-1.5 py-0.5 rounded-full font-black border border-blue-500/40">PRO AI</span>
-                      </h4>
-                      <span className="text-[10px] text-zinc-400 block font-medium">
-                        नेपालको १ नम्बर AI लर्निङ असिस्टेन्ट
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Header Action Tools */}
-                  <div className="flex items-center gap-1 text-zinc-300">
-                    <button
-                      onClick={() => speakBotResponse(chatMessages[chatMessages.length - 1]?.text || '')}
-                      title={isSpeechActive ? "Stop Voice" : "Voice Reader"}
-                      className={`p-1.5 rounded-lg transition cursor-pointer ${isSpeechActive ? 'bg-blue-600 text-white animate-pulse' : 'hover:bg-white/10 hover:text-white'}`}
-                    >
-                      {isSpeechActive ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                      onClick={() => setShowPromptBuilder(!showPromptBuilder)}
-                      title="AI Prompt Builder Tool"
-                      className={`p-1.5 rounded-lg transition cursor-pointer ${showPromptBuilder ? 'bg-blue-600 text-white font-bold' : 'hover:bg-white/10 hover:text-white'}`}
-                    >
-                      <Wand2 className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      onClick={handleClearChatHistory}
-                      title="Reset Chat"
-                      className="p-1.5 hover:bg-white/10 hover:text-white rounded-lg transition cursor-pointer"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </button>
-
-                    <button 
-                      onClick={() => setIsChatOpen(false)}
-                      className="p-1.5 hover:bg-white/10 hover:text-white rounded-lg transition cursor-pointer ml-1"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Advanced Prompt Builder Mini Modal View */}
-                {showPromptBuilder && (
-                  <div className="bg-zinc-950 p-3 text-white border-b border-zinc-800 shrink-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-blue-300 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5" /> AI Master Prompt Builder
-                      </span>
-                      <button onClick={() => setShowPromptBuilder(false)} className="text-zinc-400 hover:text-white text-xs cursor-pointer">Close</button>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={promptTopic}
-                        onChange={(e) => setPromptTopic(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleGeneratePromptTool(promptTopic);
-                        }}
-                        placeholder="विषय लेख्नुहोस् (उदा: Shorts Video, Avatar, Suno Song)..."
-                        className="grow bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-hidden"
-                      />
-                      <button
-                        onClick={() => handleGeneratePromptTool(promptTopic)}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-xl font-black text-xs transition cursor-pointer shrink-0 shadow-sm"
-                      >
-                        Generate ✨
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Category Filter Chips */}
-                <div className="bg-zinc-950 p-2 border-b border-zinc-805 flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold text-zinc-300 shrink-0 scrollbar-none">
-                  <button
-                    onClick={() => setActiveChatCategory('all')}
-                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'all' ? 'bg-blue-600 text-white font-black shadow-xs' : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'}`}
-                  >
-                    🔥 FAQs
-                  </button>
-                  <button
-                    onClick={() => setActiveChatCategory('activation')}
-                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'activation' ? 'bg-blue-600 text-white font-black shadow-xs' : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'}`}
-                  >
-                    🔑 Code & Key
-                  </button>
-                  <button
-                    onClick={() => setActiveChatCategory('prompts')}
-                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'prompts' ? 'bg-blue-600 text-white font-black shadow-xs' : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'}`}
-                  >
-                    🤖 AI Prompts
-                  </button>
-                  <button
-                    onClick={() => setActiveChatCategory('payment')}
-                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'payment' ? 'bg-blue-600 text-white font-black shadow-xs' : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'}`}
-                  >
-                    💳 eSewa Payment
-                  </button>
-                </div>
-
-                {/* Chat messages body */}
-                <div className="grow overflow-y-auto p-3.5 sm:p-4 space-y-3.5 bg-black">
-                  {chatMessages.map((msg, idx) => (
-                    <div 
-                      key={idx}
-                      className={`flex items-start gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}
-                    >
-                      {msg.sender === 'bot' && (
-                        <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0 text-xs mt-0.5">
-                          <Bot className="w-4 h-4" />
-                        </div>
-                      )}
-                      
-                      <div className="max-w-[85%] flex flex-col group">
-                        <div 
-                          className={`p-3.5 rounded-2xl text-xs md:text-sm leading-relaxed ${
-                            msg.sender === 'user' 
-                              ? 'bg-blue-600 text-white font-semibold rounded-tr-none shadow-md' 
-                              : 'bg-zinc-900 text-zinc-200 border border-zinc-800 rounded-tl-none shadow-xs'
-                          }`}
-                          dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>') }}
-                        />
-                        
-                        {/* Action buttons under message */}
-                        <div className={`flex items-center gap-2 mt-1 text-[10px] text-zinc-500 font-medium ${msg.sender === 'user' ? 'justify-end' : 'justify-between'}`}>
-                          <span>{msg.timestamp}</span>
-                          {msg.sender === 'bot' && (
-                            <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition">
-                              <button
-                                onClick={() => handleCopyChatMessage(msg.text)}
-                                className="hover:text-blue-400 text-zinc-400 flex items-center gap-0.5 cursor-pointer"
-                                title="Copy text"
-                              >
-                                <Copy className="w-3 h-3" /> Copy
-                              </button>
-                              <button
-                                onClick={() => speakBotResponse(msg.text)}
-                                className="hover:text-blue-400 text-zinc-400 flex items-center gap-0.5 cursor-pointer"
-                                title="Listen"
-                              >
-                                <Volume2 className="w-3 h-3" /> Listen
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {msg.sender === 'user' && (
-                        <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5 shadow-sm">
-                          <User className="w-4 h-4" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {isTyping && (
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0 text-xs">
-                        <Bot className="w-4 h-4 animate-pulse" />
-                      </div>
-                      <div className="max-w-[80%] flex flex-col">
-                        <div className="bg-zinc-900 text-zinc-200 border border-zinc-800 p-3 rounded-2xl rounded-tl-none shadow-xs flex items-center gap-1.5">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* Bottom Quick reply chips & Input bar */}
-                <div className="p-3 bg-zinc-950 border-t border-zinc-800 shrink-0">
-                  {/* Suggestions chips filtered by active category */}
-                  <div className="flex flex-wrap gap-1.5 mb-2 max-h-20 overflow-y-auto">
-                    {(activeChatCategory === 'all' || activeChatCategory === 'payment') && (
-                      <button 
-                        onClick={() => handleSendMessage('Price कति हो?')}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                      >
-                        Price कति हो? 🏷️
-                      </button>
-                    )}
-                    {(activeChatCategory === 'all' || activeChatCategory === 'activation') && (
-                      <button 
-                        onClick={() => handleSendMessage('Activation Code कहाँ पाइन्छ?')}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                      >
-                        Activation Code? 🔑
-                      </button>
-                    )}
-                    {(activeChatCategory === 'all' || activeChatCategory === 'activation') && (
-                      <button 
-                        onClick={() => handleSendMessage('Invalid key देखाए के गर्ने?')}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                      >
-                        Invalid Code Fix? 🚨
-                      </button>
-                    )}
-                    {(activeChatCategory === 'all' || activeChatCategory === 'prompts') && (
-                      <button 
-                        onClick={() => handleSendMessage('Midjourney AI Prompt कसरी बनाउने?')}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                      >
-                        Midjourney Prompts 🎨
-                      </button>
-                    )}
-                    {(activeChatCategory === 'all' || activeChatCategory === 'payment') && (
-                      <button 
-                        onClick={() => handleSendMessage('Payment कसरी गर्ने?')}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                      >
-                        eSewa QR Payment 💳
-                      </button>
-                    )}
-                    {(activeChatCategory === 'all' || activeChatCategory === 'prompts') && (
-                      <button 
-                        onClick={() => handleSendMessage('Suno AI ले गीत कसरी बनाउने?')}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                      >
-                        Suno Music Creation 🎵
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => handleSendMessage('Certificate कसरी Download गर्ने?')}
-                      className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 text-[11px] font-bold py-1 px-2.5 rounded-full border border-blue-500/25 transition cursor-pointer"
-                    >
-                      Certificate Download 📜
-                    </button>
-                  </div>
-
-                  {/* Input Text Form */}
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSendMessage();
-                      }}
-                      placeholder="तपाईंको प्रश्न वा विषय यहाँ लेख्नुहोस्..."
-                      className="grow bg-zinc-900 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 text-white placeholder-zinc-500 rounded-full px-4 py-2 text-xs md:text-sm transition outline-hidden font-medium"
-                    />
-                    <button 
-                      onClick={() => handleSendMessage()}
-                      className="w-9 h-9 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center shrink-0 shadow-md transition cursor-pointer font-bold"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* AI Clipzone Nepal Branding Badge anchored at the bottom of the widget */}
-                  <div className="mt-2.5 pt-2 border-t border-zinc-800 flex items-center justify-between text-[10px] text-zinc-400 font-bold bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span className="text-zinc-300">{siteSettings.instituteName || 'AI Clipzone'} Assistant</span>
-                    </div>
-                    <span className="text-blue-400 text-[9px] uppercase tracking-wider font-black">{siteSettings.instituteName || 'AI Clipzone Nepal'} 🇳🇵</span>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          )
-        )}
-      </AnimatePresence>
-
       {/* Fullscreen Immersive Video Player Overlay with Auto-Rotate & Simple 'X' Close Button */}
       {fullscreenVideo && (
         <div 
@@ -7835,19 +6983,18 @@ export default function App() {
           <button
             id="app-nav-home"
             onClick={() => {
-              setIsChatOpen(false);
               setIsAskOpen(false);
               setShowProfileModal(false);
               setCurrentView('home');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal
+              currentView === 'home' && !isAskOpen && !showProfileModal
                 ? 'text-blue-400 font-bold'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+            <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
             <span className="text-[10.5px] font-semibold tracking-tight">Home</span>
           </button>
 
@@ -7855,20 +7002,19 @@ export default function App() {
           <button
             id="app-nav-classroom"
             onClick={() => {
-              setIsChatOpen(false);
               setIsAskOpen(false);
               setShowProfileModal(false);
               setCurrentView('classroom');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-              currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal
+              currentView === 'classroom' && !isAskOpen && !showProfileModal
                 ? 'text-blue-400 font-bold'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
             <div className="relative flex items-center justify-center">
-              <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
             <span className="text-[10.5px] font-semibold tracking-tight">Course</span>
@@ -7878,7 +7024,6 @@ export default function App() {
           <button
             id="app-nav-certificate"
             onClick={() => {
-              setIsChatOpen(false);
               setIsAskOpen(false);
               setShowProfileModal(false);
               const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
@@ -7904,28 +7049,22 @@ export default function App() {
             <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
           </button>
 
-          {/* 4. Ask (Live Support & AI Assistant) */}
+          {/* 4. Ask (Live Support & Help) */}
           <button
             id="app-nav-ask"
             onClick={() => {
               setShowProfileModal(false);
-              if (activeCourseIds.length > 0 || isUserAdminSession) {
-                setIsChatOpen(false);
-                setIsAskOpen(prev => !prev);
-                if (!isAskOpen && !isUserAdminSession) {
-                  setStudentUnreadCount(0);
-                }
-              } else {
-                setIsAskOpen(false);
-                setIsChatOpen(prev => !prev);
+              setIsAskOpen(prev => !prev);
+              if (!isAskOpen && !isUserAdminSession) {
+                setStudentUnreadCount(0);
               }
             }}
             className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              (isAskOpen || isChatOpen) && !showProfileModal ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+              isAskOpen && !showProfileModal ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
             }`}
           >
             <div className="relative flex items-center justify-center">
-              <MessageCircle className={`w-5 h-5 mb-0.5 ${(isAskOpen || isChatOpen) && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               {hasAskUnread && (
                 <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
                   {askBadgeText}
@@ -7939,12 +7078,11 @@ export default function App() {
           <button
             id="app-nav-account"
             onClick={() => {
-              setIsChatOpen(false);
               setIsAskOpen(false);
               setShowProfileModal(true);
             }}
             className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              showProfileModal && !isAskOpen && !isChatOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+              showProfileModal && !isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
             }`}
           >
             <User className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
