@@ -18,16 +18,10 @@
   "background_color": "#ffffff",
   "categories": [
     "productivity",
-    "utilities"
+    "utilities",
+    "photo"
   ],
   "prefer_related_applications": false,
-  "related_applications": [],
-  "launch_handler": {
-    "client_mode": "auto"
-  },
-  "edge_side_panel": {
-    "preferred_width": 400
-  },
   "icons": [
     {
       "src": "/pwa-192x192.png",
