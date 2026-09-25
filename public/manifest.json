@@ -9,17 +9,16 @@
   "scope": "/",
   "display": "standalone",
   "display_override": [
-    "window-controls-overlay",
     "standalone",
-    "minimal-ui"
+    "browser"
   ],
   "orientation": "any",
   "theme_color": "#000000",
   "background_color": "#ffffff",
   "categories": [
+    "photo",
     "productivity",
-    "utilities",
-    "photo"
+    "utilities"
   ],
   "prefer_related_applications": false,
   "icons": [
@@ -58,22 +57,6 @@
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/screenshot-desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Ai Clipzone Desktop Dashboard"
-    },
-    {
-      "src": "/screenshots/screenshot-mobile.png",
-      "sizes": "720x1280",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Ai Clipzone Mobile App"
     }
   ],
   "shortcuts": [
