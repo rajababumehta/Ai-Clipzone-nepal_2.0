@@ -9,6 +9,7 @@
   "scope": "/",
   "display": "standalone",
   "display_override": [
+    "window-controls-overlay",
     "standalone",
     "browser"
   ],
@@ -21,6 +22,87 @@
     "utilities"
   ],
   "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://aiclipzone.netlify.app/manifest.json"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "auto"
+  },
+  "file_handlers": [
+    {
+      "action": "/",
+      "name": "Media Clips",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "accept": {
+        "video/*": [".mp4", ".webm", ".mov"],
+        "image/*": [".jpg", ".jpeg", ".png", ".webp"]
+      }
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+clipzone",
+      "url": "/?url=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ec4e53b7",
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "note_taking": {
+    "new_note_url": "/?action=new-note"
+  },
+  "scope_extensions": [
+    {
+      "origin": "https://aiclipzone.netlify.app"
+    }
+  ],
+  "widgets": [
+    {
+      "name": "AI Clipzone",
+      "short_name": "Clipzone",
+      "description": "Quick access to AI video generator and courses",
+      "tag": "clipzone-widget",
+      "template": "widget-template",
+      "ms_ac_template": "/widget-template.json",
+      "data": "/api/health",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/screenshots/screenshot-mobile.png",
+          "sizes": "720x1280",
+          "label": "Clipzone Widget"
+        }
+      ],
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "auth": false,
+      "update": 86400
+    }
+  ],
   "icons": [
     {
       "src": "/pwa-192x192.png",
@@ -57,6 +139,22 @@
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Ai Clipzone Desktop Dashboard"
+    },
+    {
+      "src": "/screenshots/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ai Clipzone Mobile App"
     }
   ],
   "shortcuts": [

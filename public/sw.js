@@ -12,6 +12,7 @@ const STATIC_ASSETS = [
   '/apple-touch-icon.png',
   '/screenshots/screenshot-desktop.png',
   '/screenshots/screenshot-mobile.png',
+  '/widget-template.json',
   '/robots.txt',
   '/sitemap.xml'
 ];
