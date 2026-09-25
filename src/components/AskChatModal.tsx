@@ -769,19 +769,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: isRunningInAppMode ? 15 : 10 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className={
-          isRunningInAppMode
-            ? "fixed inset-0 z-[4900] bg-[#0b141a] flex flex-col pb-[64px] pt-[env(safe-area-inset-top,0px)] select-none text-[#e9edef] overflow-hidden"
-            : "fixed inset-0 z-[4900] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm select-none text-[#e9edef]"
-        }
+        className="fixed inset-0 z-[4900] flex sm:items-center sm:justify-center bg-[#0b141a] sm:bg-black/80 sm:backdrop-blur-sm select-none text-[#e9edef] overflow-hidden"
       >
         <div
           className={
-            isRunningInAppMode
-              ? "flex flex-col h-full w-full bg-[#0b141a]"
-              : isAdmin
-                ? "flex flex-col h-[92vh] max-h-[780px] w-full max-w-4xl bg-[#111b21] rounded-2xl border border-[#222d34] shadow-2xl overflow-hidden relative"
-                : "flex flex-col h-[90vh] max-h-[720px] w-full max-w-[480px] bg-[#111b21] rounded-2xl border border-[#222d34] shadow-2xl overflow-hidden relative"
+            isAdmin
+              ? "flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[780px] sm:max-w-4xl bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-[64px] sm:pb-0"
+              : "flex flex-col h-full w-full sm:h-[90vh] sm:max-h-[720px] sm:max-w-[480px] bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-[64px] sm:pb-0"
           }
         >
 

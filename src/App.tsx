@@ -3277,7 +3277,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white overflow-x-hidden flex flex-col justify-between relative ${isRunningInAppMode ? 'pb-20' : ''}`}>
+    <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white overflow-x-hidden flex flex-col justify-between relative pb-20">
       {/* Sleek Pure Black Ambient Lighting: Situational Blue, Green, Red Accents */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
         <div className="absolute -top-32 -left-32 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
@@ -3443,22 +3443,20 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* Notification Bell Button - ONLY VISIBLE IN INSTALLED PWA APP MODE */}
-              {isRunningInAppMode && (
-                <button
-                  id="header-notification-bell-btn"
-                  onClick={() => setShowNotifCenterModal(true)}
-                  className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-purple-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group"
-                  title="Notifications & Announcements"
-                >
-                  <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-purple-400 transition" />
-                  {unreadNotifCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
-                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                    </span>
-                  )}
-                </button>
-              )}
+              {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
+              <button
+                id="header-notification-bell-btn"
+                onClick={() => setShowNotifCenterModal(true)}
+                className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group"
+                title="Notifications & Announcements"
+              >
+                <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-blue-400 transition" />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
+                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                  </span>
+                )}
+              </button>
 
               {/* Dropdown Menu Button */}
               <div className="relative">
@@ -3488,86 +3486,84 @@ export default function App() {
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 mt-2 w-48 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
+                      className="absolute right-0 mt-2 w-52 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
                     >
-                      {isRunningInAppMode ? (
-                        /* IN PWA APP MODE: ONLY SHOW LOG OUT */
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setCurrentView('home');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          showToast('Welcome Home! 🏠', 'info');
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
+                      >
+                        🏠 Home Page
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setCurrentView('classroom');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          showToast('Your Course! 🎓', 'info');
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
+                      >
+                        🎓 Course Page
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setShowProfileModal(true);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
+                      >
+                        <span className="flex items-center gap-2">👤 Profile & Keys</span>
+                        <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Verified Account">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setShowNotifCenterModal(true);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-zinc-300"
+                      >
+                        <span className="flex items-center gap-2">🔔 Notifications</span>
+                        {unreadNotifCount > 0 && (
+                          <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                            {unreadNotifCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {!isRunningInAppMode && (
                         <button
-                          id="pwa-header-user-logout-btn"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            handleInstallPwa();
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-950/40 text-blue-300 transition flex items-center gap-2.5 cursor-pointer font-extrabold border-t border-zinc-800/80 mt-0.5"
+                        >
+                          📲 Install PWA App
+                        </button>
+                      )}
+
+                      {(currentUser || localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0) && (
+                        <button
                           onClick={() => {
                             setShowUserMenu(false);
                             setStudentLogoutConfirmInput('');
                             setShowStudentLogoutConfirmModal(true);
                           }}
-                          className="w-full text-left px-3.5 py-3 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-black text-xs group"
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold border-t border-zinc-800/80 mt-1"
                         >
-                          <LogOut className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+                          <LogOut className="w-4 h-4 text-rose-400" />
                           <span>🚪 Log Out</span>
                         </button>
-                      ) : (
-                        /* IN WEBSITE MODE: Standard Website navigation items */
-                        <>
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setCurrentView('home');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                              showToast('Welcome Home! 🏠', 'info');
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
-                          >
-                            🏠 Home Page
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setCurrentView('classroom');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                              showToast('Your Course! 🎓', 'info');
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
-                          >
-                            🎓 Course Page
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setShowProfileModal(true);
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
-                          >
-                            <span className="flex items-center gap-2">👤 Profile Page</span>
-                            <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Verified Account">
-                              <Check className="w-2.5 h-2.5 stroke-[3]" />
-                            </span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              handleInstallPwa();
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-950/40 text-blue-300 transition flex items-center gap-2.5 cursor-pointer font-extrabold border-t border-zinc-800/80 mt-0.5"
-                          >
-                            📲 Install App Mode
-                          </button>
-
-                          {(currentUser || localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0) && (
-                            <button
-                              onClick={() => {
-                                setShowUserMenu(false);
-                                setStudentLogoutConfirmInput('');
-                                setShowStudentLogoutConfirmModal(true);
-                              }}
-                              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold border-t border-zinc-800/80 mt-1"
-                            >
-                              <LogOut className="w-4 h-4 text-rose-400" />
-                              <span>🚪 Log Out</span>
-                            </button>
-                          )}
-                        </>
                       )}
                     </motion.div>
                   )}
@@ -3576,43 +3572,6 @@ export default function App() {
             </div>
           </div>
         </div>
-
-        {/* Mobile Tab Switcher on Header - shown on website browser mobile mode, hidden in App mode where bottom bar is used */}
-        {!isRunningInAppMode && (
-          <div className="sm:hidden w-full bg-black border-t border-zinc-800/80 py-2 px-4 flex gap-2">
-            <button
-              onClick={() => {
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                showToast('Home Page! 🏠', 'info');
-              }}
-              className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 ${
-                currentView === 'home'
-                  ? 'bg-blue-600 text-white shadow-md font-black'
-                  : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
-              }`}
-            >
-              🏠 Home
-            </button>
-            <button
-              onClick={() => {
-                setCurrentView('classroom');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                showToast('My Course! 🎓', 'info');
-              }}
-              className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
-                currentView === 'classroom'
-                  ? 'bg-blue-600 text-white shadow-md font-black'
-                  : 'text-zinc-400 bg-zinc-900/90 border border-zinc-800 hover:bg-zinc-800 hover:text-white'
-              }`}
-            >
-              🎓 Course
-              {activeCourseIds.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              )}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Main Container for Course List */}
@@ -5674,28 +5633,26 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* PWA Notifications shortcut */}
-                  {isRunningInAppMode && (
-                    <button
-                      onClick={() => {
-                        setShowProfileModal(false);
-                        setShowNotifCenterModal(true);
-                      }}
-                      className="w-full flex items-center justify-between p-3 rounded-xl bg-purple-950/30 border border-purple-800/40 text-purple-200 hover:bg-purple-900/40 transition cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Bell className="w-4 h-4 text-purple-400" />
-                        <span className="font-bold text-xs">PWA Notifications & Alerts</span>
-                      </div>
-                      {unreadNotifCount > 0 ? (
-                        <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                          {unreadNotifCount} new
-                        </span>
-                      ) : (
-                        <span className="text-zinc-500 text-[10px]">View all</span>
-                      )}
-                    </button>
-                  )}
+                  {/* Notifications & Announcements shortcut */}
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(false);
+                      setShowNotifCenterModal(true);
+                    }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-blue-950/30 border border-blue-800/40 text-blue-200 hover:bg-blue-900/40 transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Bell className="w-4 h-4 text-blue-400" />
+                      <span className="font-bold text-xs">Notifications & Announcements</span>
+                    </div>
+                    {unreadNotifCount > 0 ? (
+                      <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                        {unreadNotifCount} new
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500 text-[10px]">View all</span>
+                    )}
+                  </button>
 
                   {/* Logout and metadata section */}
                   <div className="flex items-center justify-between border-t border-slate-800 pt-4 text-[11px]">
@@ -6803,39 +6760,37 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING AI CHAT ASSISTANT BUTTON - website browser mode only */}
-      {!isRunningInAppMode && (
-        <div className="fixed bottom-6 left-6 z-[990]">
-          <button 
-            id="floating-ai-agent-fab"
-            onClick={() => {
-              setIsAskOpen(false);
-              setIsChatOpen(prev => !prev);
-            }}
-            className="w-16 h-16 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/30 ring-2 ring-blue-400/40 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative"
-            aria-label="AI Chat Assistant"
-            title="AI Chat Assistant"
-          >
-            {isChatOpen ? (
-              <X className="w-7 h-7" />
-            ) : (
-              <>
-                <Bot className="w-8 h-8 animate-bounce mt-0.5" />
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">1</span>
-                </span>
-              </>
-            )}
-          </button>
-        </div>
-      )}
+      {/* FLOATING AI CHAT ASSISTANT BUTTON - Desktop helper, on mobile native bottom bar Ask tab is used */}
+      <div className="hidden sm:block fixed bottom-6 left-6 z-[990]">
+        <button 
+          id="floating-ai-agent-fab"
+          onClick={() => {
+            setIsAskOpen(false);
+            setIsChatOpen(prev => !prev);
+          }}
+          className="w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/30 ring-2 ring-blue-400/40 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative"
+          aria-label="AI Chat Assistant"
+          title="AI Chat Assistant"
+        >
+          {isChatOpen ? (
+            <X className="w-6 h-6" />
+          ) : (
+            <>
+              <Bot className="w-7 h-7 animate-bounce mt-0.5" />
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 text-[9px] font-black text-white items-center justify-center">1</span>
+              </span>
+            </>
+          )}
+        </button>
+      </div>
 
-      {/* CHATBOT ASSISTANT - Full Screen Native App View in App Mode & Floating Card in Web Mode */}
+      {/* CHATBOT ASSISTANT - Full Screen Native App View in App Mode / Mobile & Floating Card in Desktop */}
       <AnimatePresence>
         {isChatOpen && (
-          isRunningInAppMode ? (
-            /* FULL SCREEN NATIVE MOBILE APP VIEW FOR APP MODE */
+          (isRunningInAppMode || (typeof window !== 'undefined' && window.innerWidth < 640)) ? (
+            /* FULL SCREEN NATIVE MOBILE APP VIEW FOR APP MODE & MOBILE WEB */
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -7790,17 +7745,15 @@ export default function App() {
         />
       )}
 
-      {/* PWA FIRST VISIT NOTIFICATION PROMPT MODAL - STRICTLY ONLY IN INSTALLED PWA APP */}
-      {isRunningInAppMode && (
-        <NotificationPromptModal
-          isOpen={showNotifPromptModal}
-          onClose={() => setShowNotifPromptModal(false)}
-          showToast={showToast}
-          onPermissionGranted={() => {
-            showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
-          }}
-        />
-      )}
+      {/* NOTIFICATION PROMPT MODAL */}
+      <NotificationPromptModal
+        isOpen={showNotifPromptModal}
+        onClose={() => setShowNotifPromptModal(false)}
+        showToast={showToast}
+        onPermissionGranted={() => {
+          showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
+        }}
+      />
 
       {/* NOTIFICATION CENTER MODAL */}
       <NotificationCenterModal
@@ -7829,7 +7782,7 @@ export default function App() {
       <AskChatModal
         isOpen={isAskOpen}
         onClose={() => setIsAskOpen(false)}
-        isRunningInAppMode={isRunningInAppMode}
+        isRunningInAppMode={true}
         siteSettings={siteSettings}
         currentUserId={
           (() => {
@@ -7871,134 +7824,134 @@ export default function App() {
         allActivationKeys={allActivationKeys}
       />
 
-      {/* NATIVE APP BOTTOM NAVIGATION BAR - ONLY VISIBLE IN INSTALLED APK / PWA APP MODE (NEVER ON REGULAR BROWSER LINK) */}
-      {isRunningInAppMode && (
-        <nav 
-          id="native-app-bottom-bar"
-          aria-label="App Navigation Bar" 
-          className="fixed bottom-0 inset-x-0 z-[4900] bg-black border-t border-zinc-800 shadow-[0_-10px_35px_rgba(0,0,0,0.9)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-md"
-        >
-          <div className="max-w-md mx-auto px-1 py-1.5 flex items-center justify-around">
-            {/* 1. Home */}
-            <button
-              id="app-nav-home"
-              onClick={() => {
-                setIsChatOpen(false);
-                setIsAskOpen(false);
-                setShowProfileModal(false);
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal
-                  ? 'text-blue-400 font-bold'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-              <span className="text-[10.5px] font-semibold tracking-tight">Home</span>
-            </button>
+      {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA FOR UNIFIED APP EXPERIENCE */}
+      <nav 
+        id="native-app-bottom-bar"
+        aria-label="App Navigation Bar" 
+        className="fixed bottom-0 inset-x-0 z-[4900] bg-black/95 border-t border-zinc-800/90 shadow-[0_-10px_35px_rgba(0,0,0,0.9)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-md"
+      >
+        <div className="max-w-md mx-auto px-1 py-1.5 flex items-center justify-around">
+          {/* 1. Home */}
+          <button
+            id="app-nav-home"
+            onClick={() => {
+              setIsChatOpen(false);
+              setIsAskOpen(false);
+              setShowProfileModal(false);
+              setCurrentView('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
+              currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal
+                ? 'text-blue-400 font-bold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Home className={`w-5 h-5 mb-0.5 ${currentView === 'home' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+            <span className="text-[10.5px] font-semibold tracking-tight">Home</span>
+          </button>
 
-            {/* 2. Course */}
-            <button
-              id="app-nav-classroom"
-              onClick={() => {
-                setIsChatOpen(false);
-                setIsAskOpen(false);
-                setShowProfileModal(false);
-                setCurrentView('classroom');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-                currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal
-                  ? 'text-blue-400 font-bold'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <div className="relative flex items-center justify-center">
-                <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-                {/* Green Notification Dot from Screenshot */}
-                <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
-              </div>
-              <span className="text-[10.5px] font-semibold tracking-tight">Course</span>
-            </button>
+          {/* 2. Course */}
+          <button
+            id="app-nav-classroom"
+            onClick={() => {
+              setIsChatOpen(false);
+              setIsAskOpen(false);
+              setShowProfileModal(false);
+              setCurrentView('classroom');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
+              currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal
+                ? 'text-blue-400 font-bold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <div className="relative flex items-center justify-center">
+              <BookOpen className={`w-5 h-5 mb-0.5 ${currentView === 'classroom' && !isChatOpen && !isAskOpen && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
+            </div>
+            <span className="text-[10.5px] font-semibold tracking-tight">Course</span>
+          </button>
 
-            {/* 3. Certificate */}
-            <button
-              id="app-nav-certificate"
-              onClick={() => {
+          {/* 3. Certificate */}
+          <button
+            id="app-nav-certificate"
+            onClick={() => {
+              setIsChatOpen(false);
+              setIsAskOpen(false);
+              setShowProfileModal(false);
+              const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
+              if (!isLoggedIn) {
+                showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्! (Please sign in to view certificate)', 'info');
+                setShowCodeInputModal(true);
+                return;
+              }
+              const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
+              const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0] || courses[0];
+              const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+              const activeCode = currentCourse ? getCourseActivationCode(currentCourse.id) : (userActivationKeys[0]?.code || 'AICLIP-CERT-2026');
+              const cleanTitle = (currentCourse?.title || 'AI Master Course').replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+              setCertificateCourseTitle(cleanTitle);
+              setCertificateStudentName(studentName);
+              setCertificateIssueDate('2083/01/14');
+              setCertificateCode(activeCode);
+              setShowCertificateModal(true);
+            }}
+            className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300"
+          >
+            <Award className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
+            <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
+          </button>
+
+          {/* 4. Ask (Live Support & AI Assistant) */}
+          <button
+            id="app-nav-ask"
+            onClick={() => {
+              setShowProfileModal(false);
+              if (activeCourseIds.length > 0 || isUserAdminSession) {
                 setIsChatOpen(false);
-                setIsAskOpen(false);
-                setShowProfileModal(false);
-                const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
-                if (!isLoggedIn) {
-                  showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्! (Please sign in to view certificate)', 'info');
-                  setShowCodeInputModal(true);
-                  return;
+                setIsAskOpen(prev => !prev);
+                if (!isAskOpen && !isUserAdminSession) {
+                  setStudentUnreadCount(0);
                 }
-                const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
-                const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0] || courses[0];
-                const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
-                const activeCode = currentCourse ? getCourseActivationCode(currentCourse.id) : (userActivationKeys[0]?.code || 'AICLIP-CERT-2026');
-                const cleanTitle = (currentCourse?.title || 'AI Master Course').replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
-                setCertificateCourseTitle(cleanTitle);
-                setCertificateStudentName(studentName);
-                setCertificateIssueDate('2083/01/14');
-                setCertificateCode(activeCode);
-                setShowCertificateModal(true);
-              }}
-              className="flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300"
-            >
-              <Award className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
-              <span className="text-[10.5px] font-semibold text-zinc-400 tracking-tight">Certificate</span>
-            </button>
-
-            {/* 4. Ask (Message to AI CLIPZONE) - Only visible if user has an activated course or is admin */}
-            {(activeCourseIds.length > 0 || isUserAdminSession) && (
-              <button
-                id="app-nav-ask"
-                onClick={() => {
-                  setShowProfileModal(false);
-                  setIsChatOpen(false);
-                  setIsAskOpen(prev => !prev);
-                  if (!isAskOpen && !isUserAdminSession) {
-                    setStudentUnreadCount(0);
-                  }
-                }}
-                className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                  isAskOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
-                }`}
-              >
-                <div className="relative flex items-center justify-center">
-                  <MessageCircle className={`w-5 h-5 mb-0.5 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-                  {hasAskUnread && (
-                    <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
-                      {askBadgeText}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
-              </button>
-            )}
-
-            {/* 5. Account */}
-            <button
-              id="app-nav-account"
-              onClick={() => {
-                setIsChatOpen(false);
+              } else {
                 setIsAskOpen(false);
-                setShowProfileModal(true);
-              }}
-              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                showProfileModal && !isAskOpen ? 'text-sky-400 font-bold' : 'text-zinc-400 hover:text-sky-300'
-              }`}
-            >
-              <User className="w-5 h-5 mb-0.5 stroke-[2.2] text-sky-400" />
-              <span className="text-[10.5px] font-semibold tracking-tight">Account</span>
-            </button>
-          </div>
-        </nav>
-      )}
+                setIsChatOpen(prev => !prev);
+              }
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
+              (isAskOpen || isChatOpen) && !showProfileModal ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+            }`}
+          >
+            <div className="relative flex items-center justify-center">
+              <MessageCircle className={`w-5 h-5 mb-0.5 ${(isAskOpen || isChatOpen) && !showProfileModal ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              {hasAskUnread && (
+                <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
+                  {askBadgeText}
+                </span>
+              )}
+            </div>
+            <span className="text-[10.5px] font-semibold tracking-tight">Ask</span>
+          </button>
+
+          {/* 5. Account */}
+          <button
+            id="app-nav-account"
+            onClick={() => {
+              setIsChatOpen(false);
+              setIsAskOpen(false);
+              setShowProfileModal(true);
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 cursor-pointer active:scale-95 ${
+              showProfileModal && !isAskOpen && !isChatOpen ? 'text-blue-400 font-bold' : 'text-zinc-400 hover:text-blue-300'
+            }`}
+          >
+            <User className="w-5 h-5 mb-0.5 stroke-[2.2] text-blue-400" />
+            <span className="text-[10.5px] font-semibold tracking-tight">Account</span>
+          </button>
+        </div>
+      </nav>
 
     </div>
   );
