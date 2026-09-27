@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v16';
+const CACHE_NAME = 'aiclipzone-pwa-v17';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

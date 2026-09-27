@@ -91,13 +91,7 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
     // Clear canvas
     ctx.clearRect(0, 0, outputSize, outputSize);
 
-    // Apply circular clip path
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-
     // Center point of output canvas
     ctx.translate(outputSize / 2, outputSize / 2);
 
@@ -201,39 +195,59 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
               />
             </div>
 
-            {/* Circular Overlay Mask (Dark outside, Clear circle inside) */}
+            {/* WhatsApp / Square Crop Overlay Mask */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <svg className="w-full h-full" viewBox="0 0 340 340">
                 <defs>
-                  <mask id="whatsapp-crop-mask">
+                  <mask id="crop-square-mask">
                     {/* Fill white everywhere */}
                     <rect width="340" height="340" fill="white" />
-                    {/* Cut out black circle in center */}
-                    <circle cx="170" cy="170" r="130" fill="black" />
+                    {/* Cut out black square in center */}
+                    <rect x="40" y="40" width="260" height="260" rx="8" fill="black" />
                   </mask>
                 </defs>
-                {/* Darkened mask around the circle */}
+                {/* Darkened mask around the square */}
                 <rect
                   width="340"
                   height="340"
-                  fill="rgba(0, 0, 0, 0.72)"
-                  mask="url(#whatsapp-crop-mask)"
+                  fill="rgba(0, 0, 0, 0.75)"
+                  mask="url(#crop-square-mask)"
                 />
-                {/* Thin WhatsApp Style Crop Border Guide */}
+                {/* Thin Square Crop Border Guide */}
+                <rect
+                  x="40"
+                  y="40"
+                  width="260"
+                  height="260"
+                  rx="8"
+                  fill="none"
+                  stroke="rgba(255, 255, 255, 0.95)"
+                  strokeWidth="2"
+                  strokeDasharray={isDragging ? '6 4' : 'none'}
+                />
+                {/* Corner Brackets */}
+                <path
+                  d="M40 60 V40 H60 M280 40 H300 V60 M300 280 V300 H280 M60 300 H40 V280"
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                />
+                {/* Inner Circular Guide (for profile avatar) */}
                 <circle
                   cx="170"
                   cy="170"
-                  r="130"
+                  r="126"
                   fill="none"
-                  stroke="rgba(255, 255, 255, 0.9)"
-                  strokeWidth="2"
-                  strokeDasharray={isDragging ? '4 4' : 'none'}
+                  stroke="rgba(255, 255, 255, 0.35)"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
                 />
                 {/* Center crosshair guide when dragging */}
                 {isDragging && (
-                  <g stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1">
-                    <line x1="170" y1="50" x2="170" y2="290" />
-                    <line x1="50" y1="170" x2="290" y2="170" />
+                  <g stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1">
+                    <line x1="170" y1="40" x2="170" y2="300" />
+                    <line x1="40" y1="170" x2="300" y2="170" />
                   </g>
                 )}
               </svg>

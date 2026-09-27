@@ -563,47 +563,30 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   )}
                 </div>
 
-                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO (PROMINENTLY FRAMED) */}
+                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO (SQUARE SHAPE WITH STROKE, NO EXTRA TEXT) */}
                 <div className="w-72 sm:w-80 shrink-0 flex items-center justify-end pr-6 sm:pr-8 md:pr-10">
-                  <div className="flex flex-col items-center">
-                    <div 
-                      style={{ 
-                        borderColor: themeColors.primary,
-                        boxShadow: `0 8px 24px -4px rgba(0,0,0,0.9), 0 0 16px ${themeColors.shadow}`
-                      }}
-                      className="w-22 h-22 sm:w-26 sm:h-26 rounded-full border-2 p-1 bg-black/70 relative overflow-hidden flex items-center justify-center shrink-0 group"
-                    >
-                      {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
-                        <img 
-                          src={studentPhoto} 
-                          alt={studentName} 
-                          crossOrigin="anonymous"
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      ) : (
-                        <div 
-                          style={{ background: `linear-gradient(135deg, ${themeColors.secondary}, ${themeColors.primary})` }}
-                          className="w-full h-full rounded-full flex items-center justify-center text-white text-2xl font-black uppercase tracking-wider"
-                        >
-                          {(studentName || 'ST').substring(0, 2)}
-                        </div>
-                      )}
-                      
-                      {/* Certified Student Mini Ribbon */}
+                  <div 
+                    style={{ 
+                      borderColor: themeColors.primary,
+                      boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 14px ${themeColors.shadow}`
+                    }}
+                    className="w-22 h-22 sm:w-26 sm:h-26 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-md"
+                  >
+                    {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
+                      <img 
+                        src={studentPhoto} 
+                        alt="" 
+                        crossOrigin="anonymous"
+                        className="w-full h-full object-cover rounded-xs"
+                      />
+                    ) : (
                       <div 
-                        style={{ background: themeColors.primary, color: '#000000' }}
-                        className="absolute bottom-0 inset-x-0 text-[8px] font-black uppercase tracking-widest text-center py-0.5"
+                        style={{ background: `linear-gradient(135deg, ${themeColors.secondary}, ${themeColors.primary})` }}
+                        className="w-full h-full rounded-xs flex items-center justify-center text-white text-2xl font-black uppercase tracking-wider"
                       >
-                        STUDENT
+                        {(studentName || 'ST').substring(0, 2)}
                       </div>
-                    </div>
-
-                    <span 
-                      style={{ color: themeColors.primary }}
-                      className="text-[9px] font-mono font-black tracking-widest uppercase mt-1 opacity-90"
-                    >
-                      VERIFIED CANDIDATE
-                    </span>
+                    )}
                   </div>
                 </div>
               </div>
