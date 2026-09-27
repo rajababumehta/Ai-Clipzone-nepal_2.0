@@ -68,6 +68,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, g
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
+import { ImageAdjustModal } from './components/ImageAdjustModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { AskChatModal } from './components/AskChatModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
@@ -286,42 +287,39 @@ export default function App() {
   const [isEditingStudentName, setIsEditingStudentName] = useState<boolean>(false);
   const [tempStudentName, setTempStudentName] = useState<string>('');
   const [copiedKeyId, setCopiedKeyId] = useState<string>('');
+  const [tempImageForAdjust, setTempImageForAdjust] = useState<string | null>(null);
+  const [showImageAdjustModal, setShowImageAdjustModal] = useState<boolean>(false);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleCustomAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('⚠️ फोटो ५ MB भन्दा सानो हुनुपर्छ (File must be under 5MB)', 'error');
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('⚠️ फोटो १० MB भन्दा सानो हुनुपर्छ (File must be under 10MB)', 'error');
       return;
     }
     const reader = new FileReader();
     reader.onload = (event) => {
       const rawDataUrl = event.target?.result as string;
       if (!rawDataUrl) return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const size = 180;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const minDim = Math.min(img.width, img.height);
-          const sx = (img.width - minDim) / 2;
-          const sy = (img.height - minDim) / 2;
-          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
-          const compressed = canvas.toDataURL('image/jpeg', 0.85);
-          setUserAvatar(compressed);
-          try {
-            localStorage.setItem('clipzone_student_avatar', compressed);
-          } catch (err) {}
-          showToast('📸 तपाईंको नयाँ फोटो प्रोफाइलमा सुरक्षित भयो!', 'success');
-        }
-      };
-      img.src = rawDataUrl;
+      setTempImageForAdjust(rawDataUrl);
+      setShowImageAdjustModal(true);
+      // Reset input value so same file can be selected again if needed
+      if (avatarFileInputRef.current) {
+        avatarFileInputRef.current.value = '';
+      }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleConfirmAdjustedAvatar = (croppedDataUrl: string) => {
+    setUserAvatar(croppedDataUrl);
+    try {
+      localStorage.setItem('clipzone_student_avatar', croppedDataUrl);
+    } catch (err) {}
+    setShowImageAdjustModal(false);
+    setTempImageForAdjust(null);
+    showToast('📸 प्रोफाइल फोटो सफलतापूर्वक मिलाइयो र सुरक्षित भयो!', 'success');
   };
 
   const handleSaveStudentName = () => {
@@ -7151,6 +7149,7 @@ export default function App() {
         return (
           <CertificateModal
             studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
+            studentPhoto={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
             courseTitle={effectiveCourseTitle}
             issueDate={certificateIssueDate || '2083/01/14'}
             certificateId={certificateCode}
@@ -7185,6 +7184,17 @@ export default function App() {
           />
         );
       })()}
+
+      {/* WHATSAPP-STYLE PROFILE IMAGE ADJUST / CROP MODAL */}
+      <ImageAdjustModal
+        imageUrl={tempImageForAdjust || ''}
+        isOpen={showImageAdjustModal && !!tempImageForAdjust}
+        onClose={() => {
+          setShowImageAdjustModal(false);
+          setTempImageForAdjust(null);
+        }}
+        onConfirm={handleConfirmAdjustedAvatar}
+      />
 
       {/* PWA INSTALLATION NATIVE DIALOG MATCHING USER SCREENSHOT */}
       {showPwaInstallModal && (
