@@ -563,31 +563,27 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   )}
                 </div>
 
-                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO (PERFECT SQUARE SHAPE WITH STROKE, NO EXTRA TEXT, LOWERED POSITION) */}
+                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO - SHOWN ONLY IF USER UPLOADED PHOTO */}
                 <div className="w-72 sm:w-80 shrink-0 flex items-center justify-end pr-6 sm:pr-8 md:pr-10">
-                  <div 
-                    style={{ 
-                      borderColor: themeColors.primary,
-                      boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 16px ${themeColors.shadow}`
-                    }}
-                    className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-lg mt-6 sm:mt-8 md:mt-10"
-                  >
-                    {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
+                  {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
+                    <div 
+                      style={{ 
+                        borderColor: themeColors.primary,
+                        boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 16px ${themeColors.shadow}`
+                      }}
+                      className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-lg mt-6 sm:mt-8 md:mt-10"
+                    >
                       <img 
                         src={studentPhoto} 
                         alt="" 
                         crossOrigin="anonymous"
                         className="w-full h-full object-cover rounded-md"
                       />
-                    ) : (
-                      <div 
-                        style={{ background: `linear-gradient(135deg, ${themeColors.secondary}, ${themeColors.primary})` }}
-                        className="w-full h-full rounded-md flex items-center justify-center text-white text-3xl font-black uppercase tracking-wider"
-                      >
-                        {(studentName || 'ST').substring(0, 2)}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    /* If no photo uploaded, do NOT show any shape or icon */
+                    <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 shrink-0 opacity-0 pointer-events-none" />
+                  )}
                 </div>
               </div>
 

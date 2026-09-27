@@ -5505,13 +5505,13 @@ export default function App() {
 
                       <button
                         onClick={() => {
-                          const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.includes(selectedCourse.id);
-                          if (!isLoggedIn) {
-                            showToast('🔒 प्रमाणपत्र हेर्न कृपया पहिले यो कोर्ष Unlock / Login गर्नुहोस्!', 'info');
+                          const isEnrolled = activeCourseIds.includes(selectedCourse.id);
+                          if (!isEnrolled) {
+                            showToast('🔒 यो कोर्सको प्रमाणपत्र पाउन कृपया पहिले कोर्स Enroll / Unlock गर्नुहोस्!', 'error');
                             setShowCodeInputModal(true);
                             return;
                           }
-                          const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student';
+                          const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
                           setSelectedCertCourseId(selectedCourse.id);
                           setCertificateCourseTitle(selectedCourse.certificateCourseTitle || selectedCourse.title);
                           setCertificateStudentName(studentName);
@@ -7122,13 +7122,19 @@ export default function App() {
 
       {/* CERTIFICATE MODAL */}
       {showCertificateModal && (() => {
-        // Resolve target course: by selectedCertCourseId, or matching title/courseTitleOverride, or selectedCourse, or first active/available course
+        // Enrolled courses ONLY:
+        const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id));
+        if (enrolledCourses.length === 0) {
+          return null;
+        }
+
+        // Resolve target course strictly from enrolled courses:
         const targetedCourse =
-          courses.find(c => selectedCertCourseId && c.id === selectedCertCourseId) ||
-          courses.find(c => c.title === certificateCourseTitle || (c.certificateCourseTitle && c.certificateCourseTitle === certificateCourseTitle)) ||
-          (selectedCourse ? courses.find(c => c.id === selectedCourse.id) : null) ||
-          (selectedClassroomCourseId ? courses.find(c => c.id === selectedClassroomCourseId) : null) ||
-          courses[0];
+          enrolledCourses.find(c => selectedCertCourseId && c.id === selectedCertCourseId) ||
+          enrolledCourses.find(c => selectedClassroomCourseId && c.id === selectedClassroomCourseId) ||
+          enrolledCourses.find(c => selectedCourse && c.id === selectedCourse.id) ||
+          enrolledCourses.find(c => c.title === certificateCourseTitle || (c.certificateCourseTitle && c.certificateCourseTitle === certificateCourseTitle)) ||
+          enrolledCourses[0];
 
         const effectiveCourseTitle = targetedCourse?.certificateCourseTitle || targetedCourse?.title || certificateCourseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS';
         const effectiveInstituteName = targetedCourse?.certificateInstituteName || siteSettings.certificateInstituteName || siteSettings.instituteName || 'AI CLIPZONE NEPAL';
@@ -7168,11 +7174,11 @@ export default function App() {
             certificateTheme={effectiveTheme}
             certificateStampUrl={effectiveStampUrl}
             certificateSealText={effectiveSealText}
-            courses={courses}
+            courses={enrolledCourses}
             selectedCourseId={targetedCourse?.id}
             onSelectCourseId={(newId) => {
               setSelectedCertCourseId(newId);
-              const found = courses.find(c => c.id === newId);
+              const found = enrolledCourses.find(c => c.id === newId);
               if (found) {
                 setCertificateCourseTitle(found.certificateCourseTitle || found.title);
               }
@@ -7444,17 +7450,17 @@ export default function App() {
               onClick={() => {
                 setIsAskOpen(false);
                 setShowProfileModal(false);
-                const isLoggedIn = !!currentUser || !!localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0;
-                if (!isLoggedIn) {
-                  showToast('🔒 प्रमाणपत्र हेर्न कृपया आफ्नो Activation Code मार्फत पहिले लगइन गर्नुहोस्! (Please sign in to view certificate)', 'info');
+                const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
+                if (activeCourses.length === 0) {
+                  showToast('🔒 प्रमाणपत्र हेर्न कृपया पहिले कुनै कोर्स Enroll / Unlock गर्नुहोस्!', 'error');
                   setShowCodeInputModal(true);
                   return;
                 }
-                const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
-                const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0] || courses[0];
+                const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0];
                 const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
-                const activeCode = currentCourse ? getCourseActivationCode(currentCourse.id) : (userActivationKeys[0]?.code || 'AICLIP-CERT-2026');
-                const cleanTitle = (currentCourse?.title || 'AI Master Course').replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                const activeCode = getCourseActivationCode(currentCourse.id) || (userActivationKeys[0]?.code || 'AICLIP-ACTIVE');
+                const cleanTitle = (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                setSelectedCertCourseId(currentCourse.id);
                 setCertificateCourseTitle(cleanTitle);
                 setCertificateStudentName(studentName);
                 setCertificateIssueDate('2083/01/14');
