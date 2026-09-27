@@ -9,6 +9,10 @@ interface ImageAdjustModalProps {
   onConfirm: (croppedDataUrl: string) => void;
 }
 
+const CROP_BOX_SIZE = 260; // 260px on screen
+const OUTPUT_SIZE = 512; // 512px output canvas
+const SCALE_FACTOR = OUTPUT_SIZE / CROP_BOX_SIZE; // ~1.96923
+
 export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
   imageUrl,
   isOpen,
@@ -19,30 +23,54 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
   const [rotation, setRotation] = useState<number>(0);
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number }>({
+    width: CROP_BOX_SIZE,
+    height: CROP_BOX_SIZE,
+  });
+
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const initialOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // Reset state when opening a new image
+  // Compute base rendered size when image loads (cover the 260x260 box by default like WhatsApp)
   useEffect(() => {
-    if (isOpen) {
-      setZoom(1);
-      setRotation(0);
-      setOffset({ x: 0, y: 0 });
-    }
+    if (!isOpen || !imageUrl) return;
+    setZoom(1);
+    setRotation(0);
+    setOffset({ x: 0, y: 0 });
+
+    const img = new Image();
+    img.onload = () => {
+      const nw = img.naturalWidth || CROP_BOX_SIZE;
+      const nh = img.naturalHeight || CROP_BOX_SIZE;
+      const aspect = nw / nh;
+
+      let bw = CROP_BOX_SIZE;
+      let bh = CROP_BOX_SIZE;
+
+      if (aspect >= 1) {
+        // Landscape: height matches crop box, width expands proportionally
+        bh = CROP_BOX_SIZE;
+        bw = Math.round(CROP_BOX_SIZE * aspect);
+      } else {
+        // Portrait: width matches crop box, height expands proportionally
+        bw = CROP_BOX_SIZE;
+        bh = Math.round(CROP_BOX_SIZE / aspect);
+      }
+
+      setBaseDimensions({ width: bw, height: bh });
+    };
+    img.src = imageUrl;
   }, [isOpen, imageUrl]);
 
-  // Handle pointer down (mouse or touch)
+  // Pointer drag handling
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     initialOffsetRef.current = { ...offset };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  // Handle pointer move (dragging image)
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
     const dx = e.clientX - dragStartRef.current.x;
@@ -56,75 +84,56 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
   const handlePointerUp = (e: React.PointerEvent) => {
     setIsDragging(false);
     try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
   };
 
-  // Rotate 90 degrees clockwise
   const handleRotate = () => {
     setRotation((prev) => (prev + 90) % 360);
   };
 
-  // Reset adjustments
   const handleReset = () => {
     setZoom(1);
     setRotation(0);
     setOffset({ x: 0, y: 0 });
   };
 
-  // Export cropped circle image to 512x512 canvas
+  // 100% WYSIWYG export to canvas:
   const handleDone = useCallback(() => {
     if (!imageRef.current) return;
     const img = imageRef.current;
 
-    const outputSize = 512;
     const canvas = document.createElement('canvas');
-    canvas.width = outputSize;
-    canvas.height = outputSize;
+    canvas.width = OUTPUT_SIZE;
+    canvas.height = OUTPUT_SIZE;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Viewport circle diameter in UI
-    const viewportSize = 260; // 260px circle in container
-    const scaleFactor = outputSize / viewportSize;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, outputSize, outputSize);
-
+    ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
     ctx.save();
-    // Center point of output canvas
-    ctx.translate(outputSize / 2, outputSize / 2);
 
-    // Apply offset scaled to output canvas
-    ctx.translate(offset.x * scaleFactor, offset.y * scaleFactor);
+    // 1. Move to canvas center (equivalent to center of 260x260 crop box)
+    ctx.translate(OUTPUT_SIZE / 2, OUTPUT_SIZE / 2);
 
-    // Apply rotation
+    // 2. Translate by user offset (scaled directly to canvas coordinate system)
+    ctx.translate(offset.x * SCALE_FACTOR, offset.y * SCALE_FACTOR);
+
+    // 3. Rotate around center
     ctx.rotate((rotation * Math.PI) / 180);
 
-    // Apply zoom
+    // 4. Scale around center
     ctx.scale(zoom, zoom);
 
-    // Compute base image display dimension
-    // When displayed in 260px viewport, calculate natural aspect ratio
-    const imgAspect = img.naturalWidth / img.naturalHeight;
-    let drawWidth: number;
-    let drawHeight: number;
-
-    if (imgAspect >= 1) {
-      drawHeight = outputSize;
-      drawWidth = outputSize * imgAspect;
-    } else {
-      drawWidth = outputSize;
-      drawHeight = outputSize / imgAspect;
-    }
-
-    // Draw centered
+    // 5. Draw image with exactly scaled base dimensions
+    const drawWidth = baseDimensions.width * SCALE_FACTOR;
+    const drawHeight = baseDimensions.height * SCALE_FACTOR;
     ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
     ctx.restore();
 
     const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
     onConfirm(croppedDataUrl);
-  }, [offset, rotation, zoom, onConfirm]);
+  }, [offset, rotation, zoom, baseDimensions, onConfirm]);
 
   if (!isOpen) return null;
 
@@ -142,7 +151,7 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
           <div className="p-4 sm:p-4.5 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/60">
             <div className="flex items-center gap-2">
               <span className="text-emerald-400 font-extrabold text-sm flex items-center gap-1.5">
-                <span>📸</span> Adjust Photo (WhatsApp Style)
+                <span>📸</span> Adjust & Crop Photo
               </span>
             </div>
             <div className="flex items-center gap-1">
@@ -166,97 +175,71 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
             </div>
           </div>
 
-          {/* Center WhatsApp Circular Cropping Viewport */}
-          <div className="relative w-full aspect-square max-w-[340px] mx-auto p-4 flex items-center justify-center overflow-hidden">
-            {/* Draggable Image Container */}
+          {/* Center WhatsApp Square Cropping Viewport */}
+          <div className="relative w-full aspect-square max-w-[340px] mx-auto p-4 flex items-center justify-center overflow-hidden bg-black/40">
+            {/* The 260x260 Square Crop Area */}
             <div
-              ref={containerRef}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className="absolute inset-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+              style={{ width: `${CROP_BOX_SIZE}px`, height: `${CROP_BOX_SIZE}px` }}
+              className="relative overflow-hidden rounded-xl border-2 border-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35)] cursor-grab active:cursor-grabbing touch-none select-none bg-zinc-900"
             >
+              {/* Centered Image with exact base dimensions and transforms */}
               <img
                 ref={imageRef}
                 src={imageUrl}
                 alt="Crop preview"
                 draggable={false}
                 style={{
+                  width: `${baseDimensions.width}px`,
+                  height: `${baseDimensions.height}px`,
+                  maxWidth: 'none',
+                  maxHeight: 'none',
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  marginLeft: `-${baseDimensions.width / 2}px`,
+                  marginTop: `-${baseDimensions.height / 2}px`,
                   transform: `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg) scale(${zoom})`,
                   transformOrigin: 'center center',
-                  maxHeight: '260px',
-                  maxWidth: '260px',
-                  objectFit: 'contain',
                   pointerEvents: 'none',
                   transition: isDragging ? 'none' : 'transform 0.05s ease-out',
                 }}
                 className="select-none"
               />
-            </div>
 
-            {/* WhatsApp / Square Crop Overlay Mask */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <svg className="w-full h-full" viewBox="0 0 340 340">
-                <defs>
-                  <mask id="crop-square-mask">
-                    {/* Fill white everywhere */}
-                    <rect width="340" height="340" fill="white" />
-                    {/* Cut out black square in center */}
-                    <rect x="40" y="40" width="260" height="260" rx="8" fill="black" />
-                  </mask>
-                </defs>
-                {/* Darkened mask around the square */}
-                <rect
-                  width="340"
-                  height="340"
-                  fill="rgba(0, 0, 0, 0.75)"
-                  mask="url(#crop-square-mask)"
-                />
-                {/* Thin Square Crop Border Guide */}
-                <rect
-                  x="40"
-                  y="40"
-                  width="260"
-                  height="260"
-                  rx="8"
-                  fill="none"
-                  stroke="rgba(255, 255, 255, 0.95)"
-                  strokeWidth="2"
-                  strokeDasharray={isDragging ? '6 4' : 'none'}
-                />
-                {/* Corner Brackets */}
-                <path
-                  d="M40 60 V40 H60 M280 40 H300 V60 M300 280 V300 H280 M60 300 H40 V280"
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                />
-                {/* Inner Circular Guide (for profile avatar) */}
-                <circle
-                  cx="170"
-                  cy="170"
-                  r="126"
-                  fill="none"
-                  stroke="rgba(255, 255, 255, 0.35)"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 4"
-                />
-                {/* Center crosshair guide when dragging */}
-                {isDragging && (
-                  <g stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1">
-                    <line x1="170" y1="40" x2="170" y2="300" />
-                    <line x1="40" y1="170" x2="300" y2="170" />
-                  </g>
-                )}
-              </svg>
+              {/* Grid / Guide Lines when dragging or adjusting */}
+              <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-0">
+                {/* 3x3 Grid Lines */}
+                <div className="w-full h-full grid grid-cols-3 grid-rows-3 pointer-events-none">
+                  <div className="border-r border-b border-white/20"></div>
+                  <div className="border-r border-b border-white/20"></div>
+                  <div className="border-b border-white/20"></div>
+                  <div className="border-r border-b border-white/20"></div>
+                  <div className="border-r border-b border-white/20"></div>
+                  <div className="border-b border-white/20"></div>
+                  <div className="border-r border-white/20"></div>
+                  <div className="border-r border-white/20"></div>
+                  <div></div>
+                </div>
+
+                {/* Subtle circular boundary guide for round avatar display */}
+                <div className="absolute inset-1 rounded-full border border-dashed border-white/30 pointer-events-none" />
+              </div>
+
+              {/* Corner brackets */}
+              <div className="absolute top-1 left-1 w-4 h-4 border-t-2 border-l-2 border-emerald-400 pointer-events-none" />
+              <div className="absolute top-1 right-1 w-4 h-4 border-t-2 border-r-2 border-emerald-400 pointer-events-none" />
+              <div className="absolute bottom-1 left-1 w-4 h-4 border-b-2 border-l-2 border-emerald-400 pointer-events-none" />
+              <div className="absolute bottom-1 right-1 w-4 h-4 border-b-2 border-r-2 border-emerald-400 pointer-events-none" />
             </div>
 
             {/* Subtle Helper Hint */}
             <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
-              <span className="bg-black/75 backdrop-blur-xs text-[10px] text-zinc-300 font-bold px-3 py-1 rounded-full border border-white/10 shadow-md">
-                👆 फोटो सार्न हातले तान्नुहोस् (Drag to center)
+              <span className="bg-black/80 backdrop-blur-xs text-[10px] text-zinc-300 font-bold px-3 py-1 rounded-full border border-white/10 shadow-md">
+                👆 फोटो तान्नुहोस् र मिलाउनुहोस् (Drag to position)
               </span>
             </div>
           </div>

@@ -563,26 +563,26 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   )}
                 </div>
 
-                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO (SQUARE SHAPE WITH STROKE, NO EXTRA TEXT) */}
+                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO (PERFECT SQUARE SHAPE WITH STROKE, NO EXTRA TEXT, LOWERED POSITION) */}
                 <div className="w-72 sm:w-80 shrink-0 flex items-center justify-end pr-6 sm:pr-8 md:pr-10">
                   <div 
                     style={{ 
                       borderColor: themeColors.primary,
-                      boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 14px ${themeColors.shadow}`
+                      boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 16px ${themeColors.shadow}`
                     }}
-                    className="w-22 h-22 sm:w-26 sm:h-26 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-md"
+                    className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-lg mt-6 sm:mt-8 md:mt-10"
                   >
                     {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
                       <img 
                         src={studentPhoto} 
                         alt="" 
                         crossOrigin="anonymous"
-                        className="w-full h-full object-cover rounded-xs"
+                        className="w-full h-full object-cover rounded-md"
                       />
                     ) : (
                       <div 
                         style={{ background: `linear-gradient(135deg, ${themeColors.secondary}, ${themeColors.primary})` }}
-                        className="w-full h-full rounded-xs flex items-center justify-center text-white text-2xl font-black uppercase tracking-wider"
+                        className="w-full h-full rounded-md flex items-center justify-center text-white text-3xl font-black uppercase tracking-wider"
                       >
                         {(studentName || 'ST').substring(0, 2)}
                       </div>
