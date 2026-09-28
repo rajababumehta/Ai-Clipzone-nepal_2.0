@@ -267,6 +267,15 @@ export default function App() {
     }
   });
 
+  // Track courses accessed via another account (secondary login - no certificate / no original owner name)
+  const [secondaryCourseIds, setSecondaryCourseIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('clipzone_secondary_course_ids') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+
   // Deleted Courses tracking
   const [deletedCourseIds, setDeletedCourseIds] = useState<string[]>(() => {
     try {
@@ -1229,8 +1238,10 @@ export default function App() {
 
     try {
       const deviceId = getOrCreateDeviceId();
+      const currentUid = user?.uid || localStorage.getItem('clipzone_student_uid') || '';
       const verifiedKeys: any[] = [];
       const verifiedCourseIds = new Set<string>();
+      const secondaryCourseIdsSet = new Set<string>();
 
       // 1. Verify every code stored locally on this device directly from Firestore
       for (const code of activeCodes) {
@@ -1249,6 +1260,18 @@ export default function App() {
             // Sync deviceId if not set or matches
             if (!data.activeDeviceId) {
               updateDoc(doc(db, 'activation_keys', code), { activeDeviceId: deviceId }).catch(() => {});
+            }
+
+            // Check if key belongs to another original account (secondary login)
+            const keyOwnerUid = data.originalOwnerUid || data.claimedByUid;
+            const isSecondary = Boolean(
+              keyOwnerUid &&
+              currentUid &&
+              keyOwnerUid !== currentUid &&
+              data.status === 'used'
+            );
+            if (isSecondary && data.courseId) {
+              secondaryCourseIdsSet.add(data.courseId);
             }
 
             verifiedKeys.push({ id: keySnap.id, code: keySnap.id, ...data });
@@ -1297,6 +1320,10 @@ export default function App() {
       }
 
       // If we verified keys, update state and local storage
+      const secArr = Array.from(secondaryCourseIdsSet);
+      setSecondaryCourseIds(secArr);
+      localStorage.setItem('clipzone_secondary_course_ids', JSON.stringify(secArr));
+
       if (verifiedCourseIds.size > 0) {
         const finalActiveIds = Array.from(verifiedCourseIds);
         setUserActivationKeys(verifiedKeys);
@@ -1445,6 +1472,10 @@ export default function App() {
     localStorage.removeItem('clipzone_local_activated_courses');
     localStorage.removeItem('clipzone_active_codes');
     localStorage.removeItem('clipzone_activated_keys_info');
+    localStorage.removeItem('clipzone_secondary_course_ids');
+    localStorage.removeItem('clipzone_student_avatar');
+    setSecondaryCourseIds([]);
+    setUserAvatar('');
 
     // Reset component states so UI instantly updates and closes modals
     setCurrentUser(null);
