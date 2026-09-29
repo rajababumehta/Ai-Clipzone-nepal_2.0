@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle, Share2, ShieldCheck, Award, Download, Loader2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import html2canvas from 'html2canvas';
-import { LOGO_DATA_URL, REMOTE_LOGO_URL } from '../logo';
 import { CERTIFICATE_EMBEDDED_FONTS_CSS } from '../certificateFonts';
 import { Course } from '../types';
 
@@ -67,7 +66,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
   const [embeddedLogo, setEmbeddedLogo] = useState<string>(() => {
     if (logoUrl && logoUrl.startsWith('data:image/')) return logoUrl;
-    return LOGO_DATA_URL;
+    return logoUrl?.trim() || '';
   });
 
   useEffect(() => {
@@ -85,19 +84,21 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             ctx.drawImage(img, 0, 0);
             const dataUrl = canvas.toDataURL('image/png');
             setEmbeddedLogo(dataUrl);
+          } else {
+            setEmbeddedLogo(logoUrl.trim());
           }
         } catch (e) {
-          setEmbeddedLogo(LOGO_DATA_URL);
+          setEmbeddedLogo(logoUrl.trim());
         }
       };
       img.onerror = () => {
-        setEmbeddedLogo(LOGO_DATA_URL);
+        setEmbeddedLogo('');
       };
       img.src = logoUrl.trim();
     } else if (logoUrl && logoUrl.startsWith('data:image/')) {
       setEmbeddedLogo(logoUrl);
     } else {
-      setEmbeddedLogo(LOGO_DATA_URL);
+      setEmbeddedLogo('');
     }
   }, [logoUrl]);
 
@@ -519,20 +520,31 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* Official Institute Logo */}
                 <div className="w-72 sm:w-80 shrink-0 flex items-center justify-start pl-6 sm:pl-8 md:pl-10">
                   <div className="h-28 sm:h-32 md:h-36 flex items-center justify-start shrink-0 bg-transparent mt-1">
-                    <img 
-                      src={embeddedLogo || LOGO_DATA_URL} 
-                      alt={instituteName || 'Institute Logo'}
-                      crossOrigin="anonymous"
-                      referrerPolicy="no-referrer"
-                      loading="eager"
-                      onError={(e) => {
-                        const target = e.currentTarget;
-                        if (target.src !== LOGO_DATA_URL) {
-                          target.src = LOGO_DATA_URL;
-                        }
-                      }}
-                      className="h-28 sm:h-32 md:h-36 w-auto max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]"
-                    />
+                    {embeddedLogo ? (
+                      <img 
+                        src={embeddedLogo} 
+                        alt={instituteName || 'Institute Logo'}
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        loading="eager"
+                        onError={() => setEmbeddedLogo('')}
+                        className="h-28 sm:h-32 md:h-36 w-auto max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg border border-amber-300/40">
+                          {instituteName ? instituteName.trim().charAt(0).toUpperCase() : '🎓'}
+                        </div>
+                        <div className="flex flex-col text-left">
+                          <span className="text-amber-200 font-black text-sm tracking-wider uppercase font-serif">
+                            {instituteName || 'ACADEMY OF EXCELLENCE'}
+                          </span>
+                          <span className="text-[9px] text-amber-400/80 font-mono tracking-widest uppercase">
+                            OFFICIAL VERIFIED
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

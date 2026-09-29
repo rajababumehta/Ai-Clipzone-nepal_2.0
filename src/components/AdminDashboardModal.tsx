@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem } from '../types';
-import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS } from '../data';
+import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS, cleanLegacyLogoUrl } from '../data';
 import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
 
@@ -225,7 +225,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [siteTitle, setSiteTitle] = useState(siteSettings.siteTitle || 'TOP AI COURSE NEPAL 🇳🇵');
   const [siteTagline, setSiteTagline] = useState(siteSettings.siteTagline || "Nepal's #1 AI Video Editing & Learning Platform");
   const [instituteName, setInstituteName] = useState(siteSettings.instituteName || 'AI CLIPZONE NEPAL');
-  const [instituteLogoUrl, setInstituteLogoUrl] = useState(siteSettings.instituteLogoUrl || '');
+  const [instituteLogoUrl, setInstituteLogoUrl] = useState(cleanLegacyLogoUrl(siteSettings.instituteLogoUrl));
   const [noticeBannerText, setNoticeBannerText] = useState(
     siteSettings.noticeBannerText || '🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.'
   );
@@ -240,7 +240,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [certificateTitle, setCertificateTitle] = useState(siteSettings.certificateTitle || 'CERTIFICATE');
   const [certificateSubtitle, setCertificateSubtitle] = useState(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
   const [certificateInstituteName, setCertificateInstituteName] = useState(siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
-  const [certificateLogoUrl, setCertificateLogoUrl] = useState(siteSettings.certificateLogoUrl || '');
+  const [certificateLogoUrl, setCertificateLogoUrl] = useState(cleanLegacyLogoUrl(siteSettings.certificateLogoUrl));
   const [certificateDescription, setCertificateDescription] = useState(siteSettings.certificateDescription || '');
   const [certificateDirectorName, setCertificateDirectorName] = useState(siteSettings.certificateDirectorName || 'Director');
   const [certificateDirectorTitle, setCertificateDirectorTitle] = useState(siteSettings.certificateDirectorTitle || 'Program Director');
@@ -276,7 +276,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setSiteTitle(siteSettings.siteTitle || 'TOP AI COURSE NEPAL 🇳🇵');
     setSiteTagline(siteSettings.siteTagline || "Nepal's #1 AI Video Editing & Learning Platform");
     setInstituteName(siteSettings.instituteName || 'AI CLIPZONE NEPAL');
-    setInstituteLogoUrl(siteSettings.instituteLogoUrl || '');
+    setInstituteLogoUrl(cleanLegacyLogoUrl(siteSettings.instituteLogoUrl));
     setNoticeBannerText(
       siteSettings.noticeBannerText || '🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.'
     );
@@ -286,7 +286,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setCertificateTitle(siteSettings.certificateTitle || 'CERTIFICATE');
     setCertificateSubtitle(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
     setCertificateInstituteName(siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
-    setCertificateLogoUrl(siteSettings.certificateLogoUrl || '');
+    setCertificateLogoUrl(cleanLegacyLogoUrl(siteSettings.certificateLogoUrl));
     setCertificateDescription(siteSettings.certificateDescription || '');
     setCertificateDirectorName(siteSettings.certificateDirectorName || 'Director');
     setCertificateDirectorTitle(siteSettings.certificateDirectorTitle || 'Program Director');
@@ -2601,7 +2601,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               onDeleteNotification={onDeleteNotification || (async () => {})}
               showToast={showToast}
               instituteName={siteSettings.instituteName || 'AI Clipzone Nepal'}
-              instituteLogoUrl={siteSettings.instituteLogoUrl || '/pwa-192x192.png'}
+              instituteLogoUrl={siteSettings.instituteLogoUrl || ''}
             />
           )}
 

@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v21';
+const CACHE_NAME = 'aiclipzone-pwa-v25';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -57,7 +57,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Network-First with Cache Fallback for navigation, Cache-First for static assets
+// 3. Fetch Event: Network-First for HTML, Scripts and Styles; Cache-First for static images/fonts
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
@@ -67,8 +67,15 @@ self.addEventListener('fetch', (event) => {
   // Chrome extension or external dev requests
   if (!url.protocol.startsWith('http')) return;
 
-  // HTML Page Navigation requests (Network-first with offline cache fallback)
-  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+  // HTML Page Navigation requests, JS code & CSS stylesheets: Network-first to always serve latest code
+  const isCodeOrDocument = 
+    event.request.mode === 'navigate' || 
+    event.request.headers.get('accept')?.includes('text/html') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.includes('/assets/');
+
+  if (isCodeOrDocument) {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
@@ -88,7 +95,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static Assets (Images, SVGs, Fonts, CSS, JS) - Cache-first with network fallback & update
+  // Other Static Assets (Images, SVGs, Fonts) - Stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {

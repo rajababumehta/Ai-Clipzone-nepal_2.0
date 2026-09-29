@@ -62,7 +62,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 
-import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS } from './data';
+import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
@@ -76,7 +76,6 @@ import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
-import { LOGO_DATA_URL, REMOTE_LOGO_URL } from './logo';
 
 enum OperationType {
   CREATE = 'create',
@@ -230,7 +229,15 @@ export default function App() {
   const [siteSettings, setSiteSettings] = useState<SiteSettingsConfig>(() => {
     try {
       const saved = localStorage.getItem('clipzone_site_settings');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const cleanedLogo = cleanLegacyLogoUrl(parsed.instituteLogoUrl);
+        return {
+          ...parsed,
+          instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
+          certificateLogoUrl: cleanLegacyLogoUrl(parsed.certificateLogoUrl),
+        };
+      }
     } catch {}
     return DEFAULT_SITE_SETTINGS;
   });
@@ -786,8 +793,14 @@ export default function App() {
     const unsubSettings = onSnapshot(doc(db, 'system', 'site_settings'), (snap) => {
       if (snap.exists()) {
         const data = snap.data() as SiteSettingsConfig;
-        setSiteSettings(prev => ({ ...prev, ...data }));
-        localStorage.setItem('clipzone_site_settings', JSON.stringify(data));
+        const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
+        const cleaned: SiteSettingsConfig = {
+          ...data,
+          instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
+          certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
+        };
+        setSiteSettings(prev => ({ ...prev, ...cleaned }));
+        localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned));
       }
     }, (err) => {
       console.warn('Site settings realtime listener error:', err);
@@ -1673,12 +1686,27 @@ export default function App() {
         return;
       }
 
+      // Check if key belongs to another user UID (secondary login)
+      const currentStudentUid = currentUser?.uid || localStorage.getItem('clipzone_student_uid') || '';
+      const originalOwnerUid = keyData?.originalOwnerUid || keyData?.claimedByUid || '';
+      const isSecondaryLogin = Boolean(
+        originalOwnerUid &&
+        currentStudentUid &&
+        originalOwnerUid !== currentStudentUid &&
+        keyData?.status === 'used'
+      );
+
       // Automatically get Student Name assigned by Admin to this key, strictly preserving real names
-      const keyStudentName = keyData?.studentName && keyData.studentName.trim() !== 'Student Learner' ? keyData.studentName.trim() : '';
+      // If it is a secondary login, do NOT copy the original owner's student name
+      const keyStudentName = (!isSecondaryLogin && keyData?.studentName && keyData.studentName.trim() !== 'Student Learner')
+        ? keyData.studentName.trim()
+        : '';
       const existingRealName = (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
         (authName && authName !== 'Student Learner' ? authName : '') ||
         (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '');
-      const assignedStudentName = keyStudentName || existingRealName || (keyData?.claimedByEmail ? (keyData.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + keyData.claimedByEmail.split('@')[0].slice(1)) : '') || 'Student';
+      const assignedStudentName = isSecondaryLogin
+        ? (existingRealName || 'Student Learner')
+        : (keyStudentName || existingRealName || (keyData?.claimedByEmail ? (keyData.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + keyData.claimedByEmail.split('@')[0].slice(1)) : '') || 'Student');
 
       // Ensure student session profile is initialized with assigned name (with 1.5s timeout guard)
       let activeUser = currentUser;
@@ -1724,6 +1752,15 @@ export default function App() {
       let unlockedCourseId = keyData?.courseId || (courses && courses[0]?.id) || 'course-1';
       let unlockedCourseTitle = keyData?.courseTitle || (courses && courses[0]?.title) || 'Premiere Pro Course';
 
+      // Track secondary login for this course
+      if (isSecondaryLogin && unlockedCourseId) {
+        setSecondaryCourseIds(prev => {
+          const next = Array.from(new Set([...prev, unlockedCourseId]));
+          localStorage.setItem('clipzone_secondary_course_ids', JSON.stringify(next));
+          return next;
+        });
+      }
+
       // Guarantee stable permanent student UID across re-logins and devices
       const permanentStudentUid = keyData?.claimedByUid || activeUser?.uid || localStorage.getItem('clipzone_student_uid') || ('local_' + Math.random().toString(36).substring(2, 11));
       try {
@@ -1734,18 +1771,25 @@ export default function App() {
       if (keyDocRef) {
         try {
           const updateTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('UPDATE_TIMEOUT')), 1500));
+          const updatePayload: any = {
+            status: 'used',
+            activeDeviceId: deviceId,
+            deviceClaimedAt: Date.now(),
+            forceLogoutAt: 0,
+          };
+          if (!keyData.originalOwnerUid && !keyData.claimedByUid) {
+            updatePayload.originalOwnerUid = permanentStudentUid;
+            updatePayload.claimedByUid = permanentStudentUid;
+            updatePayload.studentName = assignedStudentName;
+            updatePayload.claimedByEmail = assignedStudentName;
+            updatePayload.claimedAt = Date.now();
+            updatePayload.expiresAt = Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000);
+          } else if (!isSecondaryLogin) {
+            updatePayload.studentName = assignedStudentName;
+          }
+
           await Promise.race([
-            updateDoc(keyDocRef, {
-              status: 'used',
-              activeDeviceId: deviceId,
-              deviceClaimedAt: Date.now(),
-              claimedByEmail: assignedStudentName,
-              studentName: assignedStudentName,
-              claimedByUid: permanentStudentUid,
-              claimedAt: Date.now(),
-              forceLogoutAt: 0,
-              expiresAt: Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000)
-            }),
+            updateDoc(keyDocRef, updatePayload),
             updateTimeout
           ]);
         } catch (dbErr) {
@@ -3202,23 +3246,26 @@ export default function App() {
               className="flex items-center gap-2.5 sm:gap-3 cursor-pointer select-none relative group"
               title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
             >
-              {/* 3D Silver Logo prominently embedded on black header */}
-              <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-black overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
-                <img 
-                  src={siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? siteSettings.instituteLogoUrl.trim() : LOGO_DATA_URL} 
-                  alt={siteSettings.instituteName || "AI CLIPZONE"}
-                  className="h-10 sm:h-12 md:h-14 w-auto max-w-[140px] sm:max-w-[180px] md:max-w-[220px] object-contain shrink-0 filter drop-shadow-md"
-                  crossOrigin="anonymous"
-                  referrerPolicy="no-referrer"
-                  loading="eager"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    if (target.src !== LOGO_DATA_URL) {
-                      target.src = LOGO_DATA_URL;
-                    }
-                  }}
-                />
-              </div>
+              {/* Institute Official Logo (Loaded directly from Admin settings image link) */}
+              {siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? (
+                <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
+                  <img 
+                    src={siteSettings.instituteLogoUrl.trim()} 
+                    alt={siteSettings.instituteName || "Logo"}
+                    className="h-10 sm:h-12 md:h-14 w-auto max-w-[140px] sm:max-w-[180px] md:max-w-[220px] object-contain shrink-0 filter drop-shadow-md"
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
+                    loading="eager"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="h-9 sm:h-11 w-9 sm:w-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-sm sm:text-base shadow-lg shadow-blue-500/25 shrink-0 border border-white/20 group-hover:scale-105 transition-transform duration-200">
+                  {siteSettings.instituteName ? siteSettings.instituteName.trim().charAt(0).toUpperCase() : '✦'}
+                </div>
+              )}
 
               {/* Directly after logo: Prominent bold white text with Nepal flag spanning across the header */}
               <div className="flex flex-col text-left justify-center">
@@ -3306,7 +3353,7 @@ export default function App() {
                 onClick={() => {
                   setCurrentView('account');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
-                  showToast('Student Account Portal 👤', 'info');
+                  showToast('Student Profile 👤', 'info');
                 }}
                 className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
                   currentView === 'account'
@@ -3314,7 +3361,7 @@ export default function App() {
                     : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
                 }`}
               >
-                👤 Account
+                👤 Profile
               </button>
             </div>
 
@@ -3895,21 +3942,23 @@ export default function App() {
                                       <span>कक्षामा जानुहोस् (Classroom)</span>
                                     </button>
 
-                                    <button
-                                      onClick={() => {
-                                        setSelectedCertCourseId(course.id);
-                                        setCertificateCourseTitle(course.certificateCourseTitle || cleanTitle);
-                                        setCertificateStudentName(studentName);
-                                        setCertificateIssueDate(enrolledDateStr);
-                                        setCertificateCode(keyCode || 'AICLIP-ACTIVE');
-                                        setShowCertificateModal(true);
-                                      }}
-                                      className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 border border-blue-500/30 font-black text-xs px-3.5 py-2.5 rounded-2xl transition cursor-pointer flex items-center gap-1.5"
-                                      title="View Course Certificate"
-                                    >
-                                      <Award className="w-3.5 h-3.5 text-blue-400" />
-                                      <span>प्रमाणपत्र 📜</span>
-                                    </button>
+                                    {!secondaryCourseIds.includes(course.id) && (
+                                      <button
+                                        onClick={() => {
+                                          setSelectedCertCourseId(course.id);
+                                          setCertificateCourseTitle(course.certificateCourseTitle || cleanTitle);
+                                          setCertificateStudentName(studentName);
+                                          setCertificateIssueDate(enrolledDateStr);
+                                          setCertificateCode(keyCode || 'AICLIP-ACTIVE');
+                                          setShowCertificateModal(true);
+                                        }}
+                                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 border border-blue-500/30 font-black text-xs px-3.5 py-2.5 rounded-2xl transition cursor-pointer flex items-center gap-1.5"
+                                        title="View Course Certificate"
+                                      >
+                                        <Award className="w-3.5 h-3.5 text-blue-400" />
+                                        <span>प्रमाणपत्र 📜</span>
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
 
@@ -3964,7 +4013,7 @@ export default function App() {
                                     </span>
                                   </div>
 
-                                  {/* Days Remaining Banner & Release */}
+                                  {/* Days Remaining Banner */}
                                   <div className="flex items-center justify-between sm:justify-end gap-2">
                                     {daysLeft > 0 ? (
                                       <span className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[10px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1">
@@ -3976,15 +4025,6 @@ export default function App() {
                                         Expired
                                       </span>
                                     )}
-
-                                    <button
-                                      type="button"
-                                      onClick={() => handleReleaseCourseCode(course.id)}
-                                      className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 px-2 py-1 rounded-lg transition cursor-pointer"
-                                      title="Release key to use on another device"
-                                    >
-                                      Release Key 🔓
-                                    </button>
                                   </div>
                                 </div>
                               </div>
@@ -4166,22 +4206,24 @@ export default function App() {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              onClick={() => {
-                                const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
-                                const activeCode = getCourseActivationCode(currentClassroomCourse.id);
-                                const cleanTitle = currentClassroomCourse.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
-                                setCertificateCourseTitle(cleanTitle);
-                                setCertificateStudentName(studentName);
-                                setCertificateIssueDate('2083/01/14');
-                                setCertificateCode(activeCode);
-                                setShowCertificateModal(true);
-                              }}
-                              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
-                              title="Download / View Course Certificate"
-                            >
-                              📜 Course Certificate
-                            </button>
+                            {!secondaryCourseIds.includes(currentClassroomCourse.id) && (
+                              <button
+                                onClick={() => {
+                                  const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+                                  const activeCode = getCourseActivationCode(currentClassroomCourse.id);
+                                  const cleanTitle = currentClassroomCourse.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                                  setCertificateCourseTitle(cleanTitle);
+                                  setCertificateStudentName(studentName);
+                                  setCertificateIssueDate('2083/01/14');
+                                  setCertificateCode(activeCode);
+                                  setShowCertificateModal(true);
+                                }}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
+                                title="Download / View Course Certificate"
+                              >
+                                📜 Course Certificate
+                              </button>
+                            )}
 
                             <button
                               type="button"
@@ -6620,25 +6662,9 @@ export default function App() {
                     required
                     value={formImage}
                     onChange={(e) => setFormImage(e.target.value)}
-                    placeholder="e.g. https://blogger.googleusercontent.com/..."
-                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-medium text-white transition outline-hidden placeholder-zinc-600"
+                    placeholder="https://example.com/course-thumbnail.jpg"
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-medium text-white transition outline-hidden placeholder-zinc-600 font-mono"
                   />
-                  <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <button
-                      type="button"
-                      onClick={() => setFormImage('https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgXZL_14KcAVWtUkV6YOCtIePNyDndSmM7r8dFVVyp1QXLTKJzStC3O1pSK3-pwsFKhOE0RLyPfXYUo_S6ARYjLWBuRH0Ao5hipjntJKBptoXhsNU584o_EKJb-JfmGyzn57edya_hzH9RqwBvtQjwGaMIasclVW5BGKE0Uef6nDSgBiqr7diao-4seXWlX/s1600/12843.jpg')}
-                      className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[9px] font-bold px-2 py-1 rounded-md shrink-0 transition cursor-pointer"
-                    >
-                      Dhruv Rathee BG
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormImage('https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhVG6Fh_bUev_FEchbwGJsmVz3s92FK-6lTlHj-sbYBguGhsYp8O3_J7c_SOfvnXCSWWHjLjqoeorMTcWQeac1CbhIaYtgfmHrYz44urYRSjlmrrNPoe9bMVCvcoTllNI4JaajsRwwMmuyvpUpaFs3r3UJs-4d6UuW0AmES38d4115LxC4Vsx76Wf6KW4v8/s1600/12844.png')}
-                      className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[9px] font-bold px-2 py-1 rounded-md shrink-0 transition cursor-pointer"
-                    >
-                      Logo Asset
-                    </button>
-                  </div>
                 </div>
 
                 {/* Popular Badge Configuration */}
@@ -7153,8 +7179,8 @@ export default function App() {
 
       {/* CERTIFICATE MODAL */}
       {showCertificateModal && (() => {
-        // Enrolled courses ONLY:
-        const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id));
+        // Enrolled courses ONLY (Excluding secondary account logins):
+        const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
         if (enrolledCourses.length === 0) {
           return null;
         }
@@ -7245,13 +7271,19 @@ export default function App() {
             {isInstallingPwa ? (
               <div className="py-4 text-center space-y-4">
                 <div className="w-20 h-14 rounded-2xl bg-black border border-zinc-700 p-1 mx-auto flex items-center justify-center shadow-lg animate-bounce overflow-hidden">
-                  <img 
-                    src={siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? siteSettings.instituteLogoUrl.trim() : LOGO_DATA_URL} 
-                    alt={siteSettings.instituteName || "App Logo"} 
-                    className="w-full h-full object-contain" 
-                    referrerPolicy="no-referrer" 
-                    onError={(e) => { e.currentTarget.src = LOGO_DATA_URL; }}
-                  />
+                  {siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? (
+                    <img 
+                      src={siteSettings.instituteLogoUrl.trim()} 
+                      alt={siteSettings.instituteName || "App Logo"} 
+                      className="w-full h-full object-contain" 
+                      referrerPolicy="no-referrer" 
+                      onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-base">
+                      {siteSettings.instituteName ? siteSettings.instituteName.charAt(0).toUpperCase() : '✦'}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h4 className="text-lg font-semibold text-white">Installing {siteSettings.instituteName || 'App'}...</h4>
@@ -7273,13 +7305,19 @@ export default function App() {
                 {/* App Info Row */}
                 <div className="flex items-center gap-4 my-2">
                   <div className="w-16 h-12 rounded-xl bg-black border border-zinc-700 p-1 flex items-center justify-center shrink-0 shadow-md overflow-hidden">
-                    <img 
-                      src={siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? siteSettings.instituteLogoUrl.trim() : LOGO_DATA_URL} 
-                      alt={siteSettings.instituteName || "App Logo"} 
-                      className="w-full h-full object-contain" 
-                      referrerPolicy="no-referrer" 
-                      onError={(e) => { e.currentTarget.src = LOGO_DATA_URL; }}
-                    />
+                    {siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? (
+                      <img 
+                        src={siteSettings.instituteLogoUrl.trim()} 
+                        alt={siteSettings.instituteName || "App Logo"} 
+                        className="w-full h-full object-contain" 
+                        referrerPolicy="no-referrer" 
+                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-base">
+                        {siteSettings.instituteName ? siteSettings.instituteName.charAt(0).toUpperCase() : '✦'}
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0 text-left">
                     <h4 className="text-lg font-medium text-white truncate tracking-normal">
@@ -7474,20 +7512,19 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Certificate - Shown only if user has an activated course */}
-          {isCourseActiveUser && (
+          {/* 3. Certificate - Shown only if user has an activated course not under secondary login */}
+          {isCourseActiveUser && activeCourseIds.some(cid => !secondaryCourseIds.includes(cid)) && (
             <button
               id="app-nav-certificate"
               onClick={() => {
                 setIsAskOpen(false);
                 setShowProfileModal(false);
-                const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
-                if (activeCourses.length === 0) {
-                  showToast('🔒 प्रमाणपत्र हेर्न कृपया पहिले कुनै कोर्स Enroll / Unlock गर्नुहोस्!', 'error');
-                  setShowCodeInputModal(true);
+                const eligibleCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
+                if (eligibleCourses.length === 0) {
+                  showToast('🔒 प्रमाणपत्र केवल मूल खाता (Original Owner) का लागि मात्र उपलब्ध छ।', 'error');
                   return;
                 }
-                const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0];
+                const currentCourse = eligibleCourses.find(c => c.id === selectedClassroomCourseId) || eligibleCourses[0];
                 const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
                 const activeCode = getCourseActivationCode(currentCourse.id) || (userActivationKeys[0]?.code || 'AICLIP-ACTIVE');
                 const cleanTitle = (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
@@ -7534,9 +7571,9 @@ export default function App() {
             </button>
           )}
 
-          {/* 5. Account - Full Screen Native View */}
+          {/* 5. Profile - Full Screen Native View */}
           <button
-            id="app-nav-account"
+            id="app-nav-profile"
             onClick={() => {
               setIsAskOpen(false);
               setShowProfileModal(false);
@@ -7558,7 +7595,7 @@ export default function App() {
             ) : (
               <User className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
             )}
-            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Account</span>
+            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Profile</span>
           </button>
         </div>
       </nav>

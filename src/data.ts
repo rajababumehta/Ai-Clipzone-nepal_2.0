@@ -11,29 +11,44 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentQrConfig = {
   paymentInstruction: "📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।",
 };
 
+export const cleanLegacyLogoUrl = (url?: string): string => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (
+    trimmed.includes('IMG_20260817') ||
+    trimmed.includes('AVvXsEh7aJwyICAK') ||
+    trimmed.includes('AVvXsEhVG6Fh_bUev') ||
+    trimmed.includes('12844.png') ||
+    trimmed.includes('logo.png')
+  ) {
+    return '';
+  }
+  return trimmed;
+};
+
 export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
   siteTitle: "TOP AI COURSE NEPAL 🇳🇵",
-  siteTagline: "Nepal's #1 AI Video Editing & Learning Platform",
-  instituteName: "AI Clipzone",
-  instituteLogoUrl: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh7aJwyICAKblH7QvXyJ2rlMp69h1WQKLqUZscgVpXPB5rtceSU6qTJ3toQOJO4ZLJbpJd0OSSAGDCz0ehv0E3lZIXFvGOwq2OE4hQ0lxkEYw5awj68gqPYi4KX5_OkIB0zKWRwKlp7RKX8WBO1Elw5iJ21XCWjp65lemWCZPCCiyYI8vnoLpZ0m-zLPBwl/s1074/IMG_20260817_134049_273.png",
+  siteTagline: "Nepal's #1  AI  course  & Learning Platform",
+  instituteName: "Ai Clipzone",
+  instituteLogoUrl: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjkjKubk73JVlPUIUQ24lp4iURHNx7CSfrgDObWRpkHXDB7dbbkb0kVYTtpBkEQQPV-5T5pJSXvcW4gWINlgoi9IqFMJlZzOFTmGfhLnigyKlu5UDvEFalwXOyCXG4XSl6K0TZAosgqNkhoAOaV2p_gNh936KEo42I3v7igF0KmqchSq9nsr82QU7VjN-Hu/s1600/30142.png",
   noticeBannerText: "🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.",
-  showNoticeBanner: true,
+  showNoticeBanner: false,
   supportEmail: "ai.clipzone.edu@gmail.com",
   supportPhone: "9763323268",
   certificateTitle: "CERTIFICATE",
   certificateSubtitle: "OF ACHIEVEMENT",
   certificateInstituteName: "AI CLIPZONE NEPAL",
-  certificateLogoUrl: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh7aJwyICAKblH7QvXyJ2rlMp69h1WQKLqUZscgVpXPB5rtceSU6qTJ3toQOJO4ZLJbpJd0OSSAGDCz0ehv0E3lZIXFvGOwq2OE4hQ0lxkEYw5awj68gqPYi4KX5_OkIB0zKWRwKlp7RKX8WBO1Elw5iJ21XCWjp65lemWCZPCCiyYI8vnoLpZ0m-zLPBwl/s1074/IMG_20260817_134049_273.png",
+  certificateLogoUrl: "",
   certificateDescription: "an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.",
   certificateDirectorName: "Director",
-  certificateDirectorTitle: "Course Director",
+  certificateDirectorTitle: "Program Director",
   certificateDirectorSignatureUrl: "",
   certificateCeoName: "Founder/CEO (AI Clipzone)",
   certificateCeoTitle: "Founder & CEO",
   certificateCeoSignatureUrl: "",
   certificateTheme: "blue",
   certificateStampUrl: "",
-  certificateSealText: "AI CLIPZONE • OFFICIALLY VERIFIED •",
+  certificateSealText: "OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL",
   apkDownloadUrl: "",
 };
 
