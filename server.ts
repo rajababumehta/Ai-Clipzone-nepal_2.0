@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -12,7 +13,25 @@ const currentDirname = typeof __dirname !== "undefined"
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+
+  // Determine port:
+  // In dev, the dev runner passes '--port 3000' (must be 3000).
+  // In production (Cloud Run), Cloud Run assigns process.env.PORT (typically 8080).
+  const args = process.argv;
+  const portArgIndex = args.indexOf("--port");
+  let PORT = 3000;
+
+  if (portArgIndex !== -1 && args[portArgIndex + 1]) {
+    const parsed = parseInt(args[portArgIndex + 1], 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      PORT = parsed;
+    }
+  } else if (process.env.PORT) {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      PORT = parsed;
+    }
+  }
 
   // Body parser
   app.use(express.json());
@@ -20,6 +39,21 @@ async function startServer() {
   // Health check endpoint for Cloud Run and container liveness probes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: Date.now() });
+  });
+
+  // Dedicated Service Worker route to ensure correct MIME type and avoid HTML fallback
+  app.get("/sw.js", (req, res) => {
+    const swPath = fs.existsSync(path.join(process.cwd(), "public", "sw.js"))
+      ? path.join(process.cwd(), "public", "sw.js")
+      : path.join(process.cwd(), "dist", "sw.js");
+
+    if (fs.existsSync(swPath)) {
+      res.setHeader("Content-Type", "application/javascript; charset=UTF-8");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+      res.setHeader("Service-Worker-Allowed", "/");
+      return res.sendFile(swPath);
+    }
+    res.status(404).type("text/plain").send("Service Worker not found");
   });
 
   // Initialize server-side Gemini client
@@ -134,7 +168,11 @@ Tone and Language Guidelines:
   });
 
   // Serve static files & Vite dev middleware
-  if (process.env.NODE_ENV !== "production") {
+  const isDev = process.argv.includes("--port") || process.env.NODE_ENV === "development";
+  const distPath = path.join(process.cwd(), "dist");
+  const isProduction = process.env.NODE_ENV === "production" || (!isDev && fs.existsSync(path.join(distPath, "index.html")));
+
+  if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -142,7 +180,6 @@ Tone and Language Guidelines:
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

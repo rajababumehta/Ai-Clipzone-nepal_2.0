@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v25';
+const CACHE_NAME = 'aiclipzone-pwa-v26';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -57,25 +57,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Network-First for HTML, Scripts and Styles; Cache-First for static images/fonts
+// 3. Fetch Event: Strict separation between HTML navigation and scripts/assets
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Chrome extension or external dev requests
+  // Ignore non-http, browser extensions, or the Service Worker script itself
   if (!url.protocol.startsWith('http')) return;
+  if (url.pathname.endsWith('sw.js')) return;
 
-  // HTML Page Navigation requests, JS code & CSS stylesheets: Network-first to always serve latest code
-  const isCodeOrDocument = 
-    event.request.mode === 'navigate' || 
-    event.request.headers.get('accept')?.includes('text/html') ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css') ||
-    url.pathname.includes('/assets/');
+  // A. HTML Page Navigation requests (Network-first with offline index.html fallback)
+  const isNavigation =
+    event.request.mode === 'navigate' ||
+    event.request.destination === 'document' ||
+    (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'));
 
-  if (isCodeOrDocument) {
+  if (isNavigation) {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
@@ -87,15 +86,39 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => {
           return caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
-            return caches.match('/') || caches.match('/index.html');
+            return cachedResponse || caches.match('/') || caches.match('/index.html');
           });
         })
     );
     return;
   }
 
-  // Other Static Assets (Images, SVGs, Fonts) - Stale-while-revalidate
+  // B. Code & Style Assets (JS, CSS, modules) - Network-first with cache fallback (NEVER fallback to HTML)
+  const isScriptOrStyle =
+    event.request.destination === 'script' ||
+    event.request.destination === 'style' ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.includes('/assets/');
+
+  if (isScriptOrStyle) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // C. Other Static Assets (Images, SVGs, Fonts) - Stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
