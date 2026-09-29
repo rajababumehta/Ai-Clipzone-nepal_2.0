@@ -56,6 +56,21 @@ async function startServer() {
     res.status(404).type("text/plain").send("Service Worker not found");
   });
 
+  // Dedicated Official Logo routes with CORS and caching
+  app.get(["/logo.png", "/institute-logo.png"], (req, res) => {
+    const logoPath = fs.existsSync(path.join(process.cwd(), "public", "logo.png"))
+      ? path.join(process.cwd(), "public", "logo.png")
+      : path.join(process.cwd(), "dist", "logo.png");
+
+    if (fs.existsSync(logoPath)) {
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      return res.sendFile(logoPath);
+    }
+    res.status(404).type("text/plain").send("Logo not found");
+  });
+
   // Serve static assets from public directory
   app.use(express.static(path.join(process.cwd(), "public")));
 

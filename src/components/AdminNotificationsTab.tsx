@@ -385,11 +385,11 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               <div className="flex items-center justify-between text-[10px] text-zinc-400 pb-1.5 border-b border-zinc-800/80">
                 <div className="flex items-center gap-1.5">
                   <img
-                    src={instituteLogoUrl}
+                    src={instituteLogoUrl || '/logo.png'}
                     alt="Logo"
                     className="w-3.5 h-3.5 rounded-md object-cover"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/pwa-192x192.png';
+                      (e.target as HTMLImageElement).src = '/logo.png';
                     }}
                   />
                   <span className="font-bold text-zinc-200">{instituteName}</span>

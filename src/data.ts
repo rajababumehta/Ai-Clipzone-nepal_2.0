@@ -12,13 +12,17 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentQrConfig = {
 };
 
 export const cleanLegacyLogoUrl = (url?: string): string => {
-  if (!url) return '/logo.png';
+  if (!url || typeof url !== 'string') return '/logo.png';
   const trimmed = url.trim();
   if (
+    !trimmed ||
+    trimmed === 'null' ||
+    trimmed === 'undefined' ||
+    trimmed.includes('blogger.googleusercontent.com') ||
     trimmed.includes('IMG_20260817') ||
-    trimmed.includes('AVvXsEh7aJwyICAK') ||
-    trimmed.includes('AVvXsEhVG6Fh_bUev') ||
-    trimmed.includes('12844.png')
+    trimmed.includes('AVvXsE') ||
+    trimmed.includes('12844.png') ||
+    trimmed.includes('30142.png')
   ) {
     return '/logo.png';
   }

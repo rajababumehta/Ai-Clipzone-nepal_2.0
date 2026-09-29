@@ -1892,10 +1892,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <div className="flex justify-between items-center px-4 mb-2">
                     {certificateLogoUrl || instituteLogoUrl ? (
                       <img 
-                        src={certificateLogoUrl || instituteLogoUrl} 
+                        src={certificateLogoUrl || instituteLogoUrl || "/logo.png"} 
                         alt="Logo" 
                         className="h-9 object-contain rounded"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          if (!img.src.includes('/logo.png')) {
+                            img.src = '/logo.png';
+                          }
+                        }}
                       />
                     ) : (
                       <div className="font-black text-xs uppercase tracking-widest text-slate-800">

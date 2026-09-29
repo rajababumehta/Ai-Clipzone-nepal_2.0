@@ -66,40 +66,45 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
   const [embeddedLogo, setEmbeddedLogo] = useState<string>(() => {
     if (logoUrl && logoUrl.startsWith('data:image/')) return logoUrl;
-    return logoUrl?.trim() || '';
+    return logoUrl?.trim() || '/logo.png';
   });
 
   useEffect(() => {
-    if (logoUrl && logoUrl.trim() && !logoUrl.startsWith('data:image/')) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.referrerPolicy = 'no-referrer';
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || img.width || 400;
-          canvas.height = img.naturalHeight || img.height || 180;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png');
-            setEmbeddedLogo(dataUrl);
-          } else {
-            setEmbeddedLogo(logoUrl.trim());
-          }
-        } catch (e) {
-          setEmbeddedLogo(logoUrl.trim());
-        }
-      };
-      img.onerror = () => {
-        setEmbeddedLogo('');
-      };
-      img.src = logoUrl.trim();
-    } else if (logoUrl && logoUrl.startsWith('data:image/')) {
-      setEmbeddedLogo(logoUrl);
-    } else {
-      setEmbeddedLogo('');
+    const targetUrl = (logoUrl && logoUrl.trim()) ? logoUrl.trim() : '/logo.png';
+
+    if (targetUrl.startsWith('data:image/')) {
+      setEmbeddedLogo(targetUrl);
+      return;
     }
+
+    const img = new Image();
+    // Only set crossOrigin if it is an external URL
+    if (targetUrl.startsWith('http')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width || 400;
+        canvas.height = img.naturalHeight || img.height || 180;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL('image/png');
+          setEmbeddedLogo(dataUrl);
+        } else {
+          setEmbeddedLogo(targetUrl);
+        }
+      } catch (e) {
+        setEmbeddedLogo(targetUrl);
+      }
+    };
+    img.onerror = () => {
+      // If custom/remote logo fails to load, gracefully fallback to bundled /logo.png
+      setEmbeddedLogo('/logo.png');
+    };
+    img.src = targetUrl;
   }, [logoUrl]);
 
   // Theme color palette definitions
@@ -524,10 +529,15 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                       <img 
                         src={embeddedLogo} 
                         alt={instituteName || 'Institute Logo'}
-                        crossOrigin="anonymous"
+                        crossOrigin={embeddedLogo.startsWith('http') ? 'anonymous' : undefined}
                         referrerPolicy="no-referrer"
                         loading="eager"
-                        onError={() => setEmbeddedLogo('')}
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          if (!img.src.includes('/logo.png')) {
+                            setEmbeddedLogo('/logo.png');
+                          }
+                        }}
                         className="h-28 sm:h-32 md:h-36 w-auto max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]"
                       />
                     ) : (
