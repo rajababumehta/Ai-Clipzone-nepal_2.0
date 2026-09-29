@@ -12,16 +12,15 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentQrConfig = {
 };
 
 export const cleanLegacyLogoUrl = (url?: string): string => {
-  if (!url) return '';
+  if (!url) return '/logo.png';
   const trimmed = url.trim();
   if (
     trimmed.includes('IMG_20260817') ||
     trimmed.includes('AVvXsEh7aJwyICAK') ||
     trimmed.includes('AVvXsEhVG6Fh_bUev') ||
-    trimmed.includes('12844.png') ||
-    trimmed.includes('logo.png')
+    trimmed.includes('12844.png')
   ) {
-    return '';
+    return '/logo.png';
   }
   return trimmed;
 };
@@ -30,7 +29,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
   siteTitle: "TOP AI COURSE NEPAL 🇳🇵",
   siteTagline: "Nepal's #1  AI  course  & Learning Platform",
   instituteName: "Ai Clipzone",
-  instituteLogoUrl: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjkjKubk73JVlPUIUQ24lp4iURHNx7CSfrgDObWRpkHXDB7dbbkb0kVYTtpBkEQQPV-5T5pJSXvcW4gWINlgoi9IqFMJlZzOFTmGfhLnigyKlu5UDvEFalwXOyCXG4XSl6K0TZAosgqNkhoAOaV2p_gNh936KEo42I3v7igF0KmqchSq9nsr82QU7VjN-Hu/s1600/30142.png",
+  instituteLogoUrl: "/logo.png",
   noticeBannerText: "🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.",
   showNoticeBanner: false,
   supportEmail: "ai.clipzone.edu@gmail.com",

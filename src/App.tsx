@@ -3246,26 +3246,21 @@ export default function App() {
               className="flex items-center gap-2.5 sm:gap-3 cursor-pointer select-none relative group"
               title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
             >
-              {/* Institute Official Logo (Loaded directly from Admin settings image link) */}
-              {siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? (
-                <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
-                  <img 
-                    src={siteSettings.instituteLogoUrl.trim()} 
-                    alt={siteSettings.instituteName || "Logo"}
-                    className="h-10 sm:h-12 md:h-14 w-auto max-w-[140px] sm:max-w-[180px] md:max-w-[220px] object-contain shrink-0 filter drop-shadow-md"
-                    crossOrigin="anonymous"
-                    referrerPolicy="no-referrer"
-                    loading="eager"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="h-9 sm:h-11 w-9 sm:w-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-sm sm:text-base shadow-lg shadow-blue-500/25 shrink-0 border border-white/20 group-hover:scale-105 transition-transform duration-200">
-                  {siteSettings.instituteName ? siteSettings.instituteName.trim().charAt(0).toUpperCase() : '✦'}
-                </div>
-              )}
+              {/* Institute Official Logo */}
+              <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
+                <img 
+                  src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
+                  alt={siteSettings.instituteName || "Logo"}
+                  className="h-10 sm:h-12 md:h-14 w-auto max-w-[140px] sm:max-w-[180px] md:max-w-[220px] object-contain shrink-0 filter drop-shadow-md"
+                  loading="eager"
+                  onError={(e) => {
+                    const img = e.currentTarget as HTMLImageElement;
+                    if (!img.src.includes('/logo.png')) {
+                      img.src = '/logo.png';
+                    }
+                  }}
+                />
+              </div>
 
               {/* Directly after logo: Prominent bold white text with Nepal flag spanning across the header */}
               <div className="flex flex-col text-left justify-center">
@@ -5354,14 +5349,17 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-left">
             <h5 className="text-white font-extrabold text-base tracking-tight mb-2 flex items-center gap-2 justify-center md:justify-start">
-              {siteSettings.instituteLogoUrl && (
-                <img 
-                  src={siteSettings.instituteLogoUrl} 
-                  alt={siteSettings.instituteName || "Logo"} 
-                  className="h-6 w-auto object-contain rounded"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-              )}
+              <img 
+                src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
+                alt={siteSettings.instituteName || "Logo"} 
+                className="h-6 w-auto object-contain rounded"
+                onError={(e) => {
+                  const img = e.currentTarget as HTMLImageElement;
+                  if (!img.src.includes('/logo.png')) {
+                    img.src = '/logo.png';
+                  }
+                }}
+              />
               <span>{siteSettings.instituteName || 'AI Clipzone Nepal'} 🇳🇵</span>
             </h5>
             <p className="text-zinc-500 text-xs leading-relaxed">
@@ -7271,19 +7269,17 @@ export default function App() {
             {isInstallingPwa ? (
               <div className="py-4 text-center space-y-4">
                 <div className="w-20 h-14 rounded-2xl bg-black border border-zinc-700 p-1 mx-auto flex items-center justify-center shadow-lg animate-bounce overflow-hidden">
-                  {siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? (
-                    <img 
-                      src={siteSettings.instituteLogoUrl.trim()} 
-                      alt={siteSettings.instituteName || "App Logo"} 
-                      className="w-full h-full object-contain" 
-                      referrerPolicy="no-referrer" 
-                      onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-base">
-                      {siteSettings.instituteName ? siteSettings.instituteName.charAt(0).toUpperCase() : '✦'}
-                    </div>
-                  )}
+                  <img 
+                    src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
+                    alt={siteSettings.instituteName || "App Logo"} 
+                    className="w-full h-full object-contain" 
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      if (!img.src.includes('/logo.png')) {
+                        img.src = '/logo.png';
+                      }
+                    }}
+                  />
                 </div>
                 <div>
                   <h4 className="text-lg font-semibold text-white">Installing {siteSettings.instituteName || 'App'}...</h4>
@@ -7305,19 +7301,17 @@ export default function App() {
                 {/* App Info Row */}
                 <div className="flex items-center gap-4 my-2">
                   <div className="w-16 h-12 rounded-xl bg-black border border-zinc-700 p-1 flex items-center justify-center shrink-0 shadow-md overflow-hidden">
-                    {siteSettings.instituteLogoUrl && siteSettings.instituteLogoUrl.trim() ? (
-                      <img 
-                        src={siteSettings.instituteLogoUrl.trim()} 
-                        alt={siteSettings.instituteName || "App Logo"} 
-                        className="w-full h-full object-contain" 
-                        referrerPolicy="no-referrer" 
-                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-base">
-                        {siteSettings.instituteName ? siteSettings.instituteName.charAt(0).toUpperCase() : '✦'}
-                      </div>
-                    )}
+                    <img 
+                      src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
+                      alt={siteSettings.instituteName || "App Logo"} 
+                      className="w-full h-full object-contain" 
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement;
+                        if (!img.src.includes('/logo.png')) {
+                          img.src = '/logo.png';
+                        }
+                      }}
+                    />
                   </div>
                   <div className="min-w-0 text-left">
                     <h4 className="text-lg font-medium text-white truncate tracking-normal">

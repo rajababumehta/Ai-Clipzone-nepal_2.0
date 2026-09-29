@@ -56,6 +56,9 @@ async function startServer() {
     res.status(404).type("text/plain").send("Service Worker not found");
   });
 
+  // Serve static assets from public directory
+  app.use(express.static(path.join(process.cwd(), "public")));
+
   // Initialize server-side Gemini client
   let ai: GoogleGenAI | null = null;
   const key = process.env.GEMINI_API_KEY;

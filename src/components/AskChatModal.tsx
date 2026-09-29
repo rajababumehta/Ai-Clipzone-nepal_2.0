@@ -1182,16 +1182,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-xs">
-                      {siteSettings.instituteLogoUrl ? (
-                        <img
-                          src={siteSettings.instituteLogoUrl}
-                          alt="Logo"
-                          className="w-full h-full object-cover"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                      ) : (
-                        <MessageCircle className="w-5 h-5 text-white" />
-                      )}
+                      <img
+                        src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"}
+                        alt="Logo"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          if (!img.src.includes('/logo.png')) {
+                            img.src = '/logo.png';
+                          }
+                        }}
+                      />
                     </div>
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-[#202c33]"></span>
                   </div>

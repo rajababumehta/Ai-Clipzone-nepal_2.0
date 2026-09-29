@@ -1567,7 +1567,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           src={instituteLogoUrl} 
                           alt="Institute Logo Preview" 
                           className="w-10 h-10 object-contain rounded-lg bg-slate-50 p-1 border border-slate-100"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          onError={(e) => {
+                            const img = e.currentTarget as HTMLImageElement;
+                            if (!img.src.includes('/logo.png')) {
+                              img.src = '/logo.png';
+                            }
+                          }}
                         />
                         <div className="text-[11px] overflow-hidden">
                           <span className="font-bold text-slate-700 block truncate">Logo Preview Loaded</span>
@@ -1697,18 +1702,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                 <div className="bg-black p-3 sm:p-4 rounded-xl border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3 text-left w-full sm:w-auto">
-                    {instituteLogoUrl ? (
-                      <img 
-                        src={instituteLogoUrl} 
-                        alt="Logo Preview" 
-                        className="w-12 h-12 object-contain rounded-xl bg-black border border-blue-500/40 p-1 shrink-0 shadow-md"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-blue-500/40 flex items-center justify-center shrink-0">
-                        <GraduationCap className="w-6 h-6 text-blue-400" />
-                      </div>
-                    )}
+                    <img 
+                      src={instituteLogoUrl || "/logo.png"} 
+                      alt="Logo Preview" 
+                      className="w-12 h-12 object-contain rounded-xl bg-black border border-blue-500/40 p-1 shrink-0 shadow-md"
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement;
+                        if (!img.src.includes('/logo.png')) {
+                          img.src = '/logo.png';
+                        }
+                      }}
+                    />
                     <div className="min-w-0">
                       <div className="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-2">
                         <span>{instituteName || 'AI CLIPZONE NEPAL'}</span>
