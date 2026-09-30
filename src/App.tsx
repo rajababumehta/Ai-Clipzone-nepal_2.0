@@ -3451,12 +3451,34 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              {/* Quick Certificate View Button - Desktop & Tablet */}
+              <button
+                id="header-certificate-btn"
+                onClick={() => {
+                  const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
+                  const target = enrolledCourses[0] || courses[0];
+                  if (target) {
+                    setSelectedCertCourseId(target.id);
+                    setCertificateCourseTitle((target.certificateCourseTitle || target.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone'));
+                  }
+                  setCertificateStudentName(currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner');
+                  setCertificateIssueDate(certificateIssueDate || '2083/01/14');
+                  setCertificateCode(target ? (getCourseActivationCode(target.id) || 'AICLIP-ACTIVE') : 'AICLIP-ACTIVE');
+                  setShowCertificateModal(true);
+                }}
+                className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-amber-500/15 via-blue-500/15 to-amber-500/15 hover:from-amber-500/25 hover:to-blue-500/25 text-amber-300 hover:text-white px-3 py-1.5 rounded-full border border-amber-500/30 hover:border-amber-400 text-xs font-black transition cursor-pointer shadow-md active:scale-95 shrink-0"
+                title="View Official Verified Certificate"
+              >
+                <Award className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="tracking-wide">Certificate 📜</span>
+              </button>
+
               {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
               <button
                 id="header-notification-bell-btn"
                 onClick={() => setShowNotifCenterModal(true)}
-                className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group"
+                className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group shrink-0"
                 title="Notifications & Announcements"
               >
                 <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-blue-400 transition" />
@@ -3468,7 +3490,7 @@ export default function App() {
               </button>
 
               {/* Dropdown Menu Button */}
-              <div className="relative">
+              <div className="relative shrink-0">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-white hover:bg-zinc-800 hover:border-zinc-500 transition flex items-center justify-center cursor-pointer select-none font-bold text-xs relative shadow-md overflow-hidden"
@@ -3525,6 +3547,26 @@ export default function App() {
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
                       >
                         🎓 Course Page
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
+                          const target = enrolledCourses[0] || courses[0];
+                          if (target) {
+                            setSelectedCertCourseId(target.id);
+                            setCertificateCourseTitle((target.certificateCourseTitle || target.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone'));
+                          }
+                          setCertificateStudentName(currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner');
+                          setCertificateIssueDate(certificateIssueDate || '2083/01/14');
+                          setCertificateCode(target ? (getCourseActivationCode(target.id) || 'AICLIP-ACTIVE') : 'AICLIP-ACTIVE');
+                          setShowCertificateModal(true);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-amber-300 group"
+                      >
+                        <span className="flex items-center gap-2">📜 Certificate</span>
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-1.5 py-0.5 rounded-full border border-amber-500/30">Verified</span>
                       </button>
 
                       <button
@@ -7301,19 +7343,21 @@ export default function App() {
 
       {/* CERTIFICATE MODAL */}
       {showCertificateModal && (() => {
-        // Enrolled courses ONLY (Excluding secondary account logins):
+        // Enrolled courses (excluding secondary account logins):
         const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
-        if (enrolledCourses.length === 0) {
+        // Fallback to courses list if user is previewing or hasn't activated an enrolled course yet:
+        const availableCoursesList = enrolledCourses.length > 0 ? enrolledCourses : (courses.length > 0 ? courses : []);
+        if (availableCoursesList.length === 0) {
           return null;
         }
 
-        // Resolve target course strictly from enrolled courses:
+        // Resolve target course:
         const targetedCourse =
-          enrolledCourses.find(c => selectedCertCourseId && c.id === selectedCertCourseId) ||
-          enrolledCourses.find(c => selectedClassroomCourseId && c.id === selectedClassroomCourseId) ||
-          enrolledCourses.find(c => selectedCourse && c.id === selectedCourse.id) ||
-          enrolledCourses.find(c => c.title === certificateCourseTitle || (c.certificateCourseTitle && c.certificateCourseTitle === certificateCourseTitle)) ||
-          enrolledCourses[0];
+          availableCoursesList.find(c => selectedCertCourseId && c.id === selectedCertCourseId) ||
+          availableCoursesList.find(c => selectedClassroomCourseId && c.id === selectedClassroomCourseId) ||
+          availableCoursesList.find(c => selectedCourse && c.id === selectedCourse.id) ||
+          availableCoursesList.find(c => c.title === certificateCourseTitle || (c.certificateCourseTitle && c.certificateCourseTitle === certificateCourseTitle)) ||
+          availableCoursesList[0];
 
         const effectiveCourseTitle = targetedCourse?.certificateCourseTitle || targetedCourse?.title || certificateCourseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS';
         const effectiveInstituteName = targetedCourse?.certificateInstituteName || siteSettings.certificateInstituteName || siteSettings.instituteName || 'AI CLIPZONE NEPAL';
@@ -7337,7 +7381,7 @@ export default function App() {
             studentPhoto={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
             courseTitle={effectiveCourseTitle}
             issueDate={certificateIssueDate || '2083/01/14'}
-            certificateId={certificateCode}
+            certificateId={certificateCode || (targetedCourse ? (getCourseActivationCode(targetedCourse.id) || 'AICLIP-ACTIVE') : 'AICLIP-ACTIVE')}
             instituteName={siteSettings.instituteName}
             certificateInstituteName={effectiveInstituteName}
             logoUrl={effectiveLogoUrl}
@@ -7353,11 +7397,11 @@ export default function App() {
             certificateTheme={effectiveTheme}
             certificateStampUrl={effectiveStampUrl}
             certificateSealText={effectiveSealText}
-            courses={enrolledCourses}
+            courses={availableCoursesList}
             selectedCourseId={targetedCourse?.id}
             onSelectCourseId={(newId) => {
               setSelectedCertCourseId(newId);
-              const found = enrolledCourses.find(c => c.id === newId);
+              const found = availableCoursesList.find(c => c.id === newId);
               if (found) {
                 setCertificateCourseTitle(found.certificateCourseTitle || found.title);
               }
@@ -7630,35 +7674,35 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Certificate - Shown only if user has an activated course not under secondary login */}
-          {isCourseActiveUser && activeCourseIds.some(cid => !secondaryCourseIds.includes(cid)) && (
-            <button
-              id="app-nav-certificate"
-              onClick={() => {
-                setIsAskOpen(false);
-                setShowProfileModal(false);
-                const eligibleCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
-                if (eligibleCourses.length === 0) {
-                  showToast('🔒 प्रमाणपत्र केवल मूल खाता (Original Owner) का लागि मात्र उपलब्ध छ।', 'error');
-                  return;
-                }
-                const currentCourse = eligibleCourses.find(c => c.id === selectedClassroomCourseId) || eligibleCourses[0];
-                const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
-                const activeCode = getCourseActivationCode(currentCourse.id) || (userActivationKeys[0]?.code || 'AICLIP-ACTIVE');
-                const cleanTitle = (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+          {/* 3. Certificate - Always accessible */}
+          <button
+            id="app-nav-certificate"
+            onClick={() => {
+              setIsAskOpen(false);
+              setShowProfileModal(false);
+              const eligibleCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
+              const currentCourse = eligibleCourses.find(c => c.id === selectedClassroomCourseId) || eligibleCourses[0] || courses[0];
+              const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+              const activeCode = currentCourse ? (getCourseActivationCode(currentCourse.id) || (userActivationKeys[0]?.code || 'AICLIP-ACTIVE')) : 'AICLIP-ACTIVE';
+              const cleanTitle = currentCourse ? (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone') : 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS';
+              if (currentCourse) {
                 setSelectedCertCourseId(currentCourse.id);
                 setCertificateCourseTitle(cleanTitle);
-                setCertificateStudentName(studentName);
-                setCertificateIssueDate('2083/01/14');
-                setCertificateCode(activeCode);
-                setShowCertificateModal(true);
-              }}
-              className="flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent"
-            >
-              <Award className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
-              <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold text-zinc-400 hover:text-blue-300 tracking-tight">Certificate</span>
-            </button>
-          )}
+              }
+              setCertificateStudentName(studentName);
+              setCertificateIssueDate(certificateIssueDate || '2083/01/14');
+              setCertificateCode(activeCode);
+              setShowCertificateModal(true);
+            }}
+            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
+              showCertificateModal
+                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
+                : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
+            }`}
+          >
+            <Award className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
+            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Certificate</span>
+          </button>
 
           {/* 4. Ask (Live Support & Help) - Shown only if user has an activated course */}
           {isCourseActiveUser && (

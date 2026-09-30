@@ -197,30 +197,36 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   // Auto-scale certificate canvas to fit user's modal screen smoothly (both mobile and desktop)
   useEffect(() => {
     const updateScale = () => {
-      if (containerRef.current) {
-        // Safe horizontal space inside container
-        const availableWidth = Math.max(280, containerRef.current.clientWidth - 24);
-        
-        // On desktop and laptop screens, available vertical space takes top controls bar (~90px),
-        // padding (~32px), and bottom helper text into account so the certificate is never clipped
-        const availableHeight = Math.max(220, window.innerHeight - 150);
+      const containerWidth = containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1000);
+      // Safe horizontal space inside container
+      const availableWidth = Math.max(280, containerWidth - 32);
+      
+      // On desktop and laptop screens, available vertical space takes top controls bar (~90px),
+      // padding (~32px), and bottom helper text into account so the certificate is never clipped
+      const winHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const availableHeight = Math.max(220, winHeight - 150);
 
-        const scaleWidth = availableWidth / 1000;
-        const scaleHeight = availableHeight / 707;
-        
-        // Fit within both width AND height on desktop so the certificate (including signatures, seal & ID)
-        // is 100% visible and NEVER vertically clipped or pushed offscreen!
-        const optimalScale = Math.min(scaleWidth, scaleHeight);
-        
-        // Ensure scale never drops below 0.25 and does not exceed 1.0 (to preserve crisp A4 aspect ratio)
-        const newScale = Math.min(1.0, Math.max(0.25, optimalScale));
-        setScale(newScale);
-      }
+      const scaleWidth = availableWidth / 1000;
+      const scaleHeight = availableHeight / 707;
+      
+      // Fit within both width AND height on desktop so the certificate (including signatures, seal & ID)
+      // is 100% visible and NEVER vertically clipped or pushed offscreen!
+      const optimalScale = Math.min(scaleWidth, scaleHeight);
+      
+      // Ensure scale never drops below 0.25 and does not exceed 1.0 (to preserve crisp A4 aspect ratio)
+      const newScale = Math.min(1.0, Math.max(0.25, optimalScale));
+      setScale(newScale);
     };
 
     updateScale();
+    const raf = requestAnimationFrame(updateScale);
+    const timer = setTimeout(updateScale, 80);
     window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateScale);
+    };
   }, []);
 
   const handleZoomIn = () => setScale(prev => Math.min(1.25, +(prev + 0.08).toFixed(2)));
