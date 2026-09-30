@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, CheckCircle, Share2, ShieldCheck, Award, Download, Loader2, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { X, CheckCircle, Share2, ShieldCheck, Award, Download, Loader2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import html2canvas from 'html2canvas';
 import { CERTIFICATE_EMBEDDED_FONTS_CSS } from '../certificateFonts';
@@ -194,27 +194,21 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     .replace(/by Dhruv Rathee/gi, 'by AI Clipzone')
     .replace(/Dhruv Rathee/gi, 'AI Clipzone');
 
-  // Auto-scale certificate canvas to fit user's modal screen smoothly (both mobile and desktop)
+  // Auto-scale certificate canvas to fit user's modal screen clearly (both mobile and desktop)
   useEffect(() => {
     const updateScale = () => {
       const containerWidth = containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1000);
-      // Safe horizontal space inside container
-      const availableWidth = Math.max(280, containerWidth - 32);
+      const isMobile = (typeof window !== 'undefined' ? window.innerWidth : 1000) < 768;
+      const padding = isMobile ? 16 : 40;
+      const availableWidth = Math.max(280, containerWidth - padding);
       
-      // On desktop and laptop screens, available vertical space takes top controls bar (~90px),
-      // padding (~32px), and bottom helper text into account so the certificate is never clipped
-      const winHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const availableHeight = Math.max(220, winHeight - 150);
-
-      const scaleWidth = availableWidth / 1000;
-      const scaleHeight = availableHeight / 707;
-      
-      // Fit within both width AND height on desktop so the certificate (including signatures, seal & ID)
-      // is 100% visible and NEVER vertically clipped or pushed offscreen!
-      const optimalScale = Math.min(scaleWidth, scaleHeight);
-      
-      // Ensure scale never drops below 0.25 and does not exceed 1.0 (to preserve crisp A4 aspect ratio)
-      const newScale = Math.min(1.0, Math.max(0.25, optimalScale));
+      let newScale = availableWidth / 1000;
+      if (isMobile) {
+        newScale = Math.min(1.0, Math.max(0.30, newScale));
+      } else {
+        // Desktop / Laptop: keep it large, sharp, and easy to read (0.78 to 1.0)
+        newScale = Math.min(1.0, Math.max(0.78, newScale));
+      }
       setScale(newScale);
     };
 
@@ -228,16 +222,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       window.removeEventListener('resize', updateScale);
     };
   }, []);
-
-  const handleZoomIn = () => setScale(prev => Math.min(1.25, +(prev + 0.08).toFixed(2)));
-  const handleZoomOut = () => setScale(prev => Math.max(0.25, +(prev - 0.08).toFixed(2)));
-  const handleResetZoom = () => {
-    if (containerRef.current) {
-      const availableWidth = Math.max(280, containerRef.current.clientWidth - 24);
-      const availableHeight = Math.max(220, window.innerHeight - 150);
-      setScale(Math.min(1.0, Math.max(0.25, Math.min(availableWidth / 1000, availableHeight / 707))));
-    }
-  };
 
   const handleDownloadPng = async () => {
     setIsDownloading(true);
@@ -403,34 +387,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Desktop Zoom Controls */}
-            <div className="hidden sm:flex items-center gap-1 bg-slate-800/90 border border-slate-700/80 rounded-xl px-2 py-1.5 text-xs text-slate-300">
-              <button
-                onClick={handleZoomOut}
-                className="p-1 hover:text-white hover:bg-slate-700 rounded transition cursor-pointer"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-[11px] font-mono px-1 font-bold text-slate-200 min-w-[36px] text-center">
-                {Math.round(scale * 100)}%
-              </span>
-              <button
-                onClick={handleZoomIn}
-                className="p-1 hover:text-white hover:bg-slate-700 rounded transition cursor-pointer"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={handleResetZoom}
-                className="p-1 hover:text-white hover:bg-slate-700 rounded transition cursor-pointer ml-0.5"
-                title="Fit to Screen (अनुकूल मिलाउनुहोस्)"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
             {/* Course Switcher if multiple courses available */}
             {courses && courses.length > 1 && onSelectCourseId && (
               <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/90 rounded-xl px-3 py-1.5 text-xs text-slate-200">
