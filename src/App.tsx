@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -2480,6 +2480,35 @@ export default function App() {
   const [adminSearchKeyQuery, setAdminSearchKeyQuery] = useState('');
   const [isAdminLoadingKeys, setIsAdminLoadingKeys] = useState(false);
 
+  // Top Navigation Course Search Bar states
+  const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filtered courses for Home page based on Top Navigation search query
+  const filteredHomeCourses = useMemo(() => {
+    if (!courseSearchQuery.trim()) return courses;
+    const q = courseSearchQuery.toLowerCase().trim();
+    return courses.filter(c => 
+      c.title?.toLowerCase().includes(q) ||
+      c.message?.toLowerCase().includes(q) ||
+      c.popularText?.toLowerCase().includes(q) ||
+      c.learn?.some(l => l.toLowerCase().includes(q)) ||
+      c.videos?.some(v => v.title.toLowerCase().includes(q))
+    );
+  }, [courses, courseSearchQuery]);
+
   // FAQ open indexes
   const [openFaqs, setOpenFaqs] = useState<Record<number, boolean>>({});
 
@@ -3233,7 +3262,8 @@ export default function App() {
 
         {/* Top Floating Banner with sleek pitch-black styling matching the logo */}
         <div className="w-full bg-black text-white">
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-4">
+            {/* Left: Brand Logo Only (text removed as requested) */}
             <div 
               onClick={() => {
                 if (isAdminActivated) {
@@ -3243,7 +3273,7 @@ export default function App() {
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}
-              className="flex items-center gap-2.5 sm:gap-3 cursor-pointer select-none relative group"
+              className="flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
               title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
             >
               {/* Institute Official Logo */}
@@ -3251,7 +3281,7 @@ export default function App() {
                 <img 
                   src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                   alt={siteSettings.instituteName || "Logo"}
-                  className="h-10 sm:h-12 md:h-14 w-auto max-w-[140px] sm:max-w-[180px] md:max-w-[220px] object-contain shrink-0 filter drop-shadow-md"
+                  className="h-10 sm:h-12 md:h-14 w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[190px] object-contain shrink-0 filter drop-shadow-md"
                   loading="eager"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
@@ -3260,16 +3290,6 @@ export default function App() {
                     }
                   }}
                 />
-              </div>
-
-              {/* Directly after logo: Prominent bold white text with Nepal flag spanning across the header */}
-              <div className="flex flex-col text-left justify-center">
-                <h1 className="text-sm xs:text-base sm:text-lg md:text-xl lg:text-2xl font-black tracking-wide sm:tracking-wider text-white font-sans flex items-center gap-1.5 leading-none uppercase drop-shadow-sm whitespace-nowrap">
-                  {siteSettings.siteTitle || (siteSettings.instituteName ? `${siteSettings.instituteName.toUpperCase()} 🇳🇵` : 'TOP AI COURSE NEPAL 🇳🇵')}
-                </h1>
-                <span className="hidden sm:block text-[9px] sm:text-[10px] md:text-xs text-zinc-400 font-semibold tracking-widest uppercase mt-1">
-                  {siteSettings.siteTagline || "Nepal's #1 AI Video Editing & Learning Platform"}
-                </span>
               </div>
 
               {isAdminActivated && showAdminMenu && (
@@ -3311,8 +3331,128 @@ export default function App() {
               )}
             </div>
 
+            {/* 100% Radius Search Bar */}
+            <div ref={searchContainerRef} className="relative flex-1 max-w-[180px] xs:max-w-[220px] sm:max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-3">
+              <div className="relative flex items-center w-full">
+                <div className="absolute left-3 sm:left-3.5 pointer-events-none text-zinc-400 flex items-center justify-center">
+                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
+                </div>
+                <input
+                  type="text"
+                  value={courseSearchQuery}
+                  onChange={(e) => {
+                    setCourseSearchQuery(e.target.value);
+                    if (currentView !== 'home' && e.target.value.trim()) {
+                      setCurrentView('home');
+                    }
+                  }}
+                  onFocus={() => setIsSearchFocused(true)}
+                  placeholder="Search courses, AI tools..."
+                  className="w-full pl-8.5 sm:pl-10 pr-7 sm:pr-8 py-1.5 sm:py-2 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs md:text-sm rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
+                  style={{ borderRadius: '9999px' }}
+                />
+                {courseSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCourseSearchQuery('');
+                      setIsSearchFocused(false);
+                    }}
+                    className="absolute right-2 sm:right-2.5 w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Instant Search Results Dropdown Popover */}
+              <AnimatePresence>
+                {isSearchFocused && courseSearchQuery.trim() && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-0 right-0 top-full mt-2 bg-zinc-950/98 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[600] max-h-80 overflow-y-auto"
+                  >
+                    <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-2 py-1 flex items-center justify-between border-b border-zinc-900 mb-1">
+                      <span>Matching Courses ({filteredHomeCourses.length})</span>
+                      <button
+                        onClick={() => {
+                          setCourseSearchQuery('');
+                          setIsSearchFocused(false);
+                        }}
+                        className="text-zinc-500 hover:text-zinc-300 normal-case cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+
+                    {filteredHomeCourses.length > 0 ? (
+                      <div className="space-y-1">
+                        {filteredHomeCourses.map((c) => {
+                          const isEnrolled = activeCourseIds.includes(c.id);
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                setIsSearchFocused(false);
+                                if (isEnrolled) {
+                                  setSelectedClassroomCourseId(c.id);
+                                  setCurrentView('classroom');
+                                  showToast(`Opened ${c.title}! 🎓`, 'success');
+                                } else {
+                                  setCurrentView('home');
+                                  setTimeout(() => {
+                                    document.getElementById(`course-card-${c.id}`)?.scrollIntoView({ behavior: 'smooth' });
+                                  }, 100);
+                                }
+                              }}
+                              className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-zinc-900/90 transition cursor-pointer group text-left"
+                            >
+                              <div className="w-10 h-10 rounded-lg overflow-hidden bg-black shrink-0 border border-zinc-800">
+                                {c.image ? (
+                                  <img src={c.image} alt={c.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xs">🎓</div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-white group-hover:text-blue-400 transition truncate">
+                                  {c.title}
+                                </h4>
+                                <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                                  <span>{c.videos?.length || 0} Lectures</span>
+                                  {isEnrolled ? (
+                                    <span className="text-emerald-400 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded-full border border-emerald-500/30">
+                                      Enrolled ✓
+                                    </span>
+                                  ) : (
+                                    <span className="text-blue-400 font-bold">
+                                      Rs. {c.price || '999'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition shrink-0" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-4 text-center text-zinc-400 text-xs">
+                        <p className="font-semibold text-zinc-300">कुनै कोर्ष भेटिएन</p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">No courses matching "{courseSearchQuery}"</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* Desktop Navigation Tabs */}
-            <div className="hidden sm:flex items-center gap-1.5 bg-zinc-950 p-1 rounded-full border border-zinc-800 shadow-inner">
+            <div className="hidden md:flex items-center gap-1.5 bg-zinc-950 p-1 rounded-full border border-zinc-800 shadow-inner">
               <button
                 onClick={() => {
                   setCurrentView('home');
@@ -4527,8 +4667,27 @@ export default function App() {
             ))}
           </div>
         ) : (courses && courses.length > 0) ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-              {courses.map((course, index) => (
+          <div>
+            {courseSearchQuery.trim() && (
+              <div className="mb-6 flex items-center justify-between bg-zinc-950 border border-blue-500/30 rounded-2xl px-4 py-3 text-xs text-zinc-300 shadow-md">
+                <div className="flex items-center gap-2">
+                  <Search className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span>
+                    Found <strong className="text-white font-bold">{filteredHomeCourses.length}</strong> {filteredHomeCourses.length === 1 ? 'course' : 'courses'} matching "<span className="text-blue-400 font-semibold">{courseSearchQuery}</span>"
+                  </span>
+                </div>
+                <button
+                  onClick={() => setCourseSearchQuery('')}
+                  className="text-xs text-rose-400 hover:text-rose-300 font-bold px-2.5 py-1 rounded-lg hover:bg-rose-950/40 transition cursor-pointer"
+                >
+                  Clear Search ✕
+                </button>
+              </div>
+            )}
+
+            {filteredHomeCourses.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
+                {filteredHomeCourses.map((course, index) => (
                   <motion.div
                     key={course.id}
                     id={`course-card-${course.id}`}
@@ -4685,8 +4844,22 @@ export default function App() {
                   <span className="text-xs text-zinc-400 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
                 </motion.div>
               )}
-            </div>
-          ) : (
+              </div>
+            ) : (
+              <div className="py-16 text-center bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-lg mx-auto">
+                <Search className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-white mb-1">कुनै कोर्ष भेटिएन</h3>
+                <p className="text-xs text-zinc-400 mb-4">No courses matching "{courseSearchQuery}". Try another keyword.</p>
+                <button
+                  onClick={() => setCourseSearchQuery('')}
+                  className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+                >
+                  सबै कोर्षहरू हेर्नुहोस् (View All Courses)
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
             <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-3xl p-10 md:p-14 text-center max-w-xl mx-auto shadow-2xl">
               <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 text-blue-400 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-5 shadow-inner">
                 🎓
