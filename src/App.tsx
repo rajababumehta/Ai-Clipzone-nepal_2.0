@@ -3451,55 +3451,6 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            {/* Desktop Navigation Tabs */}
-            <div className="hidden md:flex items-center gap-1.5 bg-zinc-950 p-1 rounded-full border border-zinc-800 shadow-inner">
-              <button
-                onClick={() => {
-                  setCurrentView('home');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                  showToast('Welcome Home! 🏠', 'info');
-                }}
-                className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'home'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
-                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                🏠 Home Page
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('classroom');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                  showToast('Welcome to Your Course! 🎓', 'info');
-                }}
-                className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
-                  currentView === 'classroom'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
-                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                🎓 Course Page
-                {activeCourseIds.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping border border-black" />
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('account');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                  showToast('Student Profile 👤', 'info');
-                }}
-                className={`px-4 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'account'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-105'
-                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                👤 Profile
-              </button>
-            </div>
-
             <div className="flex items-center gap-2.5">
               {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
               <button
