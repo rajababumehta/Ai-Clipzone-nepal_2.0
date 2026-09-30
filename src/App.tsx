@@ -3643,7 +3643,7 @@ export default function App() {
       </div>
 
       {/* Main Container for Course List / Classroom / Account */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-20 md:pb-28">
+      <main className={`flex-1 max-w-6xl w-full mx-auto px-4 pt-3 ${currentView === 'home' ? 'pb-0' : 'pb-20 md:pb-28'}`}>
 
         {/* 1. FULL-SCREEN ACCOUNT VIEW - Masterclass Student Dashboard */}
         {currentView === 'account' ? (
@@ -5503,12 +5503,12 @@ export default function App() {
 
       </main>
 
-      {/* FOOTER - Visible on Home view */}
+      {/* FOOTER - Very last section of the website on desktop and mobile */}
       {currentView === 'home' && (
-      <footer className="bg-black/95 text-zinc-400 text-xs md:text-sm pt-12 pb-32 md:pb-36 border-t border-zinc-800/80 w-full mt-auto relative z-10 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="text-center md:text-left">
-            <h5 className="text-white font-extrabold text-base tracking-tight mb-2 flex items-center gap-2 justify-center md:justify-start">
+      <footer className="bg-black text-zinc-400 text-xs md:text-sm pt-8 pb-3 sm:pb-4 border-t border-zinc-800/80 w-full mt-auto relative z-10">
+        <div className="max-w-4xl mx-auto px-4 flex flex-col items-center justify-center text-center gap-3.5 sm:gap-4">
+          <div className="flex flex-col items-center justify-center text-center">
+            <h5 className="text-white font-extrabold text-base tracking-tight mb-1.5 flex items-center gap-2 justify-center">
               <img 
                 src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                 alt={siteSettings.instituteName || "Logo"} 
@@ -5520,10 +5520,10 @@ export default function App() {
                   }
                 }}
               />
-              <span>{siteSettings.instituteName || 'AI Clipzone Nepal'} 🇳🇵</span>
+              <span>{siteSettings.instituteName || 'AI Clipzone'} 🇳🇵</span>
             </h5>
-            <p className="text-zinc-500 text-xs leading-relaxed">
-              © {new Date().getFullYear()} {siteSettings.instituteName || 'AI Clipzone'}. All rights reserved. Nepal's Premium AI Learning platform.
+            <p className="text-zinc-500 text-xs leading-relaxed max-w-md mx-auto">
+              © {new Date().getFullYear()} {siteSettings.instituteName || 'Ai Clipzone'}. All rights reserved. Nepal's Premium AI Learning platform.
             </p>
           </div>
           <div className="flex items-center gap-2.5 flex-wrap justify-center">
