@@ -18,7 +18,9 @@ import {
   MoreVertical,
   Trash2,
   RotateCcw,
-  Info
+  Info,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { 
   collection, 
@@ -132,6 +134,26 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const [isLoadingAdminConvs, setIsLoadingAdminConvs] = useState(true);
   const adminEndRef = useRef<HTMLDivElement>(null);
   const adminReplyInputRef = useRef<HTMLInputElement>(null);
+
+  // Full-screen mode state - defaults to true so Ask opens in full screen
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('clipzone_ask_fullscreen');
+      return stored !== null ? stored === 'true' : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const toggleFullScreen = () => {
+    setIsFullScreen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('clipzone_ask_fullscreen', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // --------------------------------------------------------------------------
   // CANONICAL STUDENT USER ID: strictly ensure student messages use the same permanent conversation doc
@@ -769,13 +791,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: isRunningInAppMode ? 15 : 10 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="fixed inset-0 z-[4900] flex sm:items-center sm:justify-center bg-[#0b141a] sm:bg-black/80 sm:backdrop-blur-sm select-none text-[#e9edef] overflow-hidden"
+        className={`fixed inset-0 z-[5500] flex ${isFullScreen ? 'p-0' : 'sm:items-center sm:justify-center sm:p-4'} bg-[#0b141a] sm:bg-black/85 sm:backdrop-blur-md select-none text-[#e9edef] overflow-hidden`}
       >
         <div
           className={
-            isAdmin
-              ? "flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[780px] sm:max-w-4xl bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-[64px] sm:pb-0"
-              : "flex flex-col h-full w-full sm:h-[90vh] sm:max-h-[720px] sm:max-w-[480px] bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-[64px] sm:pb-0"
+            isFullScreen
+              ? "flex flex-col h-full w-full bg-[#111b21] sm:rounded-none sm:border-none shadow-none overflow-hidden relative pb-0"
+              : isAdmin
+                ? "flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[860px] sm:max-w-5xl bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-0"
+                : "flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[860px] sm:max-w-3xl bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-0"
           }
         >
 
@@ -823,6 +847,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={toggleFullScreen}
+                    className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
+                    title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
+                  >
+                    {isFullScreen ? <Minimize2 className="w-5 h-5 text-[#00a884]" /> : <Maximize2 className="w-5 h-5" />}
+                  </button>
+
                   <button
                     onClick={onClose}
                     className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
@@ -1219,6 +1252,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     </a>
                   )}
 
+                  {/* Full Screen Toggle button */}
+                  <button
+                    type="button"
+                    onClick={toggleFullScreen}
+                    className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
+                    title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
+                  >
+                    {isFullScreen ? <Minimize2 className="w-5 h-5 text-[#00a884]" /> : <Maximize2 className="w-5 h-5" />}
+                  </button>
+
                   {/* WhatsApp 3-dots Menu for Student */}
                   <div className="relative">
                     <button
@@ -1237,6 +1280,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           onClick={() => setStudentMenuOpen(false)} 
                         />
                         <div className="absolute right-0 top-full mt-1.5 w-60 bg-[#202c33] border border-[#222d34] rounded-xl shadow-2xl py-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudentMenuOpen(false);
+                              toggleFullScreen();
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-[#e9edef] hover:text-white transition cursor-pointer border-b border-[#222d34]"
+                          >
+                            {isFullScreen ? <Minimize2 className="w-4 h-4 text-[#00a884] shrink-0" /> : <Maximize2 className="w-4 h-4 text-[#00a884] shrink-0" />}
+                            <span>{isFullScreen ? 'Exit Fullscreen (सामान्य)' : 'Full Screen (फुलस्क्रिन)'}</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
