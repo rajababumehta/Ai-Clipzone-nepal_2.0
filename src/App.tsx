@@ -3568,16 +3568,18 @@ export default function App() {
                         🎓 Course Page
                       </button>
 
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          handleOpenStudentCertificate();
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-amber-300 group"
-                      >
-                        <span className="flex items-center gap-2">📜 Certificate</span>
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-1.5 py-0.5 rounded-full border border-amber-500/30">Verified</span>
-                      </button>
+                      {isCourseActiveUser && (
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            handleOpenStudentCertificate();
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-amber-300 group"
+                        >
+                          <span className="flex items-center gap-2">📜 Certificate</span>
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-1.5 py-0.5 rounded-full border border-amber-500/30">Verified</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {
@@ -7658,23 +7660,25 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Certificate */}
-          <button
-            id="app-nav-certificate"
-            onClick={() => {
-              setIsAskOpen(false);
-              setShowProfileModal(false);
-              handleOpenStudentCertificate();
-            }}
-            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              showCertificateModal
-                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
-                : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
-            }`}
-          >
-            <Award className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
-            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Certificate</span>
-          </button>
+          {/* 3. Certificate - Shown only if user has activated course */}
+          {isCourseActiveUser && (
+            <button
+              id="app-nav-certificate"
+              onClick={() => {
+                setIsAskOpen(false);
+                setShowProfileModal(false);
+                handleOpenStudentCertificate();
+              }}
+              className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
+                showCertificateModal
+                  ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
+                  : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
+              }`}
+            >
+              <Award className="w-5 h-5 mb-0.5 md:mb-0 stroke-[2.2] text-blue-400 shrink-0" />
+              <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Certificate</span>
+            </button>
+          )}
 
           {/* 4. Ask (Live Support & Help) - Shown only if user has an activated course */}
           {isCourseActiveUser && (
