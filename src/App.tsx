@@ -333,6 +333,18 @@ export default function App() {
     try {
       localStorage.setItem('clipzone_student_avatar', croppedDataUrl);
     } catch (err) {}
+
+    // Sync student photo immediately to support_conversations so admin sees it in Ask
+    const targetUid = localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
+    if (targetUid) {
+      try {
+        setDoc(doc(db, 'support_conversations', targetUid), {
+          userAvatar: croppedDataUrl,
+          updatedAt: Date.now()
+        }, { merge: true }).catch(() => {});
+      } catch (e) {}
+    }
+
     setShowImageAdjustModal(false);
     setTempImageForAdjust(null);
     showToast('📸 प्रोफाइल फोटो सफलतापूर्वक मिलाइयो र सुरक्षित भयो!', 'success');
@@ -3742,50 +3754,18 @@ export default function App() {
                           </span>
                         </div>
 
-                        {/* Editable Name */}
-                        {isEditingStudentName ? (
-                          <div className="flex items-center gap-2 pt-0.5">
-                            <input 
-                              type="text"
-                              value={tempStudentName}
-                              onChange={(e) => setTempStudentName(e.target.value)}
-                              placeholder="Your full name..."
-                              className="bg-zinc-950 border border-blue-500 text-white text-sm font-black px-3 py-1 rounded-xl outline-hidden focus:ring-2 focus:ring-blue-500/30"
-                              autoFocus
-                            />
-                            <button 
-                              onClick={handleSaveStudentName}
-                              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3 py-1 rounded-xl transition cursor-pointer"
-                            >
-                              Save
-                            </button>
-                            <button 
-                              onClick={() => setIsEditingStudentName(false)}
-                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold px-2 py-1 rounded-xl transition cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
-                              {currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
-                            </h2>
-                            <button 
-                              onClick={() => {
-                                setTempStudentName(currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner');
-                                setIsEditingStudentName(true);
-                              }}
-                              className="text-zinc-500 hover:text-blue-400 p-1 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 transition cursor-pointer"
-                              title="Edit Name (नाम सच्याउनुहोस्)"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Official Verified Student">
-                              <Check className="w-2.5 h-2.5 stroke-[3]" />
-                            </span>
-                          </div>
-                        )}
+                        {/* Registered Student Name (Fixed / Non-editable) */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
+                            {currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
+                          </h2>
+                          <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Official Verified Student">
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          </span>
+                          <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-semibold px-2 py-0.5 rounded-md flex items-center gap-1" title="नाम परिवर्तन गर्न मिल्दैन (Name is permanently registered)">
+                            🔒 Registered
+                          </span>
+                        </div>
 
                         <p className="text-xs text-zinc-400 font-medium">
                           {siteSettings.instituteName || 'AI Clipzone Nepal'} • लाइफटाइम डिजिटल लर्निङ पास
@@ -7529,6 +7509,7 @@ export default function App() {
           showToast={showToast}
           isAdmin={isAdminActivated || isFirebaseUserAdmin(currentUser?.email)}
           allActivationKeys={allActivationKeys}
+          studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
         />
       )}
 

@@ -51,6 +51,7 @@ interface AskChatModalProps {
   allActivationKeys?: any[];
   hasActivatedCourse?: boolean;
   onOpenActivationModal?: () => void;
+  studentAvatar?: string;
 }
 
 const QUICK_QUESTION_CHIPS = [
@@ -83,7 +84,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   isAdmin = false,
   allActivationKeys = [],
   hasActivatedCourse = false,
-  onOpenActivationModal
+  onOpenActivationModal,
+  studentAvatar = ''
 }) => {
   // Helper to ensure name is a real student name - strictly never "Student Learner" or generic placeholder
   const cleanRealName = (name: string | undefined | null): string => {
@@ -213,6 +215,20 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       setStudentClearedAt(local);
     }
   }, [effectiveUserId, currentUserId]);
+
+  // Sync student avatar to conversation in Firestore so admin sees it in Ask
+  useEffect(() => {
+    const targetUid = effectiveUserId || currentUserId;
+    const effectivePhoto = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
+    if (!isAdmin && targetUid && effectivePhoto) {
+      try {
+        setDoc(doc(db, 'support_conversations', targetUid), {
+          userAvatar: effectivePhoto,
+          updatedAt: Date.now()
+        }, { merge: true }).catch(() => {});
+      } catch (e) {}
+    }
+  }, [isOpen, isAdmin, effectiveUserId, currentUserId, studentAvatar]);
 
   // Listen to student conversation doc for remote cleared timestamp
   useEffect(() => {
@@ -367,6 +383,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             userName: resolvedName,
             userEmail: d.userEmail || (matchedKey?.claimedByEmail || ''),
             userPhone: d.userPhone || '',
+            userAvatar: d.userAvatar || (matchedKey?.studentAvatar || ''),
             purchasedCourses: d.purchasedCourses || (d.activeCourse ? [d.activeCourse] : []),
             lastMessage: d.lastMessage || '',
             lastMessageAt: d.lastMessageAt || Date.now(),
@@ -390,8 +407,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               studentContactMap.set(dedupKey, {
                 ...existing,
                 ...convObj,
+                userAvatar: convObj.userAvatar || existing.userAvatar || '',
                 purchasedCourses: Array.from(new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])]))
               });
+            } else if (convObj.userAvatar && !existing.userAvatar) {
+              existing.userAvatar = convObj.userAvatar;
             }
           }
         });
@@ -483,6 +503,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             conversationId: selectedAdminConvId,
             sender: d.sender || 'user',
             senderName: d.senderName || 'Student',
+            senderAvatar: d.senderAvatar || d.userAvatar || '',
             text: d.text || '',
             timestamp: d.timestamp || Date.now(),
             isSeen: d.isSeen ?? false,
@@ -630,12 +651,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
 
     try {
+      const effectiveAvatar = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
       // 1. Add message with status 'sent' and isSeen: false (single/double grey tick initially)
       const messagesRef = collection(db, 'support_conversations', targetUid, 'messages');
       await addDoc(messagesRef, {
         conversationId: targetUid,
         sender: 'user',
         senderName: finalStudentName,
+        senderAvatar: effectiveAvatar || undefined,
         text,
         timestamp: now,
         isSeen: false,
@@ -651,6 +674,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           userId: targetUid,
           userName: finalStudentName,
           userEmail: userEmail || '',
+          userAvatar: effectiveAvatar || undefined,
           activeCourse: activeCourseName || '',
           lastMessage: text,
           lastMessageAt: now,
@@ -929,9 +953,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             }`}
                           >
                             <div className="relative shrink-0">
-                              <div className="w-12 h-12 rounded-full bg-[#6a7b83] text-[#111b21] font-bold text-base flex items-center justify-center shadow-xs">
-                                {initialLetter}
-                              </div>
+                              {conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:')) ? (
+                                <img
+                                  src={conv.userAvatar}
+                                  alt={conv.userName}
+                                  className="w-12 h-12 rounded-full object-cover shadow-xs border border-zinc-700"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-[#6a7b83] text-[#111b21] font-bold text-base flex items-center justify-center shadow-xs">
+                                  {initialLetter}
+                                </div>
+                              )}
                               {hasUnread && (
                                 <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-red-600 text-[11px] font-black text-white flex items-center justify-center px-1 shadow-md ring-2 ring-[#111b21] animate-pulse">
                                   {conv.unreadAdminCount > 99 ? '99+' : conv.unreadAdminCount}
@@ -990,9 +1022,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       {/* Active Chat Header */}
                       <div className="bg-[#202c33] border-b border-[#222d34] px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#6a7b83] text-[#111b21] font-bold text-sm flex items-center justify-center">
-                            {(selectedAdminConv.userName || 'S').charAt(0).toUpperCase()}
-                          </div>
+                          {selectedAdminConv.userAvatar && (selectedAdminConv.userAvatar.startsWith('http') || selectedAdminConv.userAvatar.startsWith('data:')) ? (
+                            <img
+                              src={selectedAdminConv.userAvatar}
+                              alt={selectedAdminConv.userName}
+                              className="w-10 h-10 rounded-full object-cover shadow-xs border border-zinc-700 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-[#6a7b83] text-[#111b21] font-bold text-sm flex items-center justify-center shrink-0">
+                              {(selectedAdminConv.userName || 'S').charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <h4 className="font-semibold text-sm text-[#e9edef]">
                               {selectedAdminConv.userName}

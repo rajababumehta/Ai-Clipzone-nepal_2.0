@@ -180,6 +180,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             userName: resolvedName,
             userEmail: d.userEmail || (check.keyMatch?.claimedByEmail || ''),
             userPhone: d.userPhone || '',
+            userAvatar: d.userAvatar || (check.keyMatch?.studentAvatar || ''),
             activeCourse: activeCourseTitle,
             purchasedCourses: [activeCourseTitle],
             lastMessage: d.lastMessage || '',
@@ -203,8 +204,11 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               studentContactMap.set(dedupKey, {
                 ...existing,
                 ...convObj,
+                userAvatar: convObj.userAvatar || existing.userAvatar || '',
                 purchasedCourses: Array.from(new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])]))
               });
+            } else if (convObj.userAvatar && !existing.userAvatar) {
+              existing.userAvatar = convObj.userAvatar;
             }
           }
         });
@@ -299,6 +303,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             conversationId: selectedConvId,
             sender: d.sender || 'user',
             senderName: d.senderName || 'Student',
+            senderAvatar: d.senderAvatar || d.userAvatar || '',
             text: d.text || '',
             timestamp: d.timestamp || Date.now(),
             isSeen: d.isSeen ?? false,
@@ -543,9 +548,17 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                   >
                     {/* Student Avatar */}
                     <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-sm">
-                        {firstLetter}
-                      </div>
+                      {conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:')) ? (
+                        <img 
+                          src={conv.userAvatar} 
+                          alt={conv.userName} 
+                          className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-zinc-700/80" 
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-sm">
+                          {firstLetter}
+                        </div>
+                      )}
                       {hasUnread && (
                         <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-[10px] font-black text-white flex items-center justify-center shadow-xs ring-1 ring-black animate-pulse">
                           {conv.unreadAdminCount > 99 ? '99+' : conv.unreadAdminCount}
@@ -599,9 +612,17 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               {/* Active Chat Header */}
               <div className="p-3.5 border-b border-zinc-850 bg-black/60 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-600/30 border border-blue-500/40 text-blue-300 font-black text-sm flex items-center justify-center shrink-0">
-                    {(selectedConv.userName || 'S').charAt(0).toUpperCase()}
-                  </div>
+                  {selectedConv.userAvatar && (selectedConv.userAvatar.startsWith('http') || selectedConv.userAvatar.startsWith('data:')) ? (
+                    <img 
+                      src={selectedConv.userAvatar} 
+                      alt={selectedConv.userName} 
+                      className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-blue-500/40 shrink-0" 
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-2xl bg-blue-600/30 border border-blue-500/40 text-blue-300 font-black text-sm flex items-center justify-center shrink-0">
+                      {(selectedConv.userName || 'S').charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h4 className="font-bold text-sm text-white tracking-tight truncate">
@@ -659,9 +680,17 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                       >
                         <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[75%]">
                           {!isAdminMsg && (
-                            <div className="w-7 h-7 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center text-xs font-bold shrink-0 mb-1 border border-zinc-700">
-                              {(selectedConv.userName || 'S').charAt(0).toUpperCase()}
-                            </div>
+                            (msg.senderAvatar || selectedConv.userAvatar) ? (
+                              <img 
+                                src={msg.senderAvatar || selectedConv.userAvatar} 
+                                alt={msg.senderName} 
+                                className="w-7 h-7 rounded-xl object-cover shrink-0 mb-1 border border-zinc-700 shadow-xs" 
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center text-xs font-bold shrink-0 mb-1 border border-zinc-700">
+                                {(selectedConv.userName || 'S').charAt(0).toUpperCase()}
+                              </div>
+                            )
                           )}
 
                           <div

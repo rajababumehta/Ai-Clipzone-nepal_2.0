@@ -150,6 +150,7 @@ export interface SupportMessage {
   conversationId: string;
   sender: 'user' | 'admin';
   senderName: string;
+  senderAvatar?: string;
   text: string;
   timestamp: number;
   isSeen?: boolean;
@@ -163,6 +164,7 @@ export interface SupportConversation {
   userName: string;
   userEmail?: string;
   userPhone?: string;
+  userAvatar?: string;
   purchasedCourses?: string[];
   lastMessage: string;
   lastMessageAt: number;
