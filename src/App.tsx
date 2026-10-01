@@ -3542,99 +3542,19 @@ export default function App() {
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 mt-2 w-52 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
+                      className="absolute right-0 mt-2 w-44 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
                     >
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
-                          setCurrentView('home');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                          showToast('Welcome Home! 🏠', 'info');
+                          setStudentLogoutConfirmInput('');
+                          setShowStudentLogoutConfirmModal(true);
                         }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold"
                       >
-                        🏠 Home Page
+                        <LogOut className="w-4 h-4 text-rose-400" />
+                        <span>🚪 Log Out</span>
                       </button>
-                      
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setCurrentView('classroom');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                          showToast('Your Course! 🎓', 'info');
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        🎓 Course Page
-                      </button>
-
-                      {isCourseActiveUser && (
-                        <button
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            handleOpenStudentCertificate();
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-amber-300 group"
-                        >
-                          <span className="flex items-center gap-2">📜 Certificate</span>
-                          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-1.5 py-0.5 rounded-full border border-amber-500/30">Verified</span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setCurrentView('account');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-blue-400 group"
-                      >
-                        <span className="flex items-center gap-2">👤 Profile & Account</span>
-                        <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Verified Account">
-                          <Check className="w-2.5 h-2.5 stroke-[3]" />
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setShowNotifCenterModal(true);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 transition flex items-center justify-between cursor-pointer font-bold text-zinc-300"
-                      >
-                        <span className="flex items-center gap-2">🔔 Notifications</span>
-                        {unreadNotifCount > 0 && (
-                          <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
-                            {unreadNotifCount}
-                          </span>
-                        )}
-                      </button>
-
-                      {!isRunningInAppMode && (
-                        <button
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            handleInstallPwa();
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-950/40 text-blue-300 transition flex items-center gap-2.5 cursor-pointer font-extrabold border-t border-zinc-800/80 mt-0.5"
-                        >
-                          📲 Install PWA App
-                        </button>
-                      )}
-
-                      {(currentUser || localStorage.getItem('clipzone_student_name') || activeCourseIds.length > 0) && (
-                        <button
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            setStudentLogoutConfirmInput('');
-                            setShowStudentLogoutConfirmModal(true);
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold border-t border-zinc-800/80 mt-1"
-                        >
-                          <LogOut className="w-4 h-4 text-rose-400" />
-                          <span>🚪 Log Out</span>
-                        </button>
-                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
