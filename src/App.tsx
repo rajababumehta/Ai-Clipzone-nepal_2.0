@@ -3543,14 +3543,6 @@ export default function App() {
 
       {/* Top Header & Navigation Container */}
       <div className="sticky top-0 z-[100] w-full shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
-        {/* Offline Status Banner */}
-        {!isNetworkOnline && (
-          <div className="w-full bg-gradient-to-r from-amber-950/90 via-zinc-900 to-amber-950/90 text-amber-300 text-xs font-bold py-1.5 px-4 text-center border-b border-amber-500/30 flex items-center justify-center gap-2 shadow-md">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            <span>📶 अफलाइन मोड (Offline Mode) • तपाईंका एक्टिभ कोर्षहरू पूर्ण सुरक्षित छन्।</span>
-          </div>
-        )}
-
         {/* Dynamic Global Notice Banner from Admin Settings (Red Urgency Notice) */}
         {siteSettings.showNoticeBanner && siteSettings.noticeBannerText && (
           <div className="w-full bg-gradient-to-r from-black via-rose-950/90 to-black text-rose-200 text-xs font-bold py-1.5 px-4 text-center border-b border-rose-500/30 flex items-center justify-center gap-2 shadow-md">
