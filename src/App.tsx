@@ -176,6 +176,26 @@ function getSecureYouTubeEmbedUrl(url: string, autoplay: boolean = false): strin
   return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}&autoplay=${autoplay ? 1 : 0}`;
 }
 
+export function isCourseKeyExpired(key: any): boolean {
+  if (!key) return true;
+  if (key.status === 'expired' || key.isExpired === true) return true;
+  const now = Date.now();
+  if (key.expiresAt && Number(key.expiresAt) > 0 && now >= Number(key.expiresAt)) {
+    return true;
+  }
+  if (key.claimedAt && Number(key.claimedAt) > 0) {
+    const durationMs = key.duration === '1day' 
+      ? (24 * 3600000) 
+      : key.duration === '1month' 
+        ? (30 * 86400000) 
+        : (365 * 86400000);
+    if (now >= Number(key.claimedAt) + durationMs) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export default function App() {
   // Toast banner state & helper (hoisted at top of App for guaranteed availability to all hooks and handlers)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -268,7 +288,26 @@ export default function App() {
   });
   const [activeCourseIds, setActiveCourseIds] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      const localKeysInfo: any[] = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+      // Exclude expired courses on initial load
+      const valid = localActivated.filter((cId: string) => {
+        const courseKeys = localKeysInfo.filter((k: any) => k.courseId === cId || k.courseId === 'course-all');
+        if (courseKeys.length > 0) {
+          return courseKeys.some((k: any) => !isCourseKeyExpired(k));
+        }
+        if (localKeysInfo.length > 0) {
+          const anyActiveKey = localKeysInfo.some((k: any) => !isCourseKeyExpired(k));
+          if (!anyActiveKey) return false;
+        }
+        return true;
+      });
+      if (valid.length !== localActivated.length) {
+        try {
+          localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(valid));
+        } catch (e) {}
+      }
+      return valid;
     } catch (e) {
       return [];
     }
@@ -1151,8 +1190,38 @@ export default function App() {
             showToast(`❌ यो कोर्स कोड एड्मिनद्वारा हटाइएको छ (Course code ${code} deleted from database)`, 'error');
           } else {
             const keyData = docSnap.data();
-            // Check if admin triggered explicit logout for this specific key
-            if (keyData.forceLogoutAt && userLoginTime > 0 && keyData.forceLogoutAt > userLoginTime) {
+            const durationMs = keyData.duration === '1day' 
+              ? (24 * 60 * 60 * 1000) 
+              : keyData.duration === '1month' 
+                ? (30 * 24 * 60 * 60 * 1000) 
+                : (365 * 24 * 60 * 60 * 1000);
+            const keyExp = keyData.expiresAt || (keyData.claimedAt ? keyData.claimedAt + durationMs : 0);
+            const isKeyExpired = keyData.status === 'expired' || (keyExp > 0 && Date.now() > keyExp);
+
+            if (isKeyExpired) {
+              const currentCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+              const filteredCodes = currentCodes.filter(c => c !== code);
+              localStorage.setItem('clipzone_active_codes', JSON.stringify(filteredCodes));
+
+              const localKeysInfo: any[] = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+              const matchedKeyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+              const targetCourseId = keyData.courseId || matchedKeyInfo?.courseId;
+
+              if (targetCourseId) {
+                const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+                const updatedActivated = localActivated.filter(id => id !== targetCourseId);
+                localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+                setActiveCourseIds(updatedActivated);
+              }
+
+              const updatedKeysInfo = localKeysInfo.map((k: any) => (k.code || k.id) === code ? { ...k, isExpired: true, status: 'expired', expiresAt: keyExp } : k);
+              localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeysInfo));
+              setUserActivationKeys(updatedKeysInfo);
+
+              setFullscreenVideo(prev => (prev && (!targetCourseId || prev.courseId === targetCourseId)) ? null : prev);
+
+              showToast(`⚠️ तपाईंको कोर्ष "${keyData.courseTitle || 'Course'}" को म्याद समाप्त भएको छ (Course access expired).`, 'error');
+            } else if (keyData.forceLogoutAt && userLoginTime > 0 && keyData.forceLogoutAt > userLoginTime) {
               const currentCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
               const filteredCodes = currentCodes.filter(c => c !== code);
               localStorage.setItem('clipzone_active_codes', JSON.stringify(filteredCodes));
@@ -1203,6 +1272,86 @@ export default function App() {
       unsubs.forEach(u => u());
     };
   }, [activeCourseIds]);
+
+  // Periodic check for course expirations every 10s and on tab focus
+  useEffect(() => {
+    const checkCourseExpirations = () => {
+      try {
+        const localKeys: any[] = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+        if (!localKeys || localKeys.length === 0) return;
+
+        let changed = false;
+        const now = Date.now();
+        const expiredCourseIds: string[] = [];
+
+        const updatedKeys = localKeys.map((k: any) => {
+          const expired = isCourseKeyExpired(k);
+          if (expired) {
+            if (k.courseId) expiredCourseIds.push(k.courseId);
+            if (!k.isExpired || k.status !== 'expired') {
+              changed = true;
+              return { ...k, isExpired: true, status: 'expired', expiresAt: k.expiresAt || now };
+            }
+          }
+          return k;
+        });
+
+        if (changed || expiredCourseIds.length > 0) {
+          setActiveCourseIds(prev => {
+            const next = prev.filter(cId => {
+              const hasActiveKey = updatedKeys.some((k: any) => 
+                (k.courseId === cId || k.courseId === 'course-all') && !isCourseKeyExpired(k)
+              );
+              return hasActiveKey;
+            });
+            if (next.length !== prev.length) {
+              try {
+                localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(next));
+              } catch (e) {}
+              return next;
+            }
+            return prev;
+          });
+
+          if (changed) {
+            try {
+              localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeys));
+              setUserActivationKeys(updatedKeys);
+
+              const localActiveCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+              const unexpiredCodes = localActiveCodes.filter(c => {
+                const found = updatedKeys.find((k: any) => (k.code || k.id) === c);
+                return !found || !isCourseKeyExpired(found);
+              });
+              localStorage.setItem('clipzone_active_codes', JSON.stringify(unexpiredCodes));
+
+              updatedKeys.forEach((k: any) => {
+                if (isCourseKeyExpired(k) && (k.code || k.id)) {
+                  updateDoc(doc(db, 'activation_keys', k.code || k.id), { status: 'expired' }).catch(() => {});
+                }
+              });
+
+              showToast('⚠️ तपाईंको कोर्षको म्याद समाप्त भएको छ (Course access expired).', 'error');
+            } catch (err) {}
+          }
+        }
+      } catch (e) {
+        console.warn('Expiration check error:', e);
+      }
+    };
+
+    checkCourseExpirations();
+    const interval = setInterval(checkCourseExpirations, 10000);
+    const handleFocus = () => checkCourseExpirations();
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, []);
 
   // Fetch student's keys
   // Prevent context-menu, copy events and keyboard inspector shortcuts for security/copy protection
@@ -1282,6 +1431,23 @@ export default function App() {
               continue; // Exclude deleted by Admin
             }
 
+            // Expiration check
+            const durationMs = data.duration === '1day' 
+              ? (24 * 60 * 60 * 1000) 
+              : data.duration === '1month' 
+                ? (30 * 24 * 60 * 60 * 1000) 
+                : (365 * 24 * 60 * 60 * 1000);
+            const keyExpiresAt = data.expiresAt || (data.claimedAt ? data.claimedAt + durationMs : 0);
+            const isKeyExpired = data.status === 'expired' || (keyExpiresAt > 0 && Date.now() > keyExpiresAt);
+
+            if (isKeyExpired) {
+              if (data.status !== 'expired') {
+                updateDoc(doc(db, 'activation_keys', code), { status: 'expired' }).catch(() => {});
+              }
+              verifiedKeys.push({ id: keySnap.id, code: keySnap.id, ...data, isExpired: true, expiresAt: keyExpiresAt, status: 'expired' });
+              continue; // Exclude expired course from verifiedCourseIds
+            }
+
             // Sync deviceId if not set or matches
             if (!data.activeDeviceId) {
               updateDoc(doc(db, 'activation_keys', code), { activeDeviceId: deviceId }).catch(() => {});
@@ -1334,11 +1500,21 @@ export default function App() {
           const qSnap = await getDocs(q);
           qSnap.forEach((docSnap) => {
             const data = docSnap.data();
+            const durationMs = data.duration === '1day' ? 24 * 3600000 : data.duration === '1month' ? 30 * 86400000 : 365 * 86400000;
+            const keyExpiresAt = data.expiresAt || (data.claimedAt ? data.claimedAt + durationMs : 0);
+            const isKeyExpired = data.status === 'expired' || (keyExpiresAt > 0 && Date.now() > keyExpiresAt);
+
             if (data.status === 'used' && (!data.forceLogoutAt || data.forceLogoutAt <= userLoginTime)) {
-              if (!verifiedKeys.some(k => (k.code || k.id) === docSnap.id)) {
-                verifiedKeys.push({ id: docSnap.id, code: docSnap.id, ...data });
+              if (isKeyExpired) {
+                if (!verifiedKeys.some(k => (k.code || k.id) === docSnap.id)) {
+                  verifiedKeys.push({ id: docSnap.id, code: docSnap.id, ...data, isExpired: true, expiresAt: keyExpiresAt, status: 'expired' });
+                }
+              } else {
+                if (!verifiedKeys.some(k => (k.code || k.id) === docSnap.id)) {
+                  verifiedKeys.push({ id: docSnap.id, code: docSnap.id, ...data });
+                }
+                if (data.courseId) verifiedCourseIds.add(data.courseId);
               }
-              if (data.courseId) verifiedCourseIds.add(data.courseId);
             }
           });
         } catch (e) {}
@@ -1349,21 +1525,11 @@ export default function App() {
       setSecondaryCourseIds(secArr);
       localStorage.setItem('clipzone_secondary_course_ids', JSON.stringify(secArr));
 
-      if (verifiedCourseIds.size > 0) {
-        const finalActiveIds = Array.from(verifiedCourseIds);
-        setUserActivationKeys(verifiedKeys);
-        localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(verifiedKeys));
-        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
-        setActiveCourseIds(finalActiveIds);
-      } else if (localActivatedCourses.length > 0) {
-        // Network query yielded 0 confirmed keys (offline, network latency, or cache miss)
-        // STRICTLY PRESERVE existing active courses!
-        setActiveCourseIds(localActivatedCourses);
-        setUserActivationKeys(localKeysInfo);
-      } else if (activeCodes.length === 0) {
-        setActiveCourseIds([]);
-        setUserActivationKeys([]);
-      }
+      const finalActiveIds = Array.from(verifiedCourseIds);
+      setUserActivationKeys(verifiedKeys);
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(verifiedKeys));
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
+      setActiveCourseIds(finalActiveIds);
     } catch (err) {
       console.error('Error fetching student keys:', err);
       setActiveCourseIds(localActivatedCourses);
@@ -1753,6 +1919,21 @@ export default function App() {
         }
       }
 
+      // Expiration check on entered code
+      const durationMs = keyData?.duration === '1day' 
+        ? (24 * 60 * 60 * 1000) 
+        : keyData?.duration === '1month' 
+          ? (30 * 24 * 60 * 60 * 1000) 
+          : (365 * 24 * 60 * 60 * 1000);
+      const calculatedExpiresAt = keyData?.expiresAt || (keyData?.claimedAt ? keyData.claimedAt + durationMs : 0);
+      const isAlreadyExpired = keyData?.status === 'expired' || (calculatedExpiresAt > 0 && Date.now() > calculatedExpiresAt);
+
+      if (isAlreadyExpired) {
+        showToast('⚠️ यो कोडको म्याद समाप्त भइसकेको छ! (This activation code has expired!)', 'error');
+        setIsActivating(false);
+        return;
+      }
+
       // Single-device login check:
       if (keyData && keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
         showToast('यो कोड पहिले नै अर्को डिभाइसमा एक्टिभ छ! कृपया पहिले त्यहाँबाट लगआउट गर्नुहोस्। (This code is already active on another device!)', 'error');
@@ -1795,7 +1976,7 @@ export default function App() {
             updatePayload.studentName = assignedStudentName;
             updatePayload.claimedByEmail = assignedStudentName;
             updatePayload.claimedAt = Date.now();
-            updatePayload.expiresAt = Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000);
+            updatePayload.expiresAt = Date.now() + durationMs;
           } else if (!isSecondaryLogin) {
             updatePayload.studentName = assignedStudentName;
           }
@@ -1842,7 +2023,6 @@ export default function App() {
       }
 
       // Save key metadata object locally for student profile dates
-      const durationMs = keyData?.duration === '1month' ? (30 * 24 * 60 * 60 * 1000) : (365 * 24 * 60 * 60 * 1000);
       const keyExp = keyData?.expiresAt || (claimNow + durationMs);
 
       const newKeyObj = {
@@ -1853,7 +2033,8 @@ export default function App() {
         studentName: assignedStudentName,
         claimedAt: claimNow,
         expiresAt: keyExp,
-        duration: keyData?.duration || '1year'
+        duration: keyData?.duration || '1year',
+        status: 'used'
       };
 
       const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
@@ -1909,7 +2090,7 @@ export default function App() {
     courseId: string, 
     autoCopy: boolean = true, 
     studentNameArg?: string, 
-    durationArg?: '1month' | '1year'
+    durationArg?: '1day' | '1month' | '1year'
   ) => {
     let targetCourseId = courseId;
     if (!targetCourseId && courses && courses.length > 0) {
@@ -2154,6 +2335,61 @@ export default function App() {
         localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
         setActiveCourseIds(updatedActivated);
       }
+    }
+  };
+
+  // ADMIN HANDLER: EXPIRE A SPECIFIC USER/KEY IMMEDIATELY
+  const handleExpireKey = async (code: string) => {
+    const expireTime = Date.now();
+    try {
+      await updateDoc(doc(db, 'activation_keys', code), {
+        status: 'expired',
+        isExpired: true,
+        expiresAt: expireTime
+      });
+      showToast(`Key ${code} marked as EXPIRED! ⏰`, 'success');
+    } catch (err) {
+      console.error('Failed to expire key in Firestore:', err);
+      showToast(`Key ${code} marked as expired locally.`, 'info');
+    }
+
+    // Update local admin cache and state immediately
+    setAllActivationKeys(prev => {
+      const updated = prev.map(k => {
+        if ((k.code || k.id) === code) {
+          return { ...k, status: 'expired', isExpired: true, expiresAt: expireTime };
+        }
+        return k;
+      });
+      try {
+        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // Also expire immediately on current device if this user was using this key
+    const activeCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+    if (activeCodes.includes(code)) {
+      const updatedCodes = activeCodes.filter(c => c !== code);
+      localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedCodes));
+
+      const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+      const keyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+      const updatedKeysInfo = localKeysInfo.map((k: any) => 
+        (k.code || k.id) === code ? { ...k, status: 'expired', isExpired: true, expiresAt: expireTime } : k
+      );
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeysInfo));
+      setUserActivationKeys(updatedKeysInfo);
+
+      if (keyInfo && keyInfo.courseId) {
+        const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        const updatedActivated = localActivated.filter((id: string) => id !== keyInfo.courseId);
+        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+        setActiveCourseIds(updatedActivated);
+      }
+      
+      // Stop video playback if playing
+      setFullscreenVideo(null);
     }
   };
 
@@ -2574,6 +2810,16 @@ export default function App() {
   const askUnreadCount = isUserAdminSession ? adminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
+
+  // Video playback security guard: terminate fullscreen playback if access expired
+  useEffect(() => {
+    if (fullscreenVideo && fullscreenVideo.courseId && !isUserAdminSession) {
+      if (!activeCourseIds.includes(fullscreenVideo.courseId)) {
+        setFullscreenVideo(null);
+        showToast('⚠️ कोर्षको म्याद समाप्त भएकोले भिडियो बन्द गरिएको छ (Access expired).', 'error');
+      }
+    }
+  }, [activeCourseIds, fullscreenVideo, isUserAdminSession]);
 
   // Open Certificate with strict validation:
   // 1. User must have an active/enrolled course (only activated courses can be viewed)
@@ -3886,7 +4132,7 @@ export default function App() {
                   ) : (
                     <div className="space-y-4">
                       {courses
-                        .filter(course => activeCourseIds.includes(course.id))
+                        .filter(course => activeCourseIds.includes(course.id) && !userActivationKeys.some((k: any) => k.courseId === course.id && isCourseKeyExpired(k)))
                         .map((course) => {
                           const keyInfo = userActivationKeys.find((k: any) => k.courseId === course.id) || 
                             (() => {
@@ -4067,6 +4313,115 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                {/* EXPIRED COURSES LIST (IF ANY COURSE ACCESS HAS EXPIRED) */}
+                {(() => {
+                  const expiredCoursesList = courses.filter(course => 
+                    !activeCourseIds.includes(course.id) &&
+                    userActivationKeys.some((k: any) => 
+                      (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase())) &&
+                      isCourseKeyExpired(k)
+                    )
+                  );
+
+                  if (expiredCoursesList.length === 0) return null;
+
+                  return (
+                    <div className="space-y-4 pt-4 border-t border-rose-500/20">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm sm:text-base font-black text-rose-400 flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-rose-500" />
+                          <span>म्याद समाप्त भएका कोर्सहरू (Expired Courses • {expiredCoursesList.length})</span>
+                        </h3>
+                        <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          Expired
+                        </span>
+                      </div>
+
+                      <div className="space-y-4">
+                        {expiredCoursesList.map((course) => {
+                          const keyInfo = userActivationKeys.find((k: any) => 
+                            (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase()))
+                          );
+                          const enrolledTimestamp = keyInfo?.claimedAt || keyInfo?.createdAt || Date.now();
+                          const expiresTimestamp = keyInfo?.expiresAt || enrolledTimestamp;
+                          const enrolledDateStr = new Date(enrolledTimestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                          const expiredDateStr = new Date(expiresTimestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                          const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                          const keyCode = keyInfo?.code || keyInfo?.id || '';
+
+                          return (
+                            <div key={course.id} className="bg-zinc-950 border-2 border-rose-500/30 rounded-3xl overflow-hidden shadow-2xl p-4 sm:p-6 space-y-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex items-start sm:items-center gap-4 min-w-0">
+                                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 border border-rose-500/30 bg-zinc-900 shadow-md relative opacity-80">
+                                    {course.image ? (
+                                      <img src={course.image} alt={cleanTitle} className="w-full h-full object-cover grayscale" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-2xl bg-rose-600/20 text-rose-400">⏰</div>
+                                    )}
+                                    <span className="absolute bottom-0 inset-x-0 bg-rose-600 text-[8px] font-black uppercase text-center text-white py-0.5">
+                                      EXPIRED
+                                    </span>
+                                  </div>
+                                  <div className="min-w-0 space-y-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="bg-rose-500/15 text-rose-400 border border-rose-500/30 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> म्याद समाप्त (ACCESS EXPIRED)
+                                      </span>
+                                      <span className="bg-zinc-900 text-zinc-400 text-[9px] font-bold px-2 py-0.5 rounded-full border border-zinc-800">
+                                        🎬 {course.videos?.length || 0} Lectures
+                                      </span>
+                                    </div>
+                                    <h4 className="text-base sm:text-xl font-black text-zinc-300 leading-snug tracking-tight">
+                                      {cleanTitle}
+                                    </h4>
+                                    <p className="text-xs text-rose-400/80 font-medium">
+                                      यो कोर्षको म्याद समाप्त भइसकेको छ। कृपया पुनः पहुँच पाउन नयाँ कोड सक्रिय गर्नुहोस्।
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2.5 shrink-0 justify-end">
+                                  <button
+                                    onClick={() => {
+                                      setActivationCodeInput('');
+                                      setShowCodeInputModal(true);
+                                      showToast(`Renew access for "${cleanTitle}". Enter your new secret code.`, 'info');
+                                    }}
+                                    className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs px-4 py-2.5 rounded-2xl shadow-lg shadow-rose-600/25 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+                                  >
+                                    <Zap className="w-3.5 h-3.5 fill-white" />
+                                    <span>Renew Access (म्याद नवीकरण)</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="bg-zinc-900/80 border border-zinc-850 p-3 sm:p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3 items-center text-xs">
+                                <div>
+                                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                                    🔑 Previous Key:
+                                  </span>
+                                  <span className="font-mono font-bold text-zinc-400 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
+                                    {keyCode || 'EXPIRED-KEY'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                                    📅 अवधि:
+                                  </span>
+                                  <span className="font-bold text-rose-400">
+                                    {enrolledDateStr} - {expiredDateStr} (Expired)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* 5. ADD ANOTHER COURSE (Unlock with New Code) */}
                 <div className="bg-zinc-950 border border-zinc-800/80 p-5 sm:p-6 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
@@ -4489,47 +4844,123 @@ export default function App() {
               )}
             </div>
           ) : (
-            /* ==================== CLASSROOM EMPTY STATE ==================== */
-            <div className="max-w-xl mx-auto bg-black p-8 rounded-3xl border border-zinc-800 shadow-2xl text-center space-y-6 my-8">
-              <div className="w-16 h-16 bg-blue-500/15 border border-blue-500/30 text-blue-400 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
-                🗝️
-              </div>
-              <div>
-                <h4 className="text-lg font-extrabold text-white font-sans">Activate Your Premium Course Access</h4>
-                <p className="text-xs text-zinc-400 mt-2 max-w-sm mx-auto leading-relaxed font-semibold">
-                  तपाईंसँग भएको Secret Activation Code यहाँ राखी आफ्नो कोर्ष अनलक गर्नुहोस्।
-                </p>
-              </div>
+            /* ==================== CLASSROOM EMPTY / EXPIRED STATE ==================== */
+            (() => {
+              const expiredKeysList = userActivationKeys.filter(k => isCourseKeyExpired(k));
+              const hasExpiredCourseAccess = expiredKeysList.length > 0;
 
-              <form onSubmit={handleClaimActivationCode} className="space-y-3">
-                <input 
-                  type="text"
-                  value={activationCodeInput}
-                  onChange={(e) => setActivationCodeInput(e.target.value)}
-                  placeholder="CLIP-XXXXXX"
-                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
-                />
-                <button
-                  type="submit"
-                  disabled={isActivating || !activationCodeInput.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-3.5 rounded-2xl text-xs transition cursor-pointer shadow-lg shadow-blue-500/20 font-sans active:scale-[0.99]"
-                >
-                  {isActivating ? 'Activating Course...' : 'Unlock Instant Access ⚡'}
-                </button>
-              </form>
+              return hasExpiredCourseAccess ? (
+                <div className="max-w-xl mx-auto bg-gradient-to-b from-rose-950/30 via-zinc-950 to-black p-6 sm:p-8 rounded-3xl border border-rose-500/40 shadow-2xl text-center space-y-6 my-8">
+                  <div className="w-16 h-16 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
+                    ⏰
+                  </div>
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-black uppercase tracking-wider">
+                      <Clock className="w-3.5 h-3.5" />
+                      Course Access Expired • म्याद समाप्त भयो
+                    </span>
+                    <h4 className="text-xl sm:text-2xl font-black text-white font-sans">
+                      तपाईंको कोर्षको म्याद समाप्त भएको छ
+                    </h4>
+                    <p className="text-xs text-zinc-300 leading-relaxed font-medium max-w-sm mx-auto">
+                      तपाईंको कोर्षको समयावधि सकिएको छ। पुनः भिडियो कक्षाहरू हेर्न नयाँ Secret Activation Code राख्नुहोस् वा एडमिनसँग सम्पर्क गर्नुहोस्।
+                    </p>
+                  </div>
 
-              <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-center gap-2">
-                <button 
-                  onClick={() => {
-                    setCurrentView('home');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="text-xs font-black text-blue-400 hover:text-blue-300 transition flex items-center gap-1 cursor-pointer font-sans"
-                >
-                  🌐 Browse All Available Courses First
-                </button>
-              </div>
-            </div>
+                  {/* Expired Course Summary Badges */}
+                  <div className="space-y-2 text-left bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                      📚 Expired Course List:
+                    </span>
+                    {expiredKeysList.map((k, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 py-1 border-b border-zinc-800 last:border-b-0 text-xs">
+                        <span className="font-bold text-white truncate">
+                          {k.courseTitle || 'Premium Course'}
+                        </span>
+                        <span className="text-[10px] font-mono text-rose-400 shrink-0 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-800/60">
+                          Expired: {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : 'Expired'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Instant Reactivation Form */}
+                  <form onSubmit={handleClaimActivationCode} className="space-y-3 pt-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-zinc-300">
+                      नयाँ सेक्रेट कोड राख्नुहोस् (Enter New Secret Code)
+                    </label>
+                    <input 
+                      type="text"
+                      value={activationCodeInput}
+                      onChange={(e) => setActivationCodeInput(e.target.value)}
+                      placeholder="CLIP-XXXXXX"
+                      className="w-full bg-zinc-950 border border-rose-500/40 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isActivating || !activationCodeInput.trim()}
+                      className="w-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white font-black py-3.5 rounded-2xl text-xs transition cursor-pointer shadow-lg shadow-rose-600/20 font-sans active:scale-[0.99] flex items-center justify-center gap-2"
+                    >
+                      <Zap className="w-4 h-4 fill-white" />
+                      {isActivating ? 'Renewing Course...' : 'Renew & Unlock Course Access ⚡'}
+                    </button>
+                  </form>
+
+                  <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-center gap-2">
+                    <button 
+                      onClick={() => {
+                        setCurrentView('home');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="text-xs font-black text-blue-400 hover:text-blue-300 transition flex items-center gap-1 cursor-pointer font-sans"
+                    >
+                      🌐 Browse All Available Courses First
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-w-xl mx-auto bg-black p-8 rounded-3xl border border-zinc-800 shadow-2xl text-center space-y-6 my-8">
+                  <div className="w-16 h-16 bg-blue-500/15 border border-blue-500/30 text-blue-400 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
+                    🗝️
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-extrabold text-white font-sans">Activate Your Premium Course Access</h4>
+                    <p className="text-xs text-zinc-400 mt-2 max-w-sm mx-auto leading-relaxed font-semibold">
+                      तपाईंसँग भएको Secret Activation Code यहाँ राखी आफ्नो कोर्ष अनलक गर्नुहोस्।
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleClaimActivationCode} className="space-y-3">
+                    <input 
+                      type="text"
+                      value={activationCodeInput}
+                      onChange={(e) => setActivationCodeInput(e.target.value)}
+                      placeholder="CLIP-XXXXXX"
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isActivating || !activationCodeInput.trim()}
+                      className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-3.5 rounded-2xl text-xs transition cursor-pointer shadow-lg shadow-blue-500/20 font-sans active:scale-[0.99]"
+                    >
+                      {isActivating ? 'Activating Course...' : 'Unlock Instant Access ⚡'}
+                    </button>
+                  </form>
+
+                  <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-center gap-2">
+                    <button 
+                      onClick={() => {
+                        setCurrentView('home');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="text-xs font-black text-blue-400 hover:text-blue-300 transition flex items-center gap-1 cursor-pointer font-sans"
+                    >
+                      🌐 Browse All Available Courses First
+                    </button>
+                  </div>
+                </div>
+              );
+            })()
           )
         ) : isCoursesLoading && (!courses || courses.length === 0) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
@@ -4626,6 +5057,11 @@ export default function App() {
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                               Course Activated
                             </span>
+                          ) : userActivationKeys.some((k: any) => (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase())) && isCourseKeyExpired(k)) ? (
+                            <span className="bg-rose-950/80 text-rose-300 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-rose-500/40 flex items-center gap-1.5 shadow-2xs">
+                              <Clock className="w-3 h-3 text-rose-400" />
+                              Access Expired (म्याद समाप्त)
+                            </span>
                           ) : (
                             <div className="flex items-baseline gap-2.5">
                               <span className="text-2xl md:text-3xl font-black text-emerald-400">
@@ -4672,26 +5108,39 @@ export default function App() {
 
                       {/* Enrolment / Classroom Access Button */}
                       <div className="mt-8 pt-6 border-t border-zinc-800/80 flex items-center gap-3">
-                        <button
-                          onClick={() => handleEnrollCourse(course)}
-                          className={`flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans ${
-                            activeCourseIds.includes(course.id)
-                              ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20'
-                              : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-zinc-950 shadow-emerald-500/20'
-                          }`}
-                        >
-                          {activeCourseIds.includes(course.id) ? (
-                            <>
-                              🎓 Go to Course
-                              <ArrowRight className="w-4 h-4" />
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="w-4 h-4 text-zinc-950 fill-zinc-950" />
-                              Enroll & Activate Course
-                            </>
-                          )}
-                        </button>
+                        {activeCourseIds.includes(course.id) ? (
+                          <button
+                            onClick={() => {
+                              setSelectedClassroomCourseId(course.id);
+                              setCurrentView('classroom');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20"
+                          >
+                            🎓 Go to Course
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        ) : userActivationKeys.some((k: any) => (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase())) && isCourseKeyExpired(k)) ? (
+                          <button
+                            onClick={() => {
+                              setActivationCodeInput('');
+                              setShowCodeInputModal(true);
+                              showToast(`Renew access for "${course.title}". Enter your new secret code.`, 'info');
+                            }}
+                            className="flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-rose-600 hover:bg-rose-500 text-white shadow-rose-500/20"
+                          >
+                            <Clock className="w-4 h-4" />
+                            Renew Course Access (म्याद नवीकरण)
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleEnrollCourse(course)}
+                            className="flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-zinc-950 shadow-emerald-500/20"
+                          >
+                            <Zap className="w-4 h-4 text-zinc-950 fill-zinc-950" />
+                            Enroll & Activate Course
+                          </button>
+                        )}
 
                         {/* Admin Inline Controls */}
                         {isAdminActivated && (
@@ -6240,6 +6689,7 @@ export default function App() {
         onDeleteKey={handleDeleteActivationKey}
         onDeleteAllKeys={handleDeleteAllKeys}
         onLogoutKey={handleLogoutUserKey}
+        onExpireKey={handleExpireKey}
         onRefreshKeys={fetchAdminKeys}
         onOpenLogoutConfirm={() => {
           setLogoutSecretCodeInput('');

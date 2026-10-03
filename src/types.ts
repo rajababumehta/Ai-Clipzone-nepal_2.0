@@ -120,8 +120,8 @@ export interface ChatMessage {
 export interface ActivationKey {
   id: string; // the unique code e.g. "AI45NP"
   code: string;
-  status: 'unused' | 'used';
-  duration: '1month' | '1year';
+  status: 'unused' | 'used' | 'expired';
+  duration: '1day' | '1month' | '1year';
   createdAt: number;
   claimedByEmail?: string;
   claimedByUid?: string;

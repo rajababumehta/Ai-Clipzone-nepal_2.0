@@ -31,7 +31,8 @@ import {
   MessageSquare,
   CheckSquare,
   Square,
-  ListChecks
+  ListChecks,
+  Clock
 } from 'lucide-react';
 
 import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem } from '../types';
@@ -45,10 +46,11 @@ interface AdminDashboardModalProps {
   courses: Course[];
   // Keys management
   allActivationKeys: any[];
-  onGenerateKey: (courseId: string, autoCopy: boolean, studentName: string, duration: '1month' | '1year') => Promise<void>;
+  onGenerateKey: (courseId: string, autoCopy: boolean, studentName: string, duration: '1day' | '1month' | '1year') => Promise<void>;
   onDeleteKey: (code: string) => Promise<void>;
   onDeleteAllKeys?: () => Promise<void>;
   onLogoutKey?: (code: string) => Promise<void>;
+  onExpireKey?: (code: string) => Promise<void>;
   onRefreshKeys: () => Promise<void>;
   isAdminLoadingKeys: boolean;
   onOpenLogoutConfirm: () => void;
@@ -85,6 +87,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onDeleteKey,
   onDeleteAllKeys,
   onLogoutKey,
+  onExpireKey,
   onRefreshKeys,
   isAdminLoadingKeys,
   onOpenLogoutConfirm,
@@ -193,7 +196,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Keys Tab states
   const [genSelectedCourseId, setGenSelectedCourseId] = useState('');
-  const [genSelectedDuration, setGenSelectedDuration] = useState<'1month' | '1year'>('1year');
+  const [genSelectedDuration, setGenSelectedDuration] = useState<'1day' | '1month' | '1year'>('1year');
   const [genStudentName, setGenStudentName] = useState('');
   const [adminSearchKeyQuery, setAdminSearchKeyQuery] = useState('');
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
@@ -860,28 +863,39 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
                       Key Subscription Duration
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setGenSelectedDuration('1day')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                          genSelectedDuration === '1day' 
+                            ? 'bg-purple-600 border-purple-600 text-white shadow-xs' 
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        24h Test
+                      </button>
                       <button
                         type="button"
                         onClick={() => setGenSelectedDuration('1month')}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
                           genSelectedDuration === '1month' 
                             ? 'bg-purple-600 border-purple-600 text-white shadow-xs' 
                             : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        1 Month Access
+                        1 Month
                       </button>
                       <button
                         type="button"
                         onClick={() => setGenSelectedDuration('1year')}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
                           genSelectedDuration === '1year' 
                             ? 'bg-purple-600 border-purple-600 text-white shadow-xs' 
                             : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        1 Year Access
+                        1 Year
                       </button>
                     </div>
                   </div>
@@ -967,10 +981,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           (k.claimedByEmail || '').toLowerCase().includes(q)
                         );
                       })
-                      .map((key) => (
+                      .map((key) => {
+                        const durationMs = key.duration === '1day' ? 24 * 3600000 : key.duration === '1month' ? 30 * 86400000 : 365 * 86400000;
+                        const keyExpiresAt = key.expiresAt || (key.claimedAt ? key.claimedAt + durationMs : 0);
+                        const isKeyExpired = key.status === 'expired' || (keyExpiresAt > 0 && Date.now() > keyExpiresAt);
+
+                        return (
                         <div 
                           key={key.code || key.id}
-                          className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-xs flex items-start justify-between gap-3 hover:border-purple-300 transition"
+                          className={`border rounded-xl p-3 shadow-xs flex items-start justify-between gap-3 transition ${
+                            isKeyExpired 
+                              ? 'bg-rose-50/40 border-rose-200' 
+                              : 'bg-white border-slate-200/80 hover:border-purple-300'
+                          }`}
                         >
                           <div className="space-y-1.5 grow overflow-hidden">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -987,14 +1010,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 📋 Copy
                               </button>
                               <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${
-                                key.status === 'unused' 
-                                  ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' 
-                                  : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                isKeyExpired
+                                  ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30 font-black'
+                                  : key.status === 'unused' 
+                                    ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' 
+                                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                               }`}>
-                                {key.status}
+                                {isKeyExpired ? 'EXPIRED' : key.status}
                               </span>
                               <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-bold">
-                                {key.duration === '1month' ? '30 Days' : '1 Year'}
+                                {key.duration === '1day' ? '24 Hours' : key.duration === '1month' ? '30 Days' : '1 Year'}
                               </span>
                             </div>
 
@@ -1010,6 +1035,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 <span>Created: {key.createdAt ? new Date(key.createdAt).toLocaleDateString() : 'N/A'}</span>
                                 <span>Claimed: {key.status === 'used' && key.claimedAt ? new Date(key.claimedAt).toLocaleDateString() : 'Unclaimed'}</span>
                                 <span>
+                                  Expiry: {keyExpiresAt ? (isKeyExpired ? <span className="text-rose-600 font-black">Expired ({new Date(keyExpiresAt).toLocaleDateString()})</span> : new Date(keyExpiresAt).toLocaleDateString()) : 'N/A'}
+                                </span>
+                                <span>
                                   Session: {key.activeDeviceId ? (
                                     <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-black text-[8px] uppercase">🟢 Active</span>
                                   ) : (
@@ -1021,6 +1049,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           </div>
 
                           <div className="flex flex-col gap-1.5 shrink-0 items-end">
+                            {/* Expire Key Immediately Button */}
+                            {onExpireKey && key.status === 'used' && !isKeyExpired && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const code = key.code || key.id;
+                                  await onExpireKey(code);
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition shrink-0 cursor-pointer flex items-center gap-1 border bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                                title="Expire this course key immediately"
+                              >
+                                <Clock className="w-3 h-3 text-rose-600" />
+                                <span>Expire Now</span>
+                              </button>
+                            )}
+
                             {/* Logout User Session Button */}
                             <button
                               type="button"
@@ -1053,7 +1097,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             </button>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
