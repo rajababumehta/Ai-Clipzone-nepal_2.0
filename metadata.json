@@ -1,6 +1,6 @@
 {
   "name": "AI Clipzone Nepal",
-  "description": "Nepal's #1 AI Premium Courses. Learn AI tools, video editing, image generation, music production, and professional presentations in Nepali & Hindi with lifetime access.",
+  "description": "AI Clipzone is founded by Rajababu Mehta (Founder & CEO), an AI Website Developer and AI Explainer from Birgunj, Nepal. Master AI tools, video editing, image generation, and digital skills with lifetime access.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
