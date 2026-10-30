@@ -57,24 +57,50 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
 
 export const COURSES: Course[] = [
   {
-    id: "al-master-class-course-by-al-clipzone",
-    title: "Al Master Class Course by Al Clipzone",
+    id: "Ai master class course by Ai clipzone",
+    title: "Ai master class course  by ai clipzone",
     order: 0,
     price: "Rs. 449",
     amount: 449,
-    message: "I want to buy Ai master class by dhruv rather ",
+    message: "I want to buy ai master class course by ai clipzone",
     learn: [
       "30+ Al Tools Mastery",
       "Al Video & Image Generation",
       "Al Songs Creation",
       "Presentation & Website Design"
     ],
-    image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiI6q11UwbnIp-U7yN_NZi3p9W2QuqU4gNTcwUrQHpQ9BjvwRdFd0wRnZke-p9TJfULwJmqx07Qq4tEHuehoBh6ea_Yhfbx9sl4XGKqke1HA43rkqRVYR37fsI5DXmCff4LZZYXUVawHNugWiFNXXyG8J0Wv5uUM5xxcsSv-pOnYX9v37fjy_qEv5p5Zq8l/s1386/2236.png",
+    image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png",
     isPopular: true,
     popularText: "🔥 MOST POPULAR - BEST SELLER",
     language: "Hindi",
-    videos: [],
-    pdfs: []
+    videos: [
+      {
+        videoUrl: "https://youtu.be/QivoSbWmD9o?si=34&t=34",
+        chapterTitle: "Chapter 1: Course Introduction",
+        title: "Ai master class full course by ai clipzone(2026 september 6) ",
+        duration: "3:07:37"
+      },
+      {
+        title: "Ai master class full course by ai clipzone ( 2026 January) ",
+        videoUrl: "https://youtu.be/EqbNaDUVdqA?si=A-5giAweE0pRsPPm",
+        duration: "3:11:13",
+        chapterTitle: "Chapter 1: Course Introduction"
+      }
+    ],
+    pdfs: [
+      {
+        title: "Ai tools & promt technique pdf",
+        chapterTitle: "Chapter 1: Course Notes",
+        pdfUrl: "https://drive.google.com/file/d/1jET6Ddfkgqn26QSisuLhaE3G6AMJw5u2/view?usp=drivesdk",
+        fileSize: "PDF Document"
+      },
+      {
+        fileSize: "PDF Document",
+        pdfUrl: "https://drive.google.com/file/d/1TDQtnir-6HonKOagoi1Vw5mQ9ez1Xu0b/view?usp=drivesdk",
+        chapterTitle: "Chapter 1: Course Notes",
+        title: "Course about pdf ai tools "
+      }
+    ]
   },
   {
     id: "youtube-blueprint-course-by-al-clipzone",
@@ -89,12 +115,12 @@ export const COURSES: Course[] = [
       "Script writing storytelling",
       "Shooting presentation",
       "Editing skills",
-      "Thumbnail title 13",
+      "Thumbnail title",
       "YouTube growth strategy",
       "Monetizationearning methods",
-      "Al tools प्रयोग गरेर content बनाउन े तरिका"
+      "Al tools प्रयोग गरेर content बनाउने  तरिका"
     ],
-    image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgXZL_14KcAVWtUkV6YOCtIePNyDndSmM7r8dFVVyp1QXLTKJzStC3O1pSK3-pwsFKhOE0RLyPfXYUo_S6ARYjLWBuRH0Ao5hipjntJKBptoXhsNU584o_EKJb-JfmGyzn57edya_hzH9RqwBvtQjwGaMIasclVW5BGKE0Uef6nDSgBiqr7diao-4seXWlX/s1600/12843.jpg",
+    image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png",
     isPopular: false,
     language: "Hindi",
     videos: [],

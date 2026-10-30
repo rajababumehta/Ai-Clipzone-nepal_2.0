@@ -290,9 +290,22 @@ export default function App() {
     try {
       const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
       const localKeysInfo: any[] = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+
+      // Auto-bridge course ID aliases (e.g. legacy vs updated IDs)
+      const expandedActivated = [...localActivated];
+      if (expandedActivated.includes('al-master-class-course-by-al-clipzone') && !expandedActivated.includes('Ai master class course by Ai clipzone')) {
+        expandedActivated.push('Ai master class course by Ai clipzone');
+      } else if (expandedActivated.includes('Ai master class course by Ai clipzone') && !expandedActivated.includes('al-master-class-course-by-al-clipzone')) {
+        expandedActivated.push('al-master-class-course-by-al-clipzone');
+      }
+
       // Exclude expired courses on initial load
-      const valid = localActivated.filter((cId: string) => {
-        const courseKeys = localKeysInfo.filter((k: any) => k.courseId === cId || k.courseId === 'course-all');
+      const valid = expandedActivated.filter((cId: string) => {
+        const courseKeys = localKeysInfo.filter((k: any) => 
+          k.courseId === cId || 
+          k.courseId === 'course-all' ||
+          (cId.toLowerCase().includes('master') && k.courseId?.toLowerCase().includes('master'))
+        );
         if (courseKeys.length > 0) {
           return courseKeys.some((k: any) => !isCourseKeyExpired(k));
         }
@@ -414,6 +427,28 @@ export default function App() {
       }
     })();
 
+    // Helper to sanitize cached course to eliminate stale/legacy thumbnails and details
+    const sanitizeCachedCourse = (c: Course, index: number): Course => {
+      let img = c.image;
+      if (!img || img.includes('2236.png') || img.includes('AVvXsEiI6q11UwbnIp')) {
+        img = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png';
+      } else if (img.includes('12843.jpg') || img.includes('AVvXsEgXZL_14KcAVWt')) {
+        img = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png';
+      }
+
+      let id = c.id;
+      if (id === 'al-master-class-course-by-al-clipzone') {
+        id = 'Ai master class course by Ai clipzone';
+      }
+
+      return {
+        ...c,
+        id,
+        image: img,
+        order: typeof c.order === 'number' ? c.order : index
+      };
+    };
+
     const cached = localStorage.getItem('clipzone_dynamic_courses');
     if (cached) {
       try {
@@ -422,19 +457,21 @@ export default function App() {
           // Strictly exclude deleted courses and do NOT re-add them from defaults
           const activeList = parsed.filter(c => !deletedIds.includes(c.id));
           if (activeList.length > 0) {
-            return activeList.map((c, i) => ({
-              ...c,
-              order: typeof c.order === 'number' ? c.order : i
-            })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            const sanitized = activeList.map(sanitizeCachedCourse).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            try {
+              localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sanitized));
+            } catch (e) {}
+            return sanitized;
           }
         }
       } catch (e) {}
     }
     // Reliable fallback: return default courses excluding any explicitly deleted ones
-    return COURSES.filter(c => !deletedIds.includes(c.id)).map((c, i) => ({
-      ...c,
-      order: typeof c.order === 'number' ? c.order : i
-    })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const defaults = COURSES.filter(c => !deletedIds.includes(c.id)).map(sanitizeCachedCourse).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    try {
+      localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(defaults));
+    } catch (e) {}
+    return defaults;
   });
 
   // Push Notifications state
