@@ -4,4 +4,4 @@ Allow: /
 Disallow: /admin
 Disallow: /api/
 
-Sitemap: https://aiclipzone.netlify.app/sitemap.xml
+Sitemap: https://aiclipzone.vercel.app/sitemap.xml

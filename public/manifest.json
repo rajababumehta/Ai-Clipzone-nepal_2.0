@@ -25,7 +25,7 @@
   "related_applications": [
     {
       "platform": "webapp",
-      "url": "https://aiclipzone.netlify.app/manifest.json"
+      "url": "https://aiclipzone.vercel.app/manifest.json"
     }
   ],
   "launch_handler": {
@@ -72,7 +72,7 @@
   },
   "scope_extensions": [
     {
-      "origin": "https://aiclipzone.netlify.app"
+      "origin": "https://aiclipzone.vercel.app"
     }
   ],
   "widgets": [

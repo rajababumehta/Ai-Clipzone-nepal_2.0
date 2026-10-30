@@ -7814,7 +7814,7 @@ export default function App() {
                       {siteSettings.instituteName || 'AI Clipzone'}
                     </h4>
                     <p className="text-sm text-slate-400 truncate font-normal mt-0.5">
-                      {typeof window !== 'undefined' ? window.location.hostname || 'aiclipzone.netlify.app' : 'aiclipzone.netlify.app'}
+                      {typeof window !== 'undefined' ? window.location.hostname || 'aiclipzone.vercel.app' : 'aiclipzone.vercel.app'}
                     </p>
                   </div>
                 </div>
