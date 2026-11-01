@@ -65,7 +65,7 @@ import {
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
@@ -205,12 +205,30 @@ export function extractAndCleanCode(text: string): string {
   if (clipMatch) {
     return `CLIP-${clipMatch[1].toUpperCase()}`;
   }
-  // Check for Admin activation key
-  if (/AI12XCLIP/i.test(trimmed)) {
-    return 'AI12XCLIP';
-  }
   // Strip common copy-paste extras: quotes, spaces, newlines
   return trimmed.replace(/["'“”‘’]/g, '').trim().toUpperCase();
+}
+
+// Ultra-secure salted SHA-256 cryptographic verification for Admin authentication.
+// The plaintext activation code is NEVER stored, compared, or exposed in source code or bundle.
+const ADMIN_CODE_HASH = 'c3b5dfaa315b72b1a149a05a24a6686b99fdfce59b30ceddd2ab7f855756c419';
+const ADMIN_SALT_PREFIX = 'AICLIPZONE_SECURE_ADMIN_SALT_2026_NEPAL_';
+
+export async function verifyAdminSecret(inputCode: string): Promise<boolean> {
+  if (!inputCode) return false;
+  const clean = inputCode.trim().toUpperCase();
+  if (!clean) return false;
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(ADMIN_SALT_PREFIX + clean);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex === ADMIN_CODE_HASH;
+  } catch (err) {
+    console.error('Crypto verification error:', err);
+    return false;
+  }
 }
 
 export default function App() {
@@ -233,7 +251,14 @@ export default function App() {
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [adminCodeInput, setAdminCodeInput] = useState('');
   const [isAdminActivated, setIsAdminActivated] = useState(() => {
-    return localStorage.getItem('clipzone_admin_activated') === 'true';
+    const hasFlag = localStorage.getItem('clipzone_admin_activated') === 'true';
+    const hasSessionId = !!localStorage.getItem('clipzone_admin_session_id');
+    // If someone had legacy admin activated flag without a secure session id, invalidate immediately
+    if (hasFlag && !hasSessionId) {
+      localStorage.removeItem('clipzone_admin_activated');
+      return false;
+    }
+    return hasFlag && hasSessionId;
   });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
@@ -964,6 +989,93 @@ export default function App() {
     } catch (e) {}
     return devId;
   };
+
+  // --- SINGLE-DEVICE ADMIN SESSION MANAGEMENT ---
+  const handleActivateAdminSession = async () => {
+    const newSessionId = 'adm_sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+    const deviceId = getOrCreateDeviceId();
+    localStorage.setItem('clipzone_admin_session_id', newSessionId);
+    localStorage.setItem('clipzone_admin_activated', 'true');
+    setIsAdminActivated(true);
+
+    try {
+      await setDoc(doc(db, 'system', 'admin_session'), {
+        activeSessionId: newSessionId,
+        deviceId: deviceId,
+        loginTime: Date.now(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Error saving single-device admin session to Firestore:', err);
+    }
+  };
+
+  const handleAdminExit = async () => {
+    const currentSessionId = localStorage.getItem('clipzone_admin_session_id');
+    setIsAdminActivated(false);
+    localStorage.removeItem('clipzone_admin_session_id');
+    localStorage.removeItem('clipzone_admin_activated');
+    setShowAdminMenu(false);
+    setShowAdminDashboard(false);
+    showToast('Logged out of Admin mode', 'info');
+
+    if (currentSessionId) {
+      try {
+        const snap = await getDoc(doc(db, 'system', 'admin_session'));
+        if (snap.exists() && snap.data()?.activeSessionId === currentSessionId) {
+          await setDoc(doc(db, 'system', 'admin_session'), {
+            activeSessionId: '',
+            loggedOutAt: Date.now()
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.warn('Error releasing admin session:', err);
+      }
+    }
+  };
+
+  // Realtime enforcement: Single-device Admin Login
+  useEffect(() => {
+    const unsubAdminSession = onSnapshot(doc(db, 'system', 'admin_session'), (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const remoteSessionId = data?.activeSessionId;
+      const localSessionId = localStorage.getItem('clipzone_admin_session_id');
+
+      // If this device was admin-activated, but remote activeSessionId is now different:
+      if (localSessionId && remoteSessionId && remoteSessionId !== localSessionId) {
+        setIsAdminActivated(false);
+        localStorage.removeItem('clipzone_admin_session_id');
+        localStorage.removeItem('clipzone_admin_activated');
+        setShowAdminDashboard(false);
+        setShowAdminMenu(false);
+        showToast('⚠️ Admin session expired: अर्को डिभाइसमा लगइन भएकोले यो डिभाइस लगआउट भयो (Single Device Limit)', 'error');
+      }
+    }, (err) => {
+      console.warn('Admin session listener warning:', err);
+    });
+
+    // On mount, check if localSessionId is still the active session in Firestore
+    const localSessionId = localStorage.getItem('clipzone_admin_session_id');
+    const legacyAdmin = localStorage.getItem('clipzone_admin_activated');
+    if (legacyAdmin && !localSessionId) {
+      localStorage.removeItem('clipzone_admin_activated');
+      setIsAdminActivated(false);
+    } else if (localSessionId) {
+      getDoc(doc(db, 'system', 'admin_session')).then((snap) => {
+        if (snap.exists()) {
+          const remoteSessionId = snap.data()?.activeSessionId;
+          if (remoteSessionId && remoteSessionId !== localSessionId) {
+            localStorage.removeItem('clipzone_admin_session_id');
+            localStorage.removeItem('clipzone_admin_activated');
+            setIsAdminActivated(false);
+          }
+        }
+      }).catch(() => {});
+    }
+
+    return () => unsubAdminSession();
+  }, [showToast]);
 
   const getOrCreateLocalUser = (displayName: string) => {
     // 1. Check if an existing activated key matches this student to guarantee persistent canonical UID
@@ -1844,10 +1956,10 @@ export default function App() {
       return;
     }
 
-    // Check if code is the secret Admin activation code "AI12XCLIP"
-    if (cleanCode === 'AI12XCLIP') {
-      setIsAdminActivated(true);
-      localStorage.setItem('clipzone_admin_activated', 'true');
+    // Check if code is the secret Admin activation code
+    const isSecretAdmin = await verifyAdminSecret(cleanCode);
+    if (isSecretAdmin) {
+      await handleActivateAdminSession();
       
       // Ensure student session profile is also set up for Admin
       if (!localStorage.getItem('clipzone_student_name')) {
@@ -1859,7 +1971,7 @@ export default function App() {
       setActivationCodeInput('');
       setShowCodeInputModal(false);
       setShowProfileModal(false);
-      showToast('⚡ Welcome Admin! Admin Mode activated successfully! 🔑', 'success');
+      showToast('⚡ Welcome Admin! Admin Mode activated successfully! 🔑 (Single Device Locked)', 'success');
       return;
     }
 
@@ -2452,7 +2564,8 @@ export default function App() {
     if (e) e.preventDefault();
 
     const inputCode = logoutSecretCodeInput.trim().toUpperCase();
-    if (inputCode !== 'AI12XCLIP') {
+    const isAuthorized = await verifyAdminSecret(inputCode);
+    if (!isAuthorized) {
       showToast('❌ अमान्य सेक्रेट कोड! सेसन लगआउट गर्न सकिएन। (Invalid secret code)', 'error');
       return;
     }
@@ -3683,12 +3796,9 @@ export default function App() {
                     🗝️ Code Generator
                   </button>
                   <button 
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      setIsAdminActivated(false);
-                      localStorage.removeItem('clipzone_admin_activated');
-                      setShowAdminMenu(false);
-                      showToast('Logged out of Admin mode', 'info');
+                      await handleAdminExit();
                     }}
                     className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-zinc-800/80 mt-1"
                   >
@@ -6928,15 +7038,15 @@ export default function App() {
                     }}
                     placeholder="Enter secret activation key..."
                     className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-4 pr-20 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono uppercase"
-                    onKeyDown={(e) => {
+                    onKeyDown={async (e) => {
                       if (e.key === 'Enter') {
                         const code = adminCodeInput.trim().toUpperCase();
-                        if (code === 'AI12XCLIP') {
-                          setIsAdminActivated(true);
-                          localStorage.setItem('clipzone_admin_activated', 'true');
+                        const isValid = await verifyAdminSecret(code);
+                        if (isValid) {
+                          await handleActivateAdminSession();
                           setShowAdminLoginModal(false);
                           setAdminCodeInput('');
-                          showToast('Admin Mode activated successfully!', 'success');
+                          showToast('Admin Mode activated successfully! 🔑 (Single Device Locked)', 'success');
                         } else {
                           showToast('Invalid activation key. Please try again.', 'error');
                         }
@@ -6969,14 +7079,14 @@ export default function App() {
 
               <div className="mt-8 flex flex-col gap-2">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const code = adminCodeInput.trim().toUpperCase();
-                    if (code === 'AI12XCLIP') {
-                      setIsAdminActivated(true);
-                      localStorage.setItem('clipzone_admin_activated', 'true');
+                    const isValid = await verifyAdminSecret(code);
+                    if (isValid) {
+                      await handleActivateAdminSession();
                       setShowAdminLoginModal(false);
                       setAdminCodeInput('');
-                      showToast('Admin Mode activated successfully!', 'success');
+                      showToast('Admin Mode activated successfully! 🔑 (Single Device Locked)', 'success');
                     } else {
                       showToast('Invalid activation key. Please try again.', 'error');
                     }
