@@ -3955,17 +3955,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* If Admin is active, show direct Admin Dashboard button */}
-              {isAdminActivated && (
-                <button
-                  onClick={() => setShowAdminDashboard(true)}
-                  className="bg-linear-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black font-black text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-amber-500/20 hover:scale-105 transition cursor-pointer select-none shrink-0"
-                  title="Open Admin Dashboard"
-                >
-                  <span>👑 Admin Panel</span>
-                </button>
-              )}
-
               {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
               <button
                 id="header-notification-bell-btn"
