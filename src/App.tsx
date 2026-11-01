@@ -49,7 +49,8 @@ import {
   LogOut,
   Volume2,
   VolumeX,
-  Copy,
+  Copy, 
+  ClipboardPaste,
   Zap,
   RotateCcw,
   Wand2,
@@ -194,6 +195,22 @@ export function isCourseKeyExpired(key: any): boolean {
     }
   }
   return false;
+}
+
+export function extractAndCleanCode(text: string): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  // Check for CLIP pattern (e.g. "CLIP-123456", "CLIP 123456", "CLIP123456", "clip-abc", or within messages like "Your code is CLIP-892341")
+  const clipMatch = trimmed.match(/CLIP\s*[-_]?\s*([A-Za-z0-9]+)/i);
+  if (clipMatch) {
+    return `CLIP-${clipMatch[1].toUpperCase()}`;
+  }
+  // Check for Admin activation key
+  if (/AI12XCLIP/i.test(trimmed)) {
+    return 'AI12XCLIP';
+  }
+  // Strip common copy-paste extras: quotes, spaces, newlines
+  return trimmed.replace(/["'“”‘’]/g, '').trim().toUpperCase();
 }
 
 export default function App() {
@@ -1821,7 +1838,7 @@ export default function App() {
   // ACTIVATE / CLAIM SECRET KEY
   const handleClaimActivationCode = async (e: FormEvent) => {
     e.preventDefault();
-    const cleanCode = activationCodeInput.trim().toUpperCase();
+    const cleanCode = extractAndCleanCode(activationCodeInput);
     if (!cleanCode) {
       showToast('Please enter a secret activation code.', 'error');
       return;
@@ -2572,6 +2589,28 @@ export default function App() {
   const [openDetailChapters, setOpenDetailChapters] = useState<Record<string, boolean>>({});
   const [activationCodeInput, setActivationCodeInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
+
+  // Reusable clipboard paste handler for course activation code
+  const handlePasteCodeToInput = useCallback(async (targetSetter?: (val: string) => void) => {
+    const setter = targetSetter || setActivationCodeInput;
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
+        showToast('कृपया इनपुट बक्समा लामो समय थिचेर पेस्ट गर्नुहोस् (Please long-press the input box to paste)', 'info');
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        showToast('क्लिपबोर्ड खाली छ! पहिले आफ्नो कोड कपी गर्नुहोस् (Clipboard is empty. Copy your code first)', 'error');
+        return;
+      }
+      const cleaned = extractAndCleanCode(text);
+      setter(cleaned);
+      showToast(`📋 कोड पेस्ट गरियो: ${cleaned}`, 'success');
+    } catch (err) {
+      console.warn('Clipboard read error or permission denied:', err);
+      showToast('क्लिपबोर्ड अनुमति अस्वीकार गरियो। कृपया इनपुट बक्समा सिधै पेस्ट गर्नुहोस् (Please paste directly into the input box)', 'info');
+    }
+  }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'account'>('home');
@@ -3923,18 +3962,71 @@ export default function App() {
                 )}
 
                 <form onSubmit={handleClaimActivationCode} className="space-y-4 pt-1">
-                  <div className="space-y-1.5 text-left">
-                    <label className="block text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                      Secret Activation Code
-                    </label>
-                    <input 
-                      type="text"
-                      required
-                      value={activationCodeInput}
-                      onChange={(e) => setActivationCodeInput(e.target.value)}
-                      placeholder="उदाहरण: CLIP-XXXXXX"
-                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase text-white outline-hidden tracking-widest shadow-inner placeholder-zinc-700 text-center"
-                    />
+                  <div className="space-y-2 text-left">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black uppercase text-blue-400 tracking-wider">
+                        Secret Activation Code (सेक्रेट कोड) *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
+                        <span>📋 Paste Code</span>
+                      </button>
+                    </div>
+
+                    <div className="relative flex items-center">
+                      <input 
+                        type="text"
+                        required
+                        value={activationCodeInput}
+                        onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData?.getData('text');
+                          if (pasted) {
+                            e.preventDefault();
+                            const clean = extractAndCleanCode(pasted);
+                            setActivationCodeInput(clean);
+                            showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                          }
+                        }}
+                        placeholder="CLIP-XXXXXX"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        autoCapitalize="characters"
+                        className="w-full bg-zinc-950 border border-zinc-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-2xl pl-4 pr-24 py-3.5 text-base font-mono font-black uppercase text-white outline-hidden tracking-widest shadow-inner placeholder-zinc-600 text-center"
+                      />
+
+                      <div className="absolute right-2 flex items-center gap-1">
+                        {activationCodeInput && (
+                          <button
+                            type="button"
+                            onClick={() => setActivationCodeInput('')}
+                            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                            title="Clear input"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePasteCodeToInput()}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer active:scale-95"
+                          title="Paste from clipboard"
+                        >
+                          <ClipboardPaste className="w-3.5 h-3.5" />
+                          <span>Paste</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-400 font-medium">
+                      💡 सजिलै <strong>Paste</strong> बटन थिच्नुहोस् वा आफ्नो कोड टाइप गर्नुहोस्।
+                    </p>
                   </div>
 
                   <button
@@ -4914,17 +5006,67 @@ export default function App() {
                   </div>
 
                   {/* Instant Reactivation Form */}
-                  <form onSubmit={handleClaimActivationCode} className="space-y-3 pt-2">
-                    <label className="block text-xs font-black uppercase tracking-wider text-zinc-300">
-                      नयाँ सेक्रेट कोड राख्नुहोस् (Enter New Secret Code)
-                    </label>
-                    <input 
-                      type="text"
-                      value={activationCodeInput}
-                      onChange={(e) => setActivationCodeInput(e.target.value)}
-                      placeholder="CLIP-XXXXXX"
-                      className="w-full bg-zinc-950 border border-rose-500/40 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
-                    />
+                  <form onSubmit={handleClaimActivationCode} className="space-y-3 pt-2 text-left">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black uppercase tracking-wider text-zinc-300">
+                        नयाँ सेक्रेट कोड राख्नुहोस् (Enter New Secret Code)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>📋 Paste</span>
+                      </button>
+                    </div>
+
+                    <div className="relative flex items-center">
+                      <input 
+                        type="text"
+                        value={activationCodeInput}
+                        onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData?.getData('text');
+                          if (pasted) {
+                            e.preventDefault();
+                            const clean = extractAndCleanCode(pasted);
+                            setActivationCodeInput(clean);
+                            showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                          }
+                        }}
+                        placeholder="CLIP-XXXXXX"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        autoCapitalize="characters"
+                        className="w-full bg-zinc-950 border border-rose-500/40 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl pl-4 pr-24 py-3.5 text-sm sm:text-base font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
+                      />
+
+                      <div className="absolute right-2 flex items-center gap-1">
+                        {activationCodeInput && (
+                          <button
+                            type="button"
+                            onClick={() => setActivationCodeInput('')}
+                            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                            title="Clear"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePasteCodeToInput()}
+                          className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-black px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer active:scale-95"
+                          title="Paste from clipboard"
+                        >
+                          <ClipboardPaste className="w-3.5 h-3.5" />
+                          <span>Paste</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <button
                       type="submit"
                       disabled={isActivating || !activationCodeInput.trim()}
@@ -4959,14 +5101,67 @@ export default function App() {
                     </p>
                   </div>
 
-                  <form onSubmit={handleClaimActivationCode} className="space-y-3">
-                    <input 
-                      type="text"
-                      value={activationCodeInput}
-                      onChange={(e) => setActivationCodeInput(e.target.value)}
-                      placeholder="CLIP-XXXXXX"
-                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
-                    />
+                  <form onSubmit={handleClaimActivationCode} className="space-y-3 text-left">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
+                        Secret Activation Code (सेक्रेट कोड) *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>📋 Paste</span>
+                      </button>
+                    </div>
+
+                    <div className="relative flex items-center">
+                      <input 
+                        type="text"
+                        value={activationCodeInput}
+                        onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData?.getData('text');
+                          if (pasted) {
+                            e.preventDefault();
+                            const clean = extractAndCleanCode(pasted);
+                            setActivationCodeInput(clean);
+                            showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                          }
+                        }}
+                        placeholder="CLIP-XXXXXX"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        autoCapitalize="characters"
+                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl pl-4 pr-24 py-3.5 text-sm sm:text-base font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
+                      />
+
+                      <div className="absolute right-2 flex items-center gap-1">
+                        {activationCodeInput && (
+                          <button
+                            type="button"
+                            onClick={() => setActivationCodeInput('')}
+                            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                            title="Clear"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePasteCodeToInput()}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer active:scale-95"
+                          title="Paste from clipboard"
+                        >
+                          <ClipboardPaste className="w-3.5 h-3.5" />
+                          <span>Paste</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <button
                       type="submit"
                       disabled={isActivating || !activationCodeInput.trim()}
@@ -6570,19 +6765,72 @@ export default function App() {
                 }} 
                 className="mt-6 space-y-4 text-left"
               >
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-blue-400 mb-2">
-                    Secret Activation Code (सेक्रेट कोड) *
-                  </label>
-                  <input 
-                    type="text"
-                    required
-                    autoFocus
-                    value={activationCodeInput}
-                    onChange={(e) => setActivationCodeInput(e.target.value)}
-                    placeholder="CLIP-XXXXXX"
-                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl px-4 py-3.5 text-base font-mono font-black uppercase outline-hidden text-center tracking-widest text-white transition shadow-inner placeholder-zinc-600"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
+                      Secret Activation Code (सेक्रेट कोड) *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handlePasteCodeToInput()}
+                      className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                      title="Clipboard बाट कोड Paste गर्नुहोस्"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
+                      <span>📋 Paste Code</span>
+                    </button>
+                  </div>
+
+                  <div className="relative flex items-center">
+                    <input 
+                      type="text"
+                      required
+                      autoFocus
+                      value={activationCodeInput}
+                      onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
+                      onPaste={(e) => {
+                        const pasted = e.clipboardData?.getData('text');
+                        if (pasted) {
+                          e.preventDefault();
+                          const clean = extractAndCleanCode(pasted);
+                          setActivationCodeInput(clean);
+                          showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                        }
+                      }}
+                      placeholder="CLIP-XXXXXX"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoCapitalize="characters"
+                      className="w-full bg-zinc-900 border border-zinc-750 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl pl-4 pr-24 py-3.5 text-base font-mono font-black uppercase outline-hidden text-center tracking-widest text-white transition shadow-inner placeholder-zinc-600"
+                    />
+
+                    <div className="absolute right-2 flex items-center gap-1">
+                      {activationCodeInput && (
+                        <button
+                          type="button"
+                          onClick={() => setActivationCodeInput('')}
+                          className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                          title="Clear input"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer active:scale-95"
+                        title="Paste from clipboard"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Paste</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 font-medium">
+                    💡 सजिलै <strong>Paste</strong> बटन थिच्नुहोस् वा आफ्नो कोड टाइप गर्नुहोस्।
+                  </p>
                 </div>
 
                 <button
@@ -6651,30 +6899,72 @@ export default function App() {
               </p>
 
               <div className="mt-6">
-                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2 text-left">
-                  Secret Activation Key *
-                </label>
-                <input 
-                  type="password"
-                  value={adminCodeInput}
-                  onChange={(e) => setAdminCodeInput(e.target.value)}
-                  placeholder="Enter secret activation key..."
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const code = adminCodeInput.trim().toUpperCase();
-                      if (code === 'AI12XCLIP') {
-                        setIsAdminActivated(true);
-                        localStorage.setItem('clipzone_admin_activated', 'true');
-                        setShowAdminLoginModal(false);
-                        setAdminCodeInput('');
-                        showToast('Admin Mode activated successfully!', 'success');
-                      } else {
-                        showToast('Invalid activation key. Please try again.', 'error');
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider text-left">
+                    Secret Activation Key *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handlePasteCodeToInput(setAdminCodeInput)}
+                    className="text-[10px] font-extrabold text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 px-2.5 py-0.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <ClipboardPaste className="w-3 h-3" />
+                    <span>Paste</span>
+                  </button>
+                </div>
+                <div className="relative flex items-center">
+                  <input 
+                    type="text"
+                    value={adminCodeInput}
+                    onChange={(e) => setAdminCodeInput(e.target.value.toUpperCase())}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData?.getData('text');
+                      if (pasted) {
+                        e.preventDefault();
+                        const clean = extractAndCleanCode(pasted);
+                        setAdminCodeInput(clean);
+                        showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
                       }
-                    }
-                  }}
-                />
+                    }}
+                    placeholder="Enter secret activation key..."
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-4 pr-20 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono uppercase"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const code = adminCodeInput.trim().toUpperCase();
+                        if (code === 'AI12XCLIP') {
+                          setIsAdminActivated(true);
+                          localStorage.setItem('clipzone_admin_activated', 'true');
+                          setShowAdminLoginModal(false);
+                          setAdminCodeInput('');
+                          showToast('Admin Mode activated successfully!', 'success');
+                        } else {
+                          showToast('Invalid activation key. Please try again.', 'error');
+                        }
+                      }
+                    }}
+                  />
+                  <div className="absolute right-2 flex items-center gap-1">
+                    {adminCodeInput && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminCodeInput('')}
+                        className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                        title="Clear"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handlePasteCodeToInput(setAdminCodeInput)}
+                      className="bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-black px-2 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                      title="Paste"
+                    >
+                      <ClipboardPaste className="w-3 h-3" />
+                      <span>Paste</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-8 flex flex-col gap-2">
