@@ -200,11 +200,24 @@ export function isCourseKeyExpired(key: any): boolean {
 export function extractAndCleanCode(text: string): string {
   if (!text) return '';
   const trimmed = text.trim();
-  // Check for CLIP pattern (e.g. "CLIP-123456", "CLIP 123456", "CLIP123456", "clip-abc", or within messages like "Your code is CLIP-892341")
-  const clipMatch = trimmed.match(/CLIP\s*[-_]?\s*([A-Za-z0-9]+)/i);
-  if (clipMatch) {
+  const upper = trimmed.toUpperCase();
+
+  // If text contains or is the secret Admin key (AICLIPZONE), extract cleanly without corrupting
+  if (upper.includes('AICLIPZONE') || upper.startsWith('AICLIP')) {
+    const adminMatch = trimmed.match(/AICLIPZONE\s*[-_ ]?\s*RAJA/i);
+    if (adminMatch) {
+      return 'AICLIPZONE-RAJA';
+    }
+    return trimmed.replace(/["'“”‘’]/g, '').trim().toUpperCase();
+  }
+
+  // Check for standalone student CLIP pattern (e.g. "CLIP-123456", "CLIP 123456", "CLIP123456")
+  // Use negative lookahead / word boundary to ensure it does not match inside words like AICLIPZONE
+  const clipMatch = trimmed.match(/(?:^|[^A-Za-z0-9])CLIP\s*[-_]?\s*([A-Za-z0-9]+)/i);
+  if (clipMatch && clipMatch[1] && !clipMatch[1].toUpperCase().startsWith('ZONE')) {
     return `CLIP-${clipMatch[1].toUpperCase()}`;
   }
+
   // Strip common copy-paste extras: quotes, spaces, newlines
   return trimmed.replace(/["'“”‘’]/g, '').trim().toUpperCase();
 }
@@ -216,7 +229,18 @@ const ADMIN_SALT_PREFIX = 'AICLIPZONE_SECURE_ADMIN_SALT_2026_NEPAL_';
 
 export async function verifyAdminSecret(inputCode: string): Promise<boolean> {
   if (!inputCode) return false;
-  const clean = inputCode.trim().toUpperCase();
+  let clean = inputCode
+    .trim()
+    .replace(/[–—]/g, '-')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/["'“”‘’]/g, '')
+    .toUpperCase();
+
+  // Normalize common typing variations so user is never locked out by accidental spaces or missing hyphen
+  if (clean === 'AICLIPZONERAJA' || clean === 'AICLIPZONE RAJA' || clean === 'AICLIPZONE_RAJA' || clean === 'AICLIPZONE - RAJA') {
+    clean = 'AICLIPZONE-RAJA';
+  }
+
   if (!clean) return false;
   try {
     const encoder = new TextEncoder();
@@ -1950,14 +1974,15 @@ export default function App() {
   // ACTIVATE / CLAIM SECRET KEY
   const handleClaimActivationCode = async (e: FormEvent) => {
     e.preventDefault();
-    const cleanCode = extractAndCleanCode(activationCodeInput);
-    if (!cleanCode) {
+    const rawInput = activationCodeInput;
+    const cleanCode = extractAndCleanCode(rawInput);
+    if (!cleanCode && !rawInput.trim()) {
       showToast('Please enter a secret activation code.', 'error');
       return;
     }
 
-    // Check if code is the secret Admin activation code
-    const isSecretAdmin = await verifyAdminSecret(cleanCode);
+    // Check if code is the secret Admin activation code (check both cleanCode and rawInput)
+    const isSecretAdmin = (await verifyAdminSecret(cleanCode)) || (await verifyAdminSecret(rawInput));
     if (isSecretAdmin) {
       await handleActivateAdminSession();
       
@@ -1971,7 +1996,8 @@ export default function App() {
       setActivationCodeInput('');
       setShowCodeInputModal(false);
       setShowProfileModal(false);
-      showToast('⚡ Welcome Admin! Admin Mode activated successfully! 🔑 (Single Device Locked)', 'success');
+      setShowAdminDashboard(true);
+      showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
       return;
     }
 
@@ -3929,6 +3955,17 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2.5">
+              {/* If Admin is active, show direct Admin Dashboard button */}
+              {isAdminActivated && (
+                <button
+                  onClick={() => setShowAdminDashboard(true)}
+                  className="bg-linear-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black font-black text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-amber-500/20 hover:scale-105 transition cursor-pointer select-none shrink-0"
+                  title="Open Admin Dashboard"
+                >
+                  <span>👑 Admin Panel</span>
+                </button>
+              )}
+
               {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
               <button
                 id="header-notification-bell-btn"
@@ -3978,8 +4015,61 @@ export default function App() {
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 mt-2 w-44 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
+                      className="absolute right-0 mt-2 w-48 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
                     >
+                      {isAdminActivated ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setShowAdminDashboard(true);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-zinc-800 text-amber-400 hover:text-amber-300 transition flex items-center gap-2 cursor-pointer font-bold"
+                          >
+                            <span>👑 Admin Dashboard</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              handleCreateCourseClick();
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-zinc-800 text-blue-400 hover:text-blue-300 transition flex items-center gap-2 cursor-pointer font-bold"
+                          >
+                            <span>➕ Add New Course</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setAdminInitialTab('keys');
+                              setShowAdminDashboard(true);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-zinc-800 text-purple-400 hover:text-purple-300 transition flex items-center gap-2 cursor-pointer font-bold"
+                          >
+                            <span>🗝️ Code Generator</span>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setShowUserMenu(false);
+                              await handleAdminExit();
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2 cursor-pointer font-bold border-b border-zinc-800/80 pb-2 mb-1"
+                          >
+                            <span>🚪 Exit Admin Mode</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setShowAdminLoginModal(true);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 text-zinc-300 hover:text-white transition flex items-center gap-2.5 cursor-pointer font-bold border-b border-zinc-800/80 pb-2 mb-1"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-purple-400" />
+                          <span>🔑 Admin Login</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
@@ -6234,6 +6324,22 @@ export default function App() {
             >
               <span>✉️ Email</span>
             </a>
+            {isAdminActivated ? (
+              <button
+                onClick={() => setShowAdminDashboard(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:text-amber-300 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <span>👑 Admin Dashboard</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAdminLoginModal(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Admin Login"
+              >
+                <span>🔒 Admin Access</span>
+              </button>
+            )}
           </div>
         </div>
       </footer>
@@ -7040,13 +7146,15 @@ export default function App() {
                     className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-4 pr-20 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono uppercase"
                     onKeyDown={async (e) => {
                       if (e.key === 'Enter') {
-                        const code = adminCodeInput.trim().toUpperCase();
-                        const isValid = await verifyAdminSecret(code);
+                        const raw = adminCodeInput;
+                        const code = raw.trim().toUpperCase();
+                        const isValid = (await verifyAdminSecret(code)) || (await verifyAdminSecret(raw));
                         if (isValid) {
                           await handleActivateAdminSession();
                           setShowAdminLoginModal(false);
                           setAdminCodeInput('');
-                          showToast('Admin Mode activated successfully! 🔑 (Single Device Locked)', 'success');
+                          setShowAdminDashboard(true);
+                          showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
                         } else {
                           showToast('Invalid activation key. Please try again.', 'error');
                         }
@@ -7080,13 +7188,15 @@ export default function App() {
               <div className="mt-8 flex flex-col gap-2">
                 <button
                   onClick={async () => {
-                    const code = adminCodeInput.trim().toUpperCase();
-                    const isValid = await verifyAdminSecret(code);
+                    const raw = adminCodeInput;
+                    const code = raw.trim().toUpperCase();
+                    const isValid = (await verifyAdminSecret(code)) || (await verifyAdminSecret(raw));
                     if (isValid) {
                       await handleActivateAdminSession();
                       setShowAdminLoginModal(false);
                       setAdminCodeInput('');
-                      showToast('Admin Mode activated successfully! 🔑 (Single Device Locked)', 'success');
+                      setShowAdminDashboard(true);
+                      showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
                     } else {
                       showToast('Invalid activation key. Please try again.', 'error');
                     }
