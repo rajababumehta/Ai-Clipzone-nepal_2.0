@@ -3803,15 +3803,11 @@ export default function App() {
             {/* Left: Brand Logo Only (text removed as requested) */}
             <div 
               onClick={() => {
-                if (isAdminActivated) {
-                  setShowAdminMenu(!showAdminMenu);
-                } else {
-                  setCurrentView('home');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
+                setCurrentView('home');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className="flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
-              title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
+              title="AI Clipzone Nepal - Home"
             >
               {/* Institute Official Logo */}
               <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
@@ -3828,41 +3824,6 @@ export default function App() {
                   }}
                 />
               </div>
-
-              {isAdminActivated && showAdminMenu && (
-                <div className="absolute top-14 left-0 z-[1000] w-52 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 font-bold text-xs text-zinc-100 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowAdminMenu(false);
-                      handleCreateCourseClick();
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    ➕ Add New Course
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowAdminMenu(false);
-                      setAdminInitialTab('keys');
-                      setShowAdminDashboard(true);
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-blue-400 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    🗝️ Code Generator
-                  </button>
-                  <button 
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      await handleAdminExit();
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-zinc-800/80 mt-1"
-                  >
-                    🚪 Exit Admin Mode
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* 100% Radius Search Bar */}
@@ -4015,12 +3976,11 @@ export default function App() {
                 )}
               </button>
 
-              {/* Dropdown Menu Button */}
+              {/* Student Profile Avatar Badge (No dropdown menu on click as requested) */}
               <div className="relative shrink-0">
-                <button
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-white hover:bg-zinc-800 hover:border-zinc-500 transition flex items-center justify-center cursor-pointer select-none font-bold text-xs relative shadow-md overflow-hidden"
-                  title="Account Menu"
+                <div
+                  className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
+                  title={currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'AI Clipzone'}
                 >
                   {userAvatar ? (
                     userAvatar.startsWith('http') || userAvatar.startsWith('data:') ? (
@@ -4039,74 +3999,9 @@ export default function App() {
                       </span>
                     </>
                   ) : (
-                    <Menu className="w-5 h-5 text-zinc-200" />
+                    <User className="w-4.5 h-4.5 text-zinc-400" />
                   )}
-                </button>
-
-                <AnimatePresence>
-                  {showUserMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 mt-2 w-48 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 z-[500] font-extrabold text-xs text-zinc-100 flex flex-col gap-1"
-                    >
-                      {isAdminActivated ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setShowAdminDashboard(true);
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-zinc-800 text-amber-400 hover:text-amber-300 transition flex items-center gap-2 cursor-pointer font-bold"
-                          >
-                            <span>👑 Admin Dashboard</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              handleCreateCourseClick();
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-zinc-800 text-blue-400 hover:text-blue-300 transition flex items-center gap-2 cursor-pointer font-bold"
-                          >
-                            <span>➕ Add New Course</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setAdminInitialTab('keys');
-                              setShowAdminDashboard(true);
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-zinc-800 text-purple-400 hover:text-purple-300 transition flex items-center gap-2 cursor-pointer font-bold"
-                          >
-                            <span>🗝️ Code Generator</span>
-                          </button>
-                          <button
-                            onClick={async () => {
-                              setShowUserMenu(false);
-                              await handleAdminExit();
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2 cursor-pointer font-bold border-b border-zinc-800/80 pb-2 mb-1"
-                          >
-                            <span>🚪 Exit Admin Mode</span>
-                          </button>
-                        </>
-                      ) : null}
-
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setStudentLogoutConfirmInput('');
-                          setShowStudentLogoutConfirmModal(true);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold"
-                      >
-                        <LogOut className="w-4 h-4 text-rose-400" />
-                        <span>🚪 Log Out</span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                </div>
               </div>
             </div>
           </div>
