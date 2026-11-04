@@ -2903,6 +2903,37 @@ export default function App() {
     };
   }, []);
 
+  // Covert Admin Access: URL hash (#admin or ?admin=true) and secret key combo (Alt+A or Alt+Shift+A)
+  useEffect(() => {
+    const checkAdminTrigger = () => {
+      try {
+        const hash = (window.location.hash || '').toLowerCase();
+        const search = (window.location.search || '').toLowerCase();
+        if (hash === '#admin' || hash === '#admin-login' || search.includes('admin=true') || search.includes('admin=login')) {
+          setShowAdminLoginModal(true);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkAdminTrigger();
+    window.addEventListener('hashchange', checkAdminTrigger);
+
+    const handleSecretKeyCombo = (e: KeyboardEvent) => {
+      // Secret key combination: Alt + A (or Alt + Shift + A)
+      if (e.altKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        setShowAdminLoginModal(true);
+      }
+    };
+    window.addEventListener('keydown', handleSecretKeyCombo);
+
+    return () => {
+      window.removeEventListener('hashchange', checkAdminTrigger);
+      window.removeEventListener('keydown', handleSecretKeyCombo);
+    };
+  }, []);
+
   const toggleFullscreenMode = async () => {
     try {
       if (!document.fullscreenElement) {
@@ -3849,6 +3880,20 @@ export default function App() {
                       setCurrentView('home');
                     }
                   }}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      const trimmed = courseSearchQuery.trim();
+                      const clean = extractAndCleanCode(trimmed);
+                      if ((await verifyAdminSecret(clean)) || (await verifyAdminSecret(trimmed))) {
+                        e.preventDefault();
+                        await handleActivateAdminSession();
+                        setCourseSearchQuery('');
+                        setIsSearchFocused(false);
+                        setShowAdminDashboard(true);
+                        showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
+                      }
+                    }
+                  }}
                   onFocus={() => setIsSearchFocused(true)}
                   placeholder="Search courses, AI tools..."
                   className="w-full pl-8.5 sm:pl-10 pr-7 sm:pr-8 py-1.5 sm:py-2 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs md:text-sm rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
@@ -4046,18 +4091,7 @@ export default function App() {
                             <span>🚪 Exit Admin Mode</span>
                           </button>
                         </>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            setShowAdminLoginModal(true);
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-800 text-zinc-300 hover:text-white transition flex items-center gap-2.5 cursor-pointer font-bold border-b border-zinc-800/80 pb-2 mb-1"
-                        >
-                          <ShieldCheck className="w-4 h-4 text-purple-400" />
-                          <span>🔑 Admin Login</span>
-                        </button>
-                      )}
+                      ) : null}
 
                       <button
                         onClick={() => {
@@ -6286,7 +6320,11 @@ export default function App() {
               />
               <span>{siteSettings.instituteName || 'AI Clipzone'} 🇳🇵</span>
             </h5>
-            <p className="text-zinc-500 text-xs leading-relaxed max-w-md mx-auto">
+            <p 
+              onDoubleClick={() => setShowAdminLoginModal(true)}
+              className="text-zinc-500 text-xs leading-relaxed max-w-md mx-auto select-none"
+              title="Ai Clipzone Nepal"
+            >
               © {new Date().getFullYear()} {siteSettings.instituteName || 'Ai Clipzone'}. All rights reserved. Nepal's Premium AI Learning platform.
             </p>
           </div>
@@ -6313,20 +6351,12 @@ export default function App() {
             >
               <span>✉️ Email</span>
             </a>
-            {isAdminActivated ? (
+            {isAdminActivated && (
               <button
                 onClick={() => setShowAdminDashboard(true)}
                 className="px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:text-amber-300 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
                 <span>👑 Admin Dashboard</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowAdminLoginModal(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Admin Login"
-              >
-                <span>🔒 Admin Access</span>
               </button>
             )}
           </div>
