@@ -2903,37 +2903,6 @@ export default function App() {
     };
   }, []);
 
-  // Covert Admin Access: URL hash (#admin or ?admin=true) and secret key combo (Alt+A or Alt+Shift+A)
-  useEffect(() => {
-    const checkAdminTrigger = () => {
-      try {
-        const hash = (window.location.hash || '').toLowerCase();
-        const search = (window.location.search || '').toLowerCase();
-        if (hash === '#admin' || hash === '#admin-login' || search.includes('admin=true') || search.includes('admin=login')) {
-          setShowAdminLoginModal(true);
-        }
-      } catch {
-        // ignore
-      }
-    };
-    checkAdminTrigger();
-    window.addEventListener('hashchange', checkAdminTrigger);
-
-    const handleSecretKeyCombo = (e: KeyboardEvent) => {
-      // Secret key combination: Alt + A (or Alt + Shift + A)
-      if (e.altKey && (e.key === 'a' || e.key === 'A')) {
-        e.preventDefault();
-        setShowAdminLoginModal(true);
-      }
-    };
-    window.addEventListener('keydown', handleSecretKeyCombo);
-
-    return () => {
-      window.removeEventListener('hashchange', checkAdminTrigger);
-      window.removeEventListener('keydown', handleSecretKeyCombo);
-    };
-  }, []);
-
   const toggleFullscreenMode = async () => {
     try {
       if (!document.fullscreenElement) {
@@ -3839,20 +3808,6 @@ export default function App() {
                     setCourseSearchQuery(e.target.value);
                     if (currentView !== 'home' && e.target.value.trim()) {
                       setCurrentView('home');
-                    }
-                  }}
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter') {
-                      const trimmed = courseSearchQuery.trim();
-                      const clean = extractAndCleanCode(trimmed);
-                      if ((await verifyAdminSecret(clean)) || (await verifyAdminSecret(trimmed))) {
-                        e.preventDefault();
-                        await handleActivateAdminSession();
-                        setCourseSearchQuery('');
-                        setIsSearchFocused(false);
-                        setShowAdminDashboard(true);
-                        showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
-                      }
                     }
                   }}
                   onFocus={() => setIsSearchFocused(true)}
@@ -6215,11 +6170,7 @@ export default function App() {
               />
               <span>{siteSettings.instituteName || 'AI Clipzone'} 🇳🇵</span>
             </h5>
-            <p 
-              onDoubleClick={() => setShowAdminLoginModal(true)}
-              className="text-zinc-500 text-xs leading-relaxed max-w-md mx-auto select-none"
-              title="Ai Clipzone Nepal"
-            >
+            <p className="text-zinc-500 text-xs leading-relaxed max-w-md mx-auto">
               © {new Date().getFullYear()} {siteSettings.instituteName || 'Ai Clipzone'}. All rights reserved. Nepal's Premium AI Learning platform.
             </p>
           </div>
