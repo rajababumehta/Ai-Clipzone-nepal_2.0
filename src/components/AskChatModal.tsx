@@ -20,8 +20,21 @@ import {
   RotateCcw,
   Info,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Copy,
+  Download,
+  Image as ImageIcon,
+  FileText,
+  Eye,
+  FileUp
 } from 'lucide-react';
+import { 
+  ChatAttachment, 
+  formatFileSize, 
+  compressImageFile, 
+  readDocumentFile, 
+  downloadFileAttachment 
+} from '../utils/chatMedia';
 import { 
   collection, 
   doc, 
@@ -123,6 +136,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   });
   const studentEndRef = useRef<HTMLDivElement>(null);
   const studentInputRef = useRef<HTMLInputElement>(null);
+  const studentImageInputRef = useRef<HTMLInputElement>(null);
+  const studentDocInputRef = useRef<HTMLInputElement>(null);
+  const [studentPendingAttachment, setStudentPendingAttachment] = useState<ChatAttachment | null>(null);
+  const [showStudentAttachMenu, setShowStudentAttachMenu] = useState(false);
+  const [isStudentAttaching, setIsStudentAttaching] = useState(false);
 
   // --------------------------------------------------------------------------
   // ADMIN VIEW STATES (When user is Admin and opens Ask)
@@ -136,6 +154,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const [isLoadingAdminConvs, setIsLoadingAdminConvs] = useState(true);
   const adminEndRef = useRef<HTMLDivElement>(null);
   const adminReplyInputRef = useRef<HTMLInputElement>(null);
+  const adminImageInputRef = useRef<HTMLInputElement>(null);
+  const adminDocInputRef = useRef<HTMLInputElement>(null);
+  const [adminPendingAttachment, setAdminPendingAttachment] = useState<ChatAttachment | null>(null);
+  const [showAdminAttachMenu, setShowAdminAttachMenu] = useState(false);
+  const [isAdminAttaching, setIsAdminAttaching] = useState(false);
+
+  // Shared Copy & Lightbox States
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 
   // Full-screen mode state - defaults to true so Ask opens in full screen
   const [isFullScreen, setIsFullScreen] = useState<boolean>(() => {
@@ -285,7 +312,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             timestamp: data.timestamp || Date.now(),
             isSeen: data.isSeen ?? false,
             status: data.status ?? (data.isSeen ? 'seen' : 'sent'),
-            seenAt: data.seenAt
+            seenAt: data.seenAt,
+            attachmentType: data.attachmentType,
+            attachmentUrl: data.attachmentUrl,
+            attachmentName: data.attachmentName,
+            attachmentSize: data.attachmentSize
           });
 
           // WHATSAPP DOUBLE TICK LOGIC: When student opens the chat, mark all admin messages as SEEN!
@@ -508,7 +539,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             timestamp: d.timestamp || Date.now(),
             isSeen: d.isSeen ?? false,
             status: d.status ?? (d.isSeen ? 'seen' : 'sent'),
-            seenAt: d.seenAt
+            seenAt: d.seenAt,
+            attachmentType: d.attachmentType,
+            attachmentUrl: d.attachmentUrl,
+            attachmentName: d.attachmentName,
+            attachmentSize: d.attachmentSize
           });
 
           // WHATSAPP DOUBLE TICK LOGIC: When admin opens student conversation, mark user messages as SEEN!
@@ -623,6 +658,104 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   if (!isOpen) return null;
 
   // --------------------------------------------------------------------------
+  // HANDLERS: COPY & ATTACHMENTS
+  // --------------------------------------------------------------------------
+  const handleCopyMessage = async (msg: SupportMessage) => {
+    let textToCopy = msg.text || '';
+    if (!textToCopy && msg.attachmentName) {
+      textToCopy = `${msg.attachmentType === 'image' ? '📷 Photo' : '📄 Document'}: ${msg.attachmentName}`;
+    }
+    if (!textToCopy) return;
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedMessageId(msg.id);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+      showToast?.('म्यासेज कपी भयो (Copied to clipboard)', 'success');
+    } catch (e) {
+      console.warn('Copy failed:', e);
+      showToast?.('कपी गर्न सकिएन', 'error');
+    }
+  };
+
+  const handleStudentImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsStudentAttaching(true);
+      const attachment = await compressImageFile(file);
+      setStudentPendingAttachment(attachment);
+      setShowStudentAttachMenu(false);
+      studentInputRef.current?.focus();
+    } catch (err: any) {
+      showToast?.(err.message || 'फोटो प्रोसेस गर्न सकिएन', 'error');
+    } finally {
+      setIsStudentAttaching(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleStudentDocSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsStudentAttaching(true);
+      const attachment = await readDocumentFile(file);
+      setStudentPendingAttachment(attachment);
+      setShowStudentAttachMenu(false);
+      studentInputRef.current?.focus();
+    } catch (err: any) {
+      showToast?.(err.message || 'कागजात लोड गर्न सकिएन', 'error');
+    } finally {
+      setIsStudentAttaching(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAdminImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsAdminAttaching(true);
+      const attachment = await compressImageFile(file);
+      setAdminPendingAttachment(attachment);
+      setShowAdminAttachMenu(false);
+      adminReplyInputRef.current?.focus();
+    } catch (err: any) {
+      showToast?.(err.message || 'फोटो प्रोसेस गर्न सकिएन', 'error');
+    } finally {
+      setIsAdminAttaching(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAdminDocSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsAdminAttaching(true);
+      const attachment = await readDocumentFile(file);
+      setAdminPendingAttachment(attachment);
+      setShowAdminAttachMenu(false);
+      adminReplyInputRef.current?.focus();
+    } catch (err: any) {
+      showToast?.(err.message || 'कागजात लोड गर्न सकिएन', 'error');
+    } finally {
+      setIsAdminAttaching(false);
+      e.target.value = '';
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // HANDLERS: STUDENT
   // --------------------------------------------------------------------------
   const handleStudentSendMessage = async (textToSend?: string) => {
@@ -638,11 +771,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
     const targetUid = effectiveUserId || currentUserId;
     const text = (textToSend !== undefined ? textToSend : studentInputText).trim();
-    if (!text || isStudentSending || !targetUid) return;
+    if ((!text && !studentPendingAttachment) || isStudentSending || !targetUid) return;
 
     setIsStudentSending(true);
+    const attachmentToSend = studentPendingAttachment;
     setStudentInputText('');
+    setStudentPendingAttachment(null);
     setShowEmojiBar(false);
+    setShowStudentAttachMenu(false);
 
     const now = Date.now();
     let finalStudentName = cleanRealName(studentName) || cleanRealName(initialStudentName);
@@ -662,8 +798,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         text,
         timestamp: now,
         isSeen: false,
-        status: 'sent'
+        status: 'sent',
+        attachmentType: attachmentToSend?.type || undefined,
+        attachmentUrl: attachmentToSend?.url || undefined,
+        attachmentName: attachmentToSend?.name || undefined,
+        attachmentSize: attachmentToSend?.size || undefined
       });
+
+      const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
       // 2. Set/update conversation doc with strictly the same single conversation ID
       const convRef = doc(db, 'support_conversations', targetUid);
@@ -676,7 +818,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           userEmail: userEmail || '',
           userAvatar: effectiveAvatar || undefined,
           activeCourse: activeCourseName || '',
-          lastMessage: text,
+          lastMessage: summaryText,
           lastMessageAt: now,
           lastSender: 'user',
           unreadAdminCount: increment(1),
@@ -689,6 +831,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       console.error('Failed to send student message:', error);
       showToast?.('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
       setStudentInputText(text);
+      setStudentPendingAttachment(attachmentToSend);
     } finally {
       setIsStudentSending(false);
     }
@@ -699,10 +842,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // --------------------------------------------------------------------------
   const handleAdminSendReply = async (textToSend?: string) => {
     const text = (textToSend !== undefined ? textToSend : adminReplyText).trim();
-    if (!text || isAdminSending || !selectedAdminConvId) return;
+    if ((!text && !adminPendingAttachment) || isAdminSending || !selectedAdminConvId) return;
 
     setIsAdminSending(true);
+    const attachmentToSend = adminPendingAttachment;
     setAdminReplyText('');
+    setAdminPendingAttachment(null);
+    setShowAdminAttachMenu(false);
 
     const now = Date.now();
     try {
@@ -715,8 +861,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         text,
         timestamp: now,
         isSeen: false,
-        status: 'sent'
+        status: 'sent',
+        attachmentType: attachmentToSend?.type || undefined,
+        attachmentUrl: attachmentToSend?.url || undefined,
+        attachmentName: attachmentToSend?.name || undefined,
+        attachmentSize: attachmentToSend?.size || undefined
       });
+
+      const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
       // 2. Update conversation doc - strictly preserve real student name so it never resets to Student Learner
       const targetConv = adminConversations.find(c => c.id === selectedAdminConvId);
@@ -746,7 +898,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           userEmail: targetConv?.userEmail || '',
           userPhone: targetConv?.userPhone || '',
           purchasedCourses: targetConv?.purchasedCourses || [],
-          lastMessage: text,
+          lastMessage: summaryText,
           lastMessageAt: now,
           lastSender: 'admin',
           unreadAdminCount: 0,
@@ -755,10 +907,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         },
         { merge: true }
       );
-    } catch (err) {
-      console.error('Failed to send admin reply:', err);
+    } catch (error) {
+      console.error('Failed to send admin reply:', error);
       showToast?.('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
       setAdminReplyText(text);
+      setAdminPendingAttachment(attachmentToSend);
     } finally {
       setIsAdminSending(false);
     }
@@ -1127,36 +1280,125 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
                             <p className="font-semibold text-[#e9edef]">{selectedAdminConv.userName} सँग कुराकानी सुरु गर्नुहोस्</p>
                             <p className="text-[11px] text-[#8696a0]">
-                              तलको बक्सबाट सिधै विद्यार्थीलाई जवाफ पठाउनुहोस्।
+                              तलको बक्सबाट सिधै विद्यार्थीलाई जवाफ पठाउनुहोस् वा फोटो/कागजात पठाउनुहोस्।
                             </p>
                           </div>
                         ) : (
                           displayedAdminMessages.map((msg) => {
                             const isAdminMsg = msg.sender === 'admin';
                             const isSeen = msg.isSeen || msg.status === 'seen';
+                            const isCopied = copiedMessageId === msg.id;
 
                             return (
                               <div
                                 key={msg.id}
-                                className={`flex flex-col ${isAdminMsg ? 'items-end' : 'items-start'}`}
+                                className={`flex flex-col group/bubble ${isAdminMsg ? 'items-end' : 'items-start'}`}
                               >
                                 <div
-                                  className={`rounded-xl px-3.5 pt-2 pb-1.5 shadow-sm break-words max-w-[85%] sm:max-w-[70%] ${
+                                  className={`rounded-xl px-3.5 pt-2 pb-1.5 shadow-sm break-words max-w-[85%] sm:max-w-[70%] relative ${
                                     isAdminMsg
                                       ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
                                       : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
                                   }`}
                                 >
                                   {!isAdminMsg && (
-                                    <div className="text-[11px] font-bold text-[#53bdeb] mb-0.5">
-                                      {msg.senderName}
+                                    <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
+                                      <span>{msg.senderName}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyMessage(msg)}
+                                        className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
+                                        title="Copy message (कपी गर्नुहोस्)"
+                                      >
+                                        {isCopied ? (
+                                          <Check className="w-3 h-3 text-[#00a884]" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                      </button>
                                     </div>
                                   )}
 
-                                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</p>
+                                  {/* IMAGE ATTACHMENT */}
+                                  {msg.attachmentType === 'image' && msg.attachmentUrl && (
+                                    <div className="mb-2 overflow-hidden rounded-lg bg-black/30 border border-white/10 relative group/img cursor-pointer">
+                                      <img
+                                        src={msg.attachmentUrl}
+                                        alt={msg.attachmentName || 'Photo'}
+                                        onClick={() => setLightboxImage({ url: msg.attachmentUrl!, name: msg.attachmentName || 'Photo' })}
+                                        className="w-full max-h-[260px] object-cover rounded-lg group-hover/img:scale-[1.02] transition"
+                                      />
+                                      <div 
+                                        onClick={() => setLightboxImage({ url: msg.attachmentUrl!, name: msg.attachmentName || 'Photo' })}
+                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center gap-2"
+                                      >
+                                        <span className="p-1.5 bg-black/60 rounded-full text-white text-xs flex items-center gap-1 font-semibold">
+                                          <Eye className="w-3.5 h-3.5" />
+                                          <span>View</span>
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            downloadFileAttachment(msg.attachmentUrl!, msg.attachmentName || 'photo.jpg');
+                                          }}
+                                          className="p-1.5 bg-[#00a884] text-black rounded-full hover:bg-[#02906f] transition"
+                                          title="Download photo"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
 
-                                  {/* Timestamp & WhatsApp Double Ticks */}
-                                  <div className="text-[10px] text-[#8696a0] mt-0.5 flex items-center justify-end gap-1 select-none">
+                                  {/* DOCUMENT ATTACHMENT */}
+                                  {msg.attachmentType === 'document' && msg.attachmentUrl && (
+                                    <div className="mb-2 p-2.5 bg-black/30 border border-white/10 rounded-lg flex items-center gap-2.5 min-w-[200px]">
+                                      <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
+                                        <FileText className="w-4 h-4" />
+                                      </div>
+                                      <div className="min-w-0 grow">
+                                        <p className="text-xs font-semibold text-[#e9edef] truncate" title={msg.attachmentName}>
+                                          {msg.attachmentName || 'Document'}
+                                        </p>
+                                        <p className="text-[10px] text-[#8696a0]">
+                                          {formatFileSize(msg.attachmentSize) || 'Document'}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadFileAttachment(msg.attachmentUrl!, msg.attachmentName || 'document.pdf')}
+                                        className="p-1.5 bg-[#2a3942] hover:bg-[#00a884] hover:text-black rounded-lg text-[#aebac1] transition shrink-0 cursor-pointer"
+                                        title="Download document"
+                                      >
+                                        <Download className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* MESSAGE TEXT */}
+                                  {msg.text && (
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</p>
+                                  )}
+
+                                  {/* Timestamp, Copy Button & WhatsApp Double Ticks */}
+                                  <div className="text-[10px] text-[#8696a0] mt-1 flex items-center justify-end gap-1.5 select-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyMessage(msg)}
+                                      className="text-[#8696a0] hover:text-white p-0.5 rounded transition cursor-pointer"
+                                      title="Copy message (कपी गर्नुहोस्)"
+                                    >
+                                      {isCopied ? (
+                                        <span className="text-[#00a884] flex items-center gap-0.5 font-bold">
+                                          <Check className="w-3 h-3" />
+                                          <span>कपी भयो</span>
+                                        </span>
+                                      ) : (
+                                        <Copy className="w-3 h-3 opacity-60 hover:opacity-100" />
+                                      )}
+                                    </button>
+
                                     <span>{formatMessageTime(msg.timestamp)}</span>
 
                                     {isAdminMsg && (
@@ -1193,29 +1435,142 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         ))}
                       </div>
 
+                      {/* Admin Pending Attachment Preview Bar */}
+                      {adminPendingAttachment && (
+                        <div className="px-3 py-2 bg-[#111b21] border-t border-[#222d34] flex items-center justify-between gap-3 shrink-0 animate-in fade-in slide-in-from-bottom-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {adminPendingAttachment.type === 'image' ? (
+                              <img
+                                src={adminPendingAttachment.url}
+                                alt={adminPendingAttachment.name}
+                                className="w-10 h-10 rounded-lg object-cover border border-[#00a884]/40 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-[#e9edef] truncate">
+                                {adminPendingAttachment.name}
+                              </p>
+                              <p className="text-[10px] text-[#00a884]">
+                                {adminPendingAttachment.type === 'image' ? '📷 Photo' : '📄 Document'} • {formatFileSize(adminPendingAttachment.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAdminPendingAttachment(null)}
+                            className="p-1.5 text-[#8696a0] hover:text-red-400 hover:bg-[#202c33] rounded-full transition cursor-pointer"
+                            title="Remove attachment"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
                       {/* Admin Reply Input Bar */}
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
                           handleAdminSendReply();
                         }}
-                        className="p-3 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 shrink-0"
+                        className="p-3 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 shrink-0 relative"
                       >
+                        {/* Hidden file inputs */}
+                        <input
+                          type="file"
+                          ref={adminImageInputRef}
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleAdminImageSelect}
+                        />
+                        <input
+                          type="file"
+                          ref={adminDocInputRef}
+                          accept=".pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,application/pdf,text/plain"
+                          className="hidden"
+                          onChange={handleAdminDocSelect}
+                        />
+
+                        {/* WhatsApp Attachment Button & Dropup Menu */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowAdminAttachMenu(!showAdminAttachMenu)}
+                            disabled={isAdminAttaching}
+                            className={`p-2 text-[#8696a0] hover:text-[#00a884] hover:bg-[#111b21] rounded-full transition cursor-pointer ${
+                              showAdminAttachMenu ? 'text-[#00a884] bg-[#111b21]' : ''
+                            }`}
+                            title="Attach Photo or Document"
+                          >
+                            <Paperclip className="w-5 h-5" />
+                          </button>
+
+                          {showAdminAttachMenu && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-30"
+                                onClick={() => setShowAdminAttachMenu(false)}
+                              />
+                              <div className="absolute left-0 bottom-full mb-2 w-52 bg-[#202c33] border border-[#222d34] rounded-2xl shadow-2xl p-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowAdminAttachMenu(false);
+                                    adminImageInputRef.current?.click();
+                                  }}
+                                  className="w-full px-3 py-2.5 text-left hover:bg-[#111b21] rounded-xl flex items-center gap-2.5 transition cursor-pointer"
+                                >
+                                  <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                    <ImageIcon className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-white">Photos & Images</p>
+                                    <p className="text-[10px] text-[#8696a0]">फोटो / स्क्रिनसट</p>
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowAdminAttachMenu(false);
+                                    adminDocInputRef.current?.click();
+                                  }}
+                                  className="w-full px-3 py-2.5 text-left hover:bg-[#111b21] rounded-xl flex items-center gap-2.5 transition cursor-pointer"
+                                >
+                                  <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                                    <FileText className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-white">Document / PDF</p>
+                                    <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;700KB)</p>
+                                  </div>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
                         <div className="grow bg-[#2a3942] rounded-full px-4 py-2 flex items-center">
                           <input
                             ref={adminReplyInputRef}
                             type="text"
                             value={adminReplyText}
                             onChange={(e) => setAdminReplyText(e.target.value)}
-                            placeholder={`Type message to ${selectedAdminConv.userName}...`}
-                            disabled={isAdminSending}
+                            placeholder={
+                              adminPendingAttachment
+                                ? `Add a caption for ${adminPendingAttachment.name}...`
+                                : `Type message to ${selectedAdminConv.userName}...`
+                            }
+                            disabled={isAdminSending || isAdminAttaching}
                             className="grow bg-transparent text-sm text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition disabled:opacity-50"
                           />
                         </div>
 
                         <button
                           type="submit"
-                          disabled={!adminReplyText.trim() || isAdminSending}
+                          disabled={(!adminReplyText.trim() && !adminPendingAttachment) || isAdminSending || isAdminAttaching}
                           className="w-10 h-10 rounded-full bg-[#00a884] hover:bg-[#02906f] disabled:opacity-40 text-white flex items-center justify-center transition cursor-pointer shrink-0 shadow-md active:scale-95"
                           title="Send"
                         >
@@ -1493,30 +1848,121 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       displayedStudentMessages.map((msg) => {
                         const isMe = msg.sender === 'user';
                         const isSeen = msg.isSeen || msg.status === 'seen';
+                        const isCopied = copiedMessageId === msg.id;
 
                         return (
                           <div
                             key={msg.id}
-                            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                            className={`flex flex-col group/bubble ${isMe ? 'items-end' : 'items-start'}`}
                           >
                             <div
-                              className={`rounded-xl px-3.5 pt-2 pb-1.5 text-sm shadow-sm break-words max-w-[85%] sm:max-w-[70%] ${
+                              className={`rounded-xl px-3.5 pt-2 pb-1.5 text-sm shadow-sm break-words max-w-[85%] sm:max-w-[70%] relative ${
                                 isMe
                                   ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
                                   : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
                               }`}
                             >
                               {!isMe && (
-                                <div className="text-[11px] font-bold text-[#00a884] mb-0.5 flex items-center gap-1">
-                                  <span>{siteSettings.instituteName || 'AI CLIPZONE'} Support</span>
-                                  <CheckCircle2 className="w-3 h-3 text-[#00a884]" />
+                                <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1">
+                                    <span>{siteSettings.instituteName || 'AI CLIPZONE'} Support</span>
+                                    <CheckCircle2 className="w-3 h-3 text-[#00a884]" />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyMessage(msg)}
+                                    className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
+                                    title="Copy message (कपी गर्नुहोस्)"
+                                  >
+                                    {isCopied ? (
+                                      <Check className="w-3 h-3 text-[#00a884]" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
                                 </div>
                               )}
 
-                              <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                              {/* IMAGE ATTACHMENT */}
+                              {msg.attachmentType === 'image' && msg.attachmentUrl && (
+                                <div className="mb-2 overflow-hidden rounded-lg bg-black/30 border border-white/10 relative group/img cursor-pointer">
+                                  <img
+                                    src={msg.attachmentUrl}
+                                    alt={msg.attachmentName || 'Photo'}
+                                    onClick={() => setLightboxImage({ url: msg.attachmentUrl!, name: msg.attachmentName || 'Photo' })}
+                                    className="w-full max-h-[260px] object-cover rounded-lg group-hover/img:scale-[1.02] transition"
+                                  />
+                                  <div 
+                                    onClick={() => setLightboxImage({ url: msg.attachmentUrl!, name: msg.attachmentName || 'Photo' })}
+                                    className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center gap-2"
+                                  >
+                                    <span className="p-1.5 bg-black/60 rounded-full text-white text-xs flex items-center gap-1 font-semibold">
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>View</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        downloadFileAttachment(msg.attachmentUrl!, msg.attachmentName || 'photo.jpg');
+                                      }}
+                                      className="p-1.5 bg-[#00a884] text-black rounded-full hover:bg-[#02906f] transition"
+                                      title="Download photo"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
 
-                              {/* Timestamp & WhatsApp Double Ticks */}
-                              <div className="text-[10px] text-[#8696a0] mt-0.5 flex items-center justify-end gap-1 select-none">
+                              {/* DOCUMENT ATTACHMENT */}
+                              {msg.attachmentType === 'document' && msg.attachmentUrl && (
+                                <div className="mb-2 p-2.5 bg-black/30 border border-white/10 rounded-lg flex items-center gap-2.5 min-w-[200px]">
+                                  <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
+                                    <FileText className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0 grow">
+                                    <p className="text-xs font-semibold text-[#e9edef] truncate" title={msg.attachmentName}>
+                                      {msg.attachmentName || 'Document'}
+                                    </p>
+                                    <p className="text-[10px] text-[#8696a0]">
+                                      {formatFileSize(msg.attachmentSize) || 'Document'}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadFileAttachment(msg.attachmentUrl!, msg.attachmentName || 'document.pdf')}
+                                    className="p-1.5 bg-[#2a3942] hover:bg-[#00a884] hover:text-black rounded-lg text-[#aebac1] transition shrink-0 cursor-pointer"
+                                    title="Download document"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* MESSAGE TEXT */}
+                              {msg.text && (
+                                <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                              )}
+
+                              {/* Timestamp, Copy Button & WhatsApp Double Ticks */}
+                              <div className="text-[10px] text-[#8696a0] mt-1 flex items-center justify-end gap-1.5 select-none">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyMessage(msg)}
+                                  className="text-[#8696a0] hover:text-white p-0.5 rounded transition cursor-pointer"
+                                  title="Copy message (कपी गर्नुहोस्)"
+                                >
+                                  {isCopied ? (
+                                    <span className="text-[#00a884] flex items-center gap-0.5 font-bold">
+                                      <Check className="w-3 h-3" />
+                                      <span>कपी भयो</span>
+                                    </span>
+                                  ) : (
+                                    <Copy className="w-3 h-3 opacity-60 hover:opacity-100" />
+                                  )}
+                                </button>
+
                                 <span>{formatMessageTime(msg.timestamp)}</span>
 
                                 {/* WhatsApp Double Tick:
@@ -1578,14 +2024,65 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
               )}
 
+              {/* Student Pending Attachment Preview Tray */}
+              {studentPendingAttachment && (
+                <div className="px-3.5 py-2 bg-[#111b21] border-t border-[#222d34] flex items-center justify-between gap-3 shrink-0 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {studentPendingAttachment.type === 'image' ? (
+                      <img
+                        src={studentPendingAttachment.url}
+                        alt={studentPendingAttachment.name}
+                        className="w-10 h-10 rounded-lg object-cover border border-[#00a884]/40 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#e9edef] truncate">
+                        {studentPendingAttachment.name}
+                      </p>
+                      <p className="text-[10px] text-[#00a884]">
+                        {studentPendingAttachment.type === 'image' ? '📷 Photo' : '📄 Document'} • {formatFileSize(studentPendingAttachment.size)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStudentPendingAttachment(null)}
+                    className="p-1.5 text-[#8696a0] hover:text-red-400 hover:bg-[#202c33] rounded-full transition cursor-pointer"
+                    title="Remove attachment"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* WhatsApp Chat Input Bar */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleStudentSendMessage();
                 }}
-                className="p-2.5 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 shrink-0"
+                className="p-2.5 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 shrink-0 relative"
               >
+                {/* Hidden file inputs for student */}
+                <input
+                  type="file"
+                  ref={studentImageInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleStudentImageSelect}
+                />
+                <input
+                  type="file"
+                  ref={studentDocInputRef}
+                  accept=".pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,application/pdf,text/plain"
+                  className="hidden"
+                  onChange={handleStudentDocSelect}
+                />
+
                 {!hasActivatedCourse && !isAdmin ? (
                   <div className="grow flex items-center justify-between bg-[#111b21] border border-amber-500/30 rounded-full px-4 py-2.5 text-xs text-amber-300">
                     <span className="flex items-center gap-2 font-semibold">
@@ -1607,30 +2104,92 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   </div>
                 ) : (
                   <>
-                    <div className="grow bg-[#2a3942] rounded-full px-3.5 py-2 flex items-center gap-2">
+                    <div className="grow bg-[#2a3942] rounded-full px-3 py-1.5 flex items-center gap-1.5 relative">
                       <button
                         type="button"
                         onClick={() => setShowEmojiBar(!showEmojiBar)}
-                        className={`text-[#8696a0] hover:text-[#00a884] transition p-0.5 cursor-pointer ${showEmojiBar ? 'text-[#00a884]' : ''}`}
+                        className={`text-[#8696a0] hover:text-[#00a884] transition p-1 cursor-pointer ${showEmojiBar ? 'text-[#00a884]' : ''}`}
                         title="Emojis"
                       >
                         <Smile className="w-5 h-5" />
                       </button>
+
+                      {/* Attachment Button & Popup Menu */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowStudentAttachMenu(!showStudentAttachMenu)}
+                          disabled={isStudentAttaching}
+                          className={`text-[#8696a0] hover:text-[#00a884] transition p-1 cursor-pointer ${
+                            showStudentAttachMenu ? 'text-[#00a884]' : ''
+                          }`}
+                          title="Attach Photo or Document"
+                        >
+                          <Paperclip className="w-5 h-5" />
+                        </button>
+
+                        {showStudentAttachMenu && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={() => setShowStudentAttachMenu(false)}
+                            />
+                            <div className="absolute left-0 bottom-full mb-3 w-52 bg-[#202c33] border border-[#222d34] rounded-2xl shadow-2xl p-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowStudentAttachMenu(false);
+                                  studentImageInputRef.current?.click();
+                                }}
+                                className="w-full px-3 py-2.5 text-left hover:bg-[#111b21] rounded-xl flex items-center gap-2.5 transition cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                  <ImageIcon className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-white">Photos & Images</p>
+                                  <p className="text-[10px] text-[#8696a0]">फोटो / स्क्रिनसट</p>
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowStudentAttachMenu(false);
+                                  studentDocInputRef.current?.click();
+                                }}
+                                className="w-full px-3 py-2.5 text-left hover:bg-[#111b21] rounded-xl flex items-center gap-2.5 transition cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-white">Document / PDF</p>
+                                  <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;700KB)</p>
+                                </div>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
 
                       <input
                         ref={studentInputRef}
                         type="text"
                         value={studentInputText}
                         onChange={(e) => setStudentInputText(e.target.value)}
-                        placeholder="Type a message..."
-                        disabled={isStudentSending}
-                        className="grow bg-transparent text-sm text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition disabled:opacity-50"
+                        placeholder={
+                          studentPendingAttachment
+                            ? `Add a caption for ${studentPendingAttachment.name}...`
+                            : "Type a message..."
+                        }
+                        disabled={isStudentSending || isStudentAttaching}
+                        className="grow bg-transparent text-sm text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition disabled:opacity-50 px-1"
                       />
                     </div>
 
                     <button
                       type="submit"
-                      disabled={!studentInputText.trim() || isStudentSending}
+                      disabled={(!studentInputText.trim() && !studentPendingAttachment) || isStudentSending || isStudentAttaching}
                       className="w-11 h-11 rounded-full bg-[#00a884] hover:bg-[#02906f] disabled:opacity-40 text-white flex items-center justify-center transition cursor-pointer shrink-0 shadow-md active:scale-95"
                       title="Send message"
                     >
@@ -1742,6 +2301,53 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   Clear for Admin
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================================== */}
+        {/* FULLSCREEN IMAGE LIGHTBOX MODAL                                      */}
+        {/* ==================================================================== */}
+        {lightboxImage && (
+          <div 
+            className="fixed inset-0 z-[3000] bg-black/92 backdrop-blur-md flex flex-col animate-in fade-in duration-200"
+            onClick={() => setLightboxImage(null)}
+          >
+            <div 
+              className="p-3.5 bg-black/60 border-b border-white/10 flex items-center justify-between z-10 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 truncate text-white text-xs sm:text-sm font-semibold max-w-[65%]">
+                <ImageIcon className="w-4 h-4 text-[#00a884] shrink-0" />
+                <span className="truncate">{lightboxImage.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadFileAttachment(lightboxImage.url, lightboxImage.name)}
+                  className="px-3 py-1.5 bg-[#00a884] hover:bg-[#02906f] text-black font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow-md"
+                  title="Download photo"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>डाउनलोड (Download)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(null)}
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="grow flex items-center justify-center p-4 overflow-hidden">
+              <img 
+                src={lightboxImage.url} 
+                alt={lightboxImage.name} 
+                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" 
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           </div>
         )}

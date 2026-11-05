@@ -156,6 +156,10 @@ export interface SupportMessage {
   isSeen?: boolean;
   seenAt?: number;
   status?: 'sent' | 'seen';
+  attachmentType?: 'image' | 'document';
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentSize?: number;
 }
 
 export interface SupportConversation {
