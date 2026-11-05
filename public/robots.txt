@@ -5,3 +5,4 @@ Disallow: /admin
 Disallow: /api/
 
 Sitemap: https://aiclipzone.vercel.app/sitemap.xml
+Host: https://aiclipzone.vercel.app

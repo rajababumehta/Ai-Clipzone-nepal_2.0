@@ -60,7 +60,13 @@ import {
   FileText,
   ExternalLink,
   Bell,
-  MessageCircle
+  MessageCircle,
+  Code,
+  Palette,
+  TrendingUp,
+  Layers,
+  Globe,
+  Cpu
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
@@ -1997,7 +2003,7 @@ export default function App() {
       setShowCodeInputModal(false);
       setShowProfileModal(false);
       setShowAdminDashboard(true);
-      showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
+      showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
       return;
     }
 
@@ -4709,10 +4715,13 @@ export default function App() {
             <section id="courses-section" className="pt-2 scroll-mt-24">
               {currentView === 'home' && (
                 <div className="text-center mb-10">
-                  <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
-                    <BookOpen className="w-7 h-7 text-blue-400" />
-                    Our Premium AI Courses
-                  </h3>
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center gap-2">
+                    <BookOpen className="w-7 h-7 text-blue-400 shrink-0" />
+                    <span>Our Premium Courses – AI Clipzone</span>
+                  </h1>
+                  <h2 className="text-xs sm:text-sm font-semibold text-zinc-400 mt-2 max-w-xl mx-auto">
+                    Nepal's #1 Digital Skills &amp; Practical Online Learning Platform
+                  </h2>
                   <div className="w-24 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-3 shadow-sm shadow-blue-500/50"></div>
                   <p className="text-zinc-400 mt-3 text-sm md:text-base max-w-xl mx-auto font-medium">
                     तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
@@ -5750,152 +5759,6 @@ export default function App() {
           </div>
         </section>
 
-        {/* What You Learn Section */}
-        <section className="mt-24 relative">
-          <div className="text-center mb-16 relative z-10">
-            <span className="inline-flex items-center gap-1.5 bg-blue-500/20 text-blue-300 font-extrabold text-xs tracking-wider uppercase px-4 py-1.5 rounded-full border border-blue-500/30 shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Full-Stack Skills
-            </span>
-            <h3 className="text-3xl md:text-4xl font-black mt-4 text-white tracking-tight leading-tight">
-              तपाईंले के सिक्नुहुन्छ ? <span className="text-blue-400">What You Will Learn</span>
-            </h3>
-            <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-emerald-500 mx-auto rounded-full mt-4 shadow-xs shadow-blue-500/50"></div>
-            <p className="text-zinc-400 mt-4 text-sm md:text-base max-w-xl mx-auto font-medium">
-              हाम्रो व्यावहारिक कोर्षहरूमा समावेस गरिएका मुख्य विधा र सीपहरू
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            
-            {/* Learn Card 1 */}
-            <motion.div 
-              whileHover={{ y: -6 }}
-              className="bg-zinc-900/90 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/50 shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/30 shadow-sm">
-                  <Sparkles className="w-7 h-7" />
-                </div>
-                <h4 className="text-lg font-black text-white mb-3 tracking-tight">
-                  30+ Premium AI Tools
-                </h4>
-                <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-                  ChatGPT, Midjourney, Runway, ElevenLabs, Leonardo आदि विश्वस्तरीय AI tools को पूर्ण प्रयोगात्मक प्रशिक्षण।
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-wider">
-                <span>Complete Tools Master</span> • <span className="text-zinc-500">Practical</span>
-              </div>
-            </motion.div>
-
-            {/* Learn Card 2 */}
-            <motion.div 
-              whileHover={{ y: -6 }}
-              className="bg-zinc-900/90 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/50 shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/30 shadow-sm">
-                  <Video className="w-7 h-7" />
-                </div>
-                <h4 className="text-lg font-black text-white mb-3 tracking-tight">
-                  AI Video Creation
-                </h4>
-                <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-                  Talking Avatar भिडियो, Text to Video, Script-writing, र प्रोफेसनल एनिमेटेड भिडियो सम्पादन।
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-wider">
-                <span>Video Editing & Avatar</span> • <span className="text-zinc-500">Viral Style</span>
-              </div>
-            </motion.div>
-
-            {/* Learn Card 3 */}
-            <motion.div 
-              whileHover={{ y: -6 }}
-              className="bg-zinc-900/90 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/50 shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/30 shadow-sm">
-                  <ImageIcon className="w-7 h-7" />
-                </div>
-                <h4 className="text-lg font-black text-white mb-3 tracking-tight">
-                  AI Image Generation
-                </h4>
-                <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-                  Stunning यथार्थपरक फोटोहरू, एनिमेसन, व्यावसायिक डिजिटल कला र थम्बनेलहरू सजिलै बनाउने।
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-wider">
-                <span>Art & Graphic Prompting</span> • <span className="text-zinc-500">Pro Quality</span>
-              </div>
-            </motion.div>
-
-            {/* Learn Card 4 */}
-            <motion.div 
-              whileHover={{ y: -6 }}
-              className="bg-zinc-900/90 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/50 shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/30 shadow-sm">
-                  <Music className="w-7 h-7" />
-                </div>
-                <h4 className="text-lg font-black text-white mb-3 tracking-tight">
-                  AI Song & Music Creation
-                </h4>
-                <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-                  आफ्नै गीत, धून, संगीत कम्पोजिसन, भ्वाइस क्लोनिङ र ट्रेन्डिङ सामाजिक सञ्जाल संगीतको उत्पादन।
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-wider">
-                <span>Audio & Voice Cloning</span> • <span className="text-zinc-500">Vocal Hits</span>
-              </div>
-            </motion.div>
-
-            {/* Learn Card 5 */}
-            <motion.div 
-              whileHover={{ y: -6 }}
-              className="bg-zinc-900/90 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/50 shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/30 shadow-sm">
-                  <Presentation className="w-7 h-7" />
-                </div>
-                <h4 className="text-lg font-black text-white mb-3 tracking-tight">
-                  AI Presentation Making
-                </h4>
-                <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-                  Dhruv Rathee शैलीमा उत्कृष्ट एनिमेटेड पावरपोइन्ट स्लाईड र व्यावसायिक कलेज/अफिस प्रस्तुतीकरण।
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-wider">
-                <span>Professional Slides</span> • <span className="text-zinc-500">Dhruv Rathee Style</span>
-              </div>
-            </motion.div>
-
-            {/* Learn Card 6 */}
-            <motion.div 
-              whileHover={{ y: -6 }}
-              className="bg-zinc-900/90 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/50 shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/30 shadow-sm">
-                  <GraduationCap className="w-7 h-7" />
-                </div>
-                <h4 className="text-lg font-black text-white mb-3 tracking-tight">
-                  Practical Projects & Access
-                </h4>
-                <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-                  वास्तविक प्रयोगात्मक प्रोजेक्टहरू, कोर्स पूरा गरेपछि सर्टिफिकेट, र सधैंको लागि आजीवन पहुँच।
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-wider">
-                <span>Verified Certificate</span> • <span className="text-zinc-500">Lifetime Access</span>
-              </div>
-            </motion.div>
-
-          </div>
-        </section>
-
         {/* FAQs Accordion */}
         <section className="mt-20">
           <div className="text-center mb-12">
@@ -6679,20 +6542,11 @@ export default function App() {
                 {/* Secure purchase assurances */}
                 <div className="mt-6 p-4 bg-zinc-900/90 rounded-2xl border border-zinc-800 flex items-center gap-3 text-xs text-zinc-300 font-semibold text-left">
                   <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
-                  <span>१००% सुरक्षित भुक्तानी। भुक्तानी गरेपछि तत्कालै ड्राइभ लिङ्क र भिडियो कोर्ष प्राप्त गर्नुहुनेछ।</span>
+                  <span>Payment गरेपछि payment screenshot send our WhatsApp and get your course access</span>
                 </div>
 
                 {/* Purchase options CTA */}
                 <div className="mt-8 flex flex-col gap-3">
-                  <a 
-                    href={getWhatsappPurchaseUrl(selectedCourse)}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
-                  >
-                    <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
-                  </a>
-                  
                   <button 
                     onClick={handleOpenFonePayQR}
                     className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 px-6 rounded-2xl text-center shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
@@ -7019,7 +6873,7 @@ export default function App() {
                           setShowAdminLoginModal(false);
                           setAdminCodeInput('');
                           setShowAdminDashboard(true);
-                          showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
+                          showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
                         } else {
                           showToast('Invalid activation key. Please try again.', 'error');
                         }
@@ -7061,7 +6915,7 @@ export default function App() {
                       setShowAdminLoginModal(false);
                       setAdminCodeInput('');
                       setShowAdminDashboard(true);
-                      showToast('⚡ Welcome Rajababu! Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
+                      showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
                     } else {
                       showToast('Invalid activation key. Please try again.', 'error');
                     }

@@ -46,7 +46,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
   certificateDirectorName: "Director",
   certificateDirectorTitle: "Program Director",
   certificateDirectorSignatureUrl: "",
-  certificateCeoName: "Rajababu Mehta (Founder & CEO)",
+  certificateCeoName: "Founder & CEO (AI Clipzone)",
   certificateCeoTitle: "Founder & CEO, AI Clipzone",
   certificateCeoSignatureUrl: "",
   certificateTheme: "blue",
