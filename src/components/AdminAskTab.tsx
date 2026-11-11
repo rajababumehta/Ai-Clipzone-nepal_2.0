@@ -1134,6 +1134,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
       {/* ==================================================================== */}
       {/* FULLSCREEN IMAGE LIGHTBOX MODAL                                      */}
       {/* ==================================================================== */}
