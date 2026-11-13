@@ -3778,6 +3778,10 @@ export default function App() {
             {/* Left: Brand Logo Only (text removed as requested) */}
             <div 
               onClick={() => {
+                if (isUserAdminSession) {
+                  setShowAdminDashboard(true);
+                  return;
+                }
                 setCurrentView('home');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
@@ -4717,7 +4721,7 @@ export default function App() {
                 <div className="text-center mb-10">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center gap-2">
                     <BookOpen className="w-7 h-7 text-blue-400 shrink-0" />
-                    <span>Our Premium Courses – AI Clipzone</span>
+                    <span>Our Premium Courses</span>
                   </h1>
                   <h2 className="text-xs sm:text-sm font-semibold text-zinc-400 mt-2 max-w-xl mx-auto">
                     Nepal's #1 Digital Skills &amp; Practical Online Learning Platform
@@ -6023,7 +6027,12 @@ export default function App() {
               <img 
                 src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                 alt={siteSettings.instituteName || "Logo"} 
-                className="h-6 w-auto object-contain rounded"
+                onClick={() => {
+                  if (isUserAdminSession) {
+                    setShowAdminDashboard(true);
+                  }
+                }}
+                className={`h-6 w-auto object-contain rounded ${isUserAdminSession ? 'cursor-pointer' : ''}`}
                 onError={(e) => {
                   const img = e.currentTarget as HTMLImageElement;
                   if (!img.src.includes('/logo.png')) {
@@ -6060,14 +6069,6 @@ export default function App() {
             >
               <span>✉️ Email</span>
             </a>
-            {isAdminActivated && (
-              <button
-                onClick={() => setShowAdminDashboard(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:text-amber-300 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <span>👑 Admin Dashboard</span>
-              </button>
-            )}
           </div>
         </div>
       </footer>
