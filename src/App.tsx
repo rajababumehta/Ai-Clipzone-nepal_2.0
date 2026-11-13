@@ -365,6 +365,10 @@ export default function App() {
   // Student Authentication & Course Activation states
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(() => {
     const localName = localStorage.getItem('clipzone_student_name');
+    if (localName === 'Admin (ClipZone)') {
+      try { localStorage.removeItem('clipzone_student_name'); } catch {}
+      return null;
+    }
     if (localName) {
       return {
         uid: localStorage.getItem('clipzone_student_uid') || 'local_student',
@@ -377,7 +381,8 @@ export default function App() {
   });
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
     // If student profile already exists in local storage, don't block UI with loading
-    return !localStorage.getItem('clipzone_student_name');
+    const localName = localStorage.getItem('clipzone_student_name');
+    return !localName || localName === 'Admin (ClipZone)';
   });
   const [userActivationKeys, setUserActivationKeys] = useState<any[]>(() => {
     try {
@@ -1174,6 +1179,18 @@ export default function App() {
     setSubAdminSession(null);
     localStorage.removeItem('clipzone_sub_admin_session');
 
+    // Never create or keep an artificial student profile for Admin login
+    if (
+      localStorage.getItem('clipzone_student_name') === 'Admin (ClipZone)' ||
+      (activeCourseIds.length === 0 && userActivationKeys.length === 0)
+    ) {
+      localStorage.removeItem('clipzone_student_name');
+      setAuthName('');
+      if (currentUser && ((currentUser as any).isAnonymous || String(currentUser.uid || '').startsWith('local_'))) {
+        setCurrentUser(null);
+      }
+    }
+
     const newSessionId = 'adm_sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
     const deviceId = getOrCreateDeviceId();
     localStorage.setItem('clipzone_admin_session_id', newSessionId);
@@ -1197,6 +1214,19 @@ export default function App() {
     setIsAdminActivated(false);
     localStorage.removeItem('clipzone_admin_session_id');
     localStorage.removeItem('clipzone_admin_activated');
+
+    // Never create or keep an artificial student profile for Sub-Admin login
+    if (
+      localStorage.getItem('clipzone_student_name') === (subAccount.name || 'Sub-Admin') ||
+      localStorage.getItem('clipzone_student_name') === 'Admin (ClipZone)' ||
+      (activeCourseIds.length === 0 && userActivationKeys.length === 0)
+    ) {
+      localStorage.removeItem('clipzone_student_name');
+      setAuthName('');
+      if (currentUser && ((currentUser as any).isAnonymous || String(currentUser.uid || '').startsWith('local_'))) {
+        setCurrentUser(null);
+      }
+    }
 
     const deviceId = getOrCreateDeviceId();
     const updatedSub: SubAdminAccount = {
@@ -2357,12 +2387,6 @@ export default function App() {
 
     await handleActivateSubAdminSession(foundSub);
 
-    if (!localStorage.getItem('clipzone_student_name')) {
-      const subDisplayName = foundSub.name || 'Sub-Admin';
-      setAuthName(subDisplayName);
-      localStorage.setItem('clipzone_student_name', subDisplayName);
-    }
-
     return 'activated';
   };
 
@@ -2412,13 +2436,6 @@ export default function App() {
     const isSecretAdmin = (await verifyAdminSecret(cleanCode)) || (await verifyAdminSecret(rawInput));
     if (isSecretAdmin) {
       await handleActivateAdminSession();
-      
-      // Ensure student session profile is also set up for Admin
-      if (!localStorage.getItem('clipzone_student_name')) {
-        const adminName = 'Admin (ClipZone)';
-        setAuthName(adminName);
-        localStorage.setItem('clipzone_student_name', adminName);
-      }
       
       setActivationCodeInput('');
       setShowCodeInputModal(false);
@@ -3826,6 +3843,11 @@ export default function App() {
   );
   const hasCourseActivated = activeCourseIds.length > 0;
   const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
+  const hasStudentProfile = Boolean(
+    !isUserAdminSession
+      ? (currentUser || localStorage.getItem('clipzone_student_name'))
+      : (activeCourseIds.length > 0 || userActivationKeys.length > 0)
+  );
   const askUnreadCount = isMainAdmin ? adminUnreadCount : isSubAdmin ? subAdminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
@@ -4872,20 +4894,20 @@ export default function App() {
               <div className="relative shrink-0">
                 <div
                   className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
-                  title={currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'AI Clipzone'}
+                  title={hasStudentProfile && currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'AI Clipzone'}
                 >
-                  {userAvatar ? (
+                  {hasStudentProfile && userAvatar ? (
                     userAvatar.startsWith('http') || userAvatar.startsWith('data:') ? (
                       <img src={userAvatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
                     ) : (
                       <span className="text-base select-none">{userAvatar}</span>
                     )
-                  ) : currentUser ? (
+                  ) : hasStudentProfile && (currentUser || localStorage.getItem('clipzone_student_name')) ? (
                     <>
                       <span className="uppercase text-[11px] text-zinc-100 font-black">
-                        {(currentUser.displayName || currentUser.email || 'ST').substring(0, 2)}
+                        {(currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || currentUser?.email || 'ST').substring(0, 2)}
                       </span>
-                      {/* Facebook Style Blue Tick Verification Badge */}
+                      {/* X/Twitter Style Blue Tick Verification Badge */}
                       <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-black flex items-center justify-center">
                         <VerifiedBadge variant="student" className="w-4 h-4" />
                       </span>
@@ -4968,12 +4990,12 @@ export default function App() {
         ) : currentView === 'account' ? (
           <section id="account-full-view" className="w-full max-w-3xl mx-auto space-y-5 pb-20 pt-2">
 
-            {authLoading && !currentUser && !localStorage.getItem('clipzone_student_name') ? (
+            {authLoading && !hasStudentProfile ? (
               <div className="p-16 text-center text-xs font-bold text-zinc-400 flex flex-col items-center justify-center gap-3 bg-zinc-950 rounded-3xl border border-zinc-800">
                 <span className="w-7 h-7 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
                 <span>Securing user session...</span>
               </div>
-            ) : !currentUser && !localStorage.getItem('clipzone_student_name') ? (
+            ) : !hasStudentProfile ? (
               /* CASE: UNREGISTERED / NOT LOGGED IN - VIP PASS ACTIVATION CARD */
               <div className="max-w-lg mx-auto bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-950 p-6 sm:p-10 rounded-3xl border border-zinc-800/90 shadow-2xl space-y-6 text-center">
                 <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-blue-500/25 ring-4 ring-blue-500/10">
@@ -8455,7 +8477,7 @@ export default function App() {
                 : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
-            {userAvatar ? (
+            {hasStudentProfile && userAvatar ? (
               userAvatar.startsWith('http') || userAvatar.startsWith('data:') ? (
                 <img src={userAvatar} alt="Avatar" className="w-5 h-5 mb-0.5 md:mb-0 rounded-full object-cover ring-1 ring-blue-400 shrink-0" />
               ) : (
