@@ -75,6 +75,11 @@ service cloud.firestore {
       }
     }
 
+    // Security rules for course-scoped sub-admin accounts
+    match /sub_admins/{code} {
+      allow read, write: if true;
+    }
+
     // Global default catch-all: deny all other paths
     match /{document=**} {
       allow read, write: if false;

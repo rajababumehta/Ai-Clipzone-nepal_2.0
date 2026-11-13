@@ -42,6 +42,20 @@ export interface Course {
   certificateCeoSignatureUrl?: string;
   certificateStampUrl?: string;
   certificateSealText?: string;
+  // Per-course Payment & WhatsApp override (editable by Main Admin or Course Sub-Admin)
+  paymentConfig?: CoursePaymentConfig;
+}
+
+export interface CoursePaymentConfig {
+  esewaId?: string;
+  accountName?: string;
+  bankName?: string;
+  bankAccountNo?: string;
+  bankBranch?: string;
+  whatsappNumber?: string;
+  qrImageUrl?: string;
+  paymentInstruction?: string;
+  updatedAt?: number;
 }
 
 export interface CourseRequest {
@@ -129,6 +143,22 @@ export interface ActivationKey {
   expiresAt?: number;
   courseId?: string; // "all" or specific courseId e.g. "ai-masterclass"
   courseTitle?: string; // "All Courses" or specific course name
+  activeDeviceId?: string;
+  createdByRole?: 'main_admin' | 'sub_admin';
+  createdBySubAdminCode?: string;
+  createdByName?: string;
+}
+
+export interface SubAdminAccount {
+  id: string; // same as code e.g. "SUB-XXXXXX"
+  code: string;
+  name: string;
+  courseId: string;
+  courseTitle: string;
+  status: 'active' | 'disabled';
+  createdAt: number;
+  updatedAt?: number;
+  lastLoginAt?: number;
   activeDeviceId?: string;
 }
 

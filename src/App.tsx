@@ -70,7 +70,7 @@ import {
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
-import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem } from './types';
+import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -217,6 +217,12 @@ export function extractAndCleanCode(text: string): string {
     return trimmed.replace(/["'“”‘’]/g, '').trim().toUpperCase();
   }
 
+  // Check for Sub-Admin code pattern (e.g. "SUB-123456", "SUB 123456", "SUB-MYCOURSE")
+  const subMatch = trimmed.match(/(?:^|[^A-Za-z0-9])SUB\s*[-_]?\s*([A-Za-z0-9-]+)/i);
+  if (subMatch && subMatch[1]) {
+    return `SUB-${subMatch[1].replace(/[^A-Za-z0-9-]/g, '').toUpperCase()}`;
+  }
+
   // Check for standalone student CLIP pattern (e.g. "CLIP-123456", "CLIP 123456", "CLIP123456")
   // Use negative lookahead / word boundary to ensure it does not match inside words like AICLIPZONE
   const clipMatch = trimmed.match(/(?:^|[^A-Za-z0-9])CLIP\s*[-_]?\s*([A-Za-z0-9]+)/i);
@@ -290,8 +296,27 @@ export default function App() {
     }
     return hasFlag && hasSessionId;
   });
+  const [subAdminSession, setSubAdminSession] = useState<SubAdminAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem('clipzone_sub_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved) as SubAdminAccount;
+        if (parsed && parsed.code && parsed.courseId && parsed.status === 'active') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
+  const [subAdminList, setSubAdminList] = useState<SubAdminAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('clipzone_sub_admins_cache');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
+  const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
   const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
 
@@ -806,8 +831,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Push Notification Handlers
+  // Push Notification Handlers (Main Admin Only)
   const handleSendNotification = async (notifData: Omit<PushNotificationItem, 'id' | 'createdAt'>) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Notification पठाउन सक्छ।', 'error');
+      return;
+    }
     try {
       const notifRef = doc(collection(db, 'notifications'));
       const newNotif: PushNotificationItem = {
@@ -825,6 +854,10 @@ export default function App() {
   };
 
   const handleDeleteNotification = async (id: string) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Notification हटाउन सक्छ।', 'error');
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'notifications', id));
       showToast('Notification removed successfully.', 'info');
@@ -1020,8 +1053,12 @@ export default function App() {
     return devId;
   };
 
-  // --- SINGLE-DEVICE ADMIN SESSION MANAGEMENT ---
+  // --- SINGLE-DEVICE ADMIN & SUB-ADMIN SESSION MANAGEMENT ---
   const handleActivateAdminSession = async () => {
+    // Clear any Sub-Admin session when Main Admin logs in
+    setSubAdminSession(null);
+    localStorage.removeItem('clipzone_sub_admin_session');
+
     const newSessionId = 'adm_sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
     const deviceId = getOrCreateDeviceId();
     localStorage.setItem('clipzone_admin_session_id', newSessionId);
@@ -1037,6 +1074,51 @@ export default function App() {
       }, { merge: true });
     } catch (err) {
       console.warn('Error saving single-device admin session to Firestore:', err);
+    }
+  };
+
+  const handleActivateSubAdminSession = async (subAccount: SubAdminAccount) => {
+    // Ensure Main Admin flags are cleared so Sub-Admin runs strictly scoped
+    setIsAdminActivated(false);
+    localStorage.removeItem('clipzone_admin_session_id');
+    localStorage.removeItem('clipzone_admin_activated');
+
+    const deviceId = getOrCreateDeviceId();
+    const updatedSub: SubAdminAccount = {
+      ...subAccount,
+      lastLoginAt: Date.now(),
+      activeDeviceId: deviceId
+    };
+    setSubAdminSession(updatedSub);
+    localStorage.setItem('clipzone_sub_admin_session', JSON.stringify(updatedSub));
+
+    try {
+      await setDoc(doc(db, 'sub_admins', subAccount.code), {
+        lastLoginAt: updatedSub.lastLoginAt,
+        activeDeviceId: deviceId
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Error updating sub-admin login session:', err);
+    }
+  };
+
+  const handleSubAdminExit = async () => {
+    const activeCode = subAdminSession?.code;
+    setSubAdminSession(null);
+    localStorage.removeItem('clipzone_sub_admin_session');
+    setAllActivationKeys([]);
+    setShowAdminMenu(false);
+    setShowAdminDashboard(false);
+    showToast('Sub-Admin मोडबाट लगआउट गरियो (Logged out of Sub-Admin mode)', 'info');
+
+    if (activeCode) {
+      try {
+        await updateDoc(doc(db, 'sub_admins', activeCode), {
+          activeDeviceId: ''
+        });
+      } catch (err) {
+        console.warn('Error releasing sub-admin device session:', err);
+      }
     }
   };
 
@@ -1061,6 +1143,14 @@ export default function App() {
       } catch (err) {
         console.warn('Error releasing admin session:', err);
       }
+    }
+  };
+
+  const handleLogoutAdminSession = async () => {
+    if (isAdminActivated) {
+      await handleAdminExit();
+    } else if (subAdminSession) {
+      await handleSubAdminExit();
     }
   };
 
@@ -1562,7 +1652,7 @@ export default function App() {
         (e.shiftKey && cmdOrCtrl && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
         (cmdOrCtrl && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
       ) {
-        if (!isAdminActivated) {
+        if (!isAdminActivated && !subAdminSession) {
           e.preventDefault();
           showToast('सुरक्षाको कारणले यो सर्टकट असक्षम गरिएको छ! (Shortcut disabled for protection!)', 'error');
         }
@@ -1570,13 +1660,13 @@ export default function App() {
     };
     
     const handleContextMenu = (e: MouseEvent) => {
-      if (!isAdminActivated) {
+      if (!isAdminActivated && !subAdminSession) {
         e.preventDefault();
       }
     };
 
     const handleCopy = (e: ClipboardEvent) => {
-      if (!isAdminActivated) {
+      if (!isAdminActivated && !subAdminSession) {
         e.preventDefault();
         showToast('कपी गर्न निषेध गरिएको छ! (Copying is restricted!)', 'error');
       }
@@ -1590,7 +1680,7 @@ export default function App() {
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('copy', handleCopy as any);
     };
-  }, [isAdminActivated]);
+  }, [isAdminActivated, subAdminSession]);
 
   const fetchUserActiveKeys = async (user: FirebaseUser) => {
     const localActivatedCourses: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
@@ -1740,36 +1830,51 @@ export default function App() {
     return lower === 'ai.clipzone.edu@gmail.com' || lower === 'rajababum426@gmail.com' || lower.startsWith('admin');
   };
 
-  // Fetch all keys for Admin panel
+  // Fetch keys for Admin (all keys) or Sub-Admin (strictly scoped to assigned courseId)
   const fetchAdminKeys = async () => {
+    const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    const subCourseId = !mainAdminActive && subAdminSession?.status === 'active' ? subAdminSession.courseId : '';
+
+    if (!mainAdminActive && !subCourseId) {
+      return;
+    }
+
     let cachedKeys: any[] = [];
-    const cached = localStorage.getItem('clipzone_admin_keys_cache');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          cachedKeys = parsed;
-          setAllActivationKeys(parsed);
-        }
-      } catch (e) {}
+    if (mainAdminActive) {
+      const cached = localStorage.getItem('clipzone_admin_keys_cache');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            cachedKeys = parsed;
+            setAllActivationKeys(parsed);
+          }
+        } catch (e) {}
+      }
     }
 
     setIsAdminLoadingKeys(true);
 
     try {
-      const querySnapshot = await getDocs(collection(db, 'activation_keys'));
+      const keysRef = mainAdminActive
+        ? collection(db, 'activation_keys')
+        : query(collection(db, 'activation_keys'), where('courseId', '==', subCourseId));
+
+      const querySnapshot = await getDocs(keysRef);
 
       const firestoreKeys: any[] = [];
-      querySnapshot.forEach((doc: any) => {
-        firestoreKeys.push({ id: doc.id, ...doc.data() });
+      querySnapshot.forEach((docSnap: any) => {
+        firestoreKeys.push({ id: docSnap.id, ...docSnap.data() });
       });
 
       firestoreKeys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setAllActivationKeys(firestoreKeys);
-      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(firestoreKeys));
+      if (mainAdminActive) {
+        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(firestoreKeys));
+      }
     } catch (err: any) {
       console.error('Failed loading keys for admin:', err);
-      if (cachedKeys.length > 0) {
+      if (mainAdminActive && cachedKeys.length > 0) {
         setAllActivationKeys(cachedKeys);
       }
       if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
@@ -1780,27 +1885,93 @@ export default function App() {
     }
   };
 
-  // Fetch admin keys when admin is activated, and subscribe to realtime updates
+  // Realtime listeners for activation_keys & sub_admins based on active role (Main Admin vs Course Sub-Admin)
   useEffect(() => {
-    if (isAdminActivated) {
-      fetchAdminKeys();
+    const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    const subCourseId = !mainAdminActive && subAdminSession?.status === 'active' ? subAdminSession.courseId : '';
 
-      // Realtime listener for admin keys collection
-      const unsub = onSnapshot(collection(db, 'activation_keys'), (snapshot) => {
-        const keys: any[] = [];
-        snapshot.forEach((docSnap) => {
-          keys.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        setAllActivationKeys(keys);
-        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
-      }, (err) => {
-        console.warn('Realtime admin keys collection listener error:', err);
-      });
-
-      return () => unsub();
+    if (!mainAdminActive && !subCourseId) {
+      return;
     }
-  }, [isAdminActivated]);
+
+    fetchAdminKeys();
+
+    const keysQuery = mainAdminActive
+      ? collection(db, 'activation_keys')
+      : query(collection(db, 'activation_keys'), where('courseId', '==', subCourseId));
+
+    const unsubKeys = onSnapshot(keysQuery, (snapshot) => {
+      const keys: any[] = [];
+      snapshot.forEach((docSnap) => {
+        keys.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setAllActivationKeys(keys);
+      if (mainAdminActive) {
+        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
+      }
+    }, (err) => {
+      console.warn('Realtime admin keys collection listener error:', err);
+    });
+
+    let unsubSubAdmins: (() => void) | null = null;
+    if (mainAdminActive) {
+      unsubSubAdmins = onSnapshot(collection(db, 'sub_admins'), (snapshot) => {
+        const list: SubAdminAccount[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
+        });
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setSubAdminList(list);
+        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(list));
+      }, (err) => {
+        console.warn('Realtime sub_admins listener error:', err);
+      });
+    } else if (subAdminSession?.code) {
+      // Live watch own Sub-Admin document so Main Admin disable / delete / reassign applies immediately
+      const myDeviceId = getOrCreateDeviceId();
+      unsubSubAdmins = onSnapshot(doc(db, 'sub_admins', subAdminSession.code), (docSnap) => {
+        if ((docSnap as any)?.metadata?.fromCache && typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if (!docSnap.exists()) {
+          setSubAdminSession(null);
+          localStorage.removeItem('clipzone_sub_admin_session');
+          setAllActivationKeys([]);
+          setShowAdminDashboard(false);
+          setShowCourseFormModal(false);
+          showToast('⚠️ तपाईंको Sub-Admin खाता Main Admin द्वारा हटाइएको छ।', 'error');
+          return;
+        }
+        const remote = { id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) };
+        if (remote.status === 'disabled') {
+          setSubAdminSession(null);
+          localStorage.removeItem('clipzone_sub_admin_session');
+          setAllActivationKeys([]);
+          setShowAdminDashboard(false);
+          setShowCourseFormModal(false);
+          showToast('⚠️ तपाईंको Sub-Admin खाता Main Admin द्वारा निष्क्रिय (Disabled) गरिएको छ।', 'error');
+          return;
+        }
+        if (remote.activeDeviceId && remote.activeDeviceId !== myDeviceId) {
+          setSubAdminSession(null);
+          localStorage.removeItem('clipzone_sub_admin_session');
+          setAllActivationKeys([]);
+          setShowAdminDashboard(false);
+          setShowCourseFormModal(false);
+          showToast('⚠️ यो Sub-Admin कोड अर्को डिभाइसमा लगइन भएकोले यो सेसन लगआउट भयो।', 'error');
+          return;
+        }
+        setSubAdminSession(remote);
+        localStorage.setItem('clipzone_sub_admin_session', JSON.stringify(remote));
+      }, (err) => {
+        console.warn('Sub-admin self watcher error:', err);
+      });
+    }
+
+    return () => {
+      unsubKeys();
+      if (unsubSubAdmins) unsubSubAdmins();
+    };
+  }, [isAdminActivated, currentUser?.email, subAdminSession?.code, subAdminSession?.courseId]);
 
   // STUDENT PORTAL HANDLERS (PASSWORD-FREE ANONYMOUS SIGN-IN)
   const handleStudentAnonymousLogin = async (e: FormEvent) => {
@@ -1977,6 +2148,91 @@ export default function App() {
     }
   };
 
+  // Lookup & verify a Course Sub-Admin code in Firestore (with offline cache fallback)
+  const tryActivateSubAdminByCode = async (rawInput: string): Promise<'activated' | 'disabled' | 'not_found'> => {
+    const cleaned = extractAndCleanCode(rawInput);
+    const rawUpper = rawInput.trim().toUpperCase();
+    const candidates = Array.from(new Set([cleaned, rawUpper].filter(Boolean)));
+    if (candidates.length === 0) return 'not_found';
+
+    let foundSub: SubAdminAccount | null = null;
+    let checkedRemote = false;
+
+    for (const candidate of candidates) {
+      try {
+        const subRef = doc(db, 'sub_admins', candidate);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SUB_TIMEOUT')), 2500));
+        const snap: any = await Promise.race([getDoc(subRef), timeoutPromise]);
+        if (snap && typeof snap.exists === 'function') {
+          checkedRemote = true;
+          if (snap.exists()) {
+            foundSub = { id: snap.id, ...(snap.data() as Omit<SubAdminAccount, 'id'>) };
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn('Sub-admin Firestore lookup error:', err);
+      }
+    }
+
+    if (!foundSub && !checkedRemote) {
+      try {
+        const cachedStr = localStorage.getItem('clipzone_sub_admins_cache');
+        const cached: SubAdminAccount[] = cachedStr ? JSON.parse(cachedStr) : [];
+        const localMatch = [...subAdminList, ...cached].find(s => candidates.includes(s.code));
+        if (localMatch) foundSub = localMatch;
+      } catch {}
+    }
+
+    if (!foundSub) return 'not_found';
+    if (foundSub.status === 'disabled') {
+      showToast('⚠️ यो Sub-Admin कोड हाल निष्क्रिय (Disabled) गरिएको छ। कृपया Main Admin सँग सम्पर्क गर्नुहोस्।', 'error');
+      return 'disabled';
+    }
+
+    await handleActivateSubAdminSession(foundSub);
+
+    if (!localStorage.getItem('clipzone_student_name')) {
+      const subDisplayName = foundSub.name || 'Sub-Admin';
+      setAuthName(subDisplayName);
+      localStorage.setItem('clipzone_student_name', subDisplayName);
+    }
+
+    return 'activated';
+  };
+
+  // Shared login handler for Admin Verification Modal (supports Main Admin & Course Sub-Admin codes)
+  const handleVerifyAdminModalLogin = async () => {
+    const raw = adminCodeInput;
+    const code = raw.trim().toUpperCase();
+    const cleaned = extractAndCleanCode(raw);
+    const isValid = (await verifyAdminSecret(code)) || (await verifyAdminSecret(raw));
+    if (isValid) {
+      await handleActivateAdminSession();
+      setShowAdminLoginModal(false);
+      setAdminCodeInput('');
+      setAdminInitialTab('keys');
+      setShowAdminDashboard(true);
+      showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
+      return;
+    }
+
+    const subStatus = await tryActivateSubAdminByCode(cleaned || raw);
+    if (subStatus === 'activated') {
+      setShowAdminLoginModal(false);
+      setAdminCodeInput('');
+      setAdminInitialTab('courses');
+      setShowAdminDashboard(true);
+      showToast('🛡️ Sub-Admin Mode activated! तपाईंको कोर्ष ड्यासबोर्ड खुल्यो।', 'success');
+      return;
+    }
+    if (subStatus === 'disabled') {
+      return;
+    }
+
+    showToast('Invalid activation key. Please try again.', 'error');
+  };
+
   // ACTIVATE / CLAIM SECRET KEY
   const handleClaimActivationCode = async (e: FormEvent) => {
     e.preventDefault();
@@ -2002,8 +2258,24 @@ export default function App() {
       setActivationCodeInput('');
       setShowCodeInputModal(false);
       setShowProfileModal(false);
+      setAdminInitialTab('keys');
       setShowAdminDashboard(true);
       showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
+      return;
+    }
+
+    // Check if code belongs to a Course Sub-Admin
+    const subStatus = await tryActivateSubAdminByCode(rawInput);
+    if (subStatus === 'disabled') {
+      return;
+    }
+    if (subStatus === 'activated') {
+      setActivationCodeInput('');
+      setShowCodeInputModal(false);
+      setShowProfileModal(false);
+      setAdminInitialTab('courses');
+      setShowAdminDashboard(true);
+      showToast('🛡️ Sub-Admin Mode activated! लोगो (Logo) मा क्लिक गरी आफ्नो कोर्ष ड्यासबोर्ड खोल्न सक्नुहुन्छ।', 'success');
       return;
     }
 
@@ -2283,21 +2555,29 @@ export default function App() {
     }
   };
 
-  // ADMIN ACTIVATION KEY GENERATION HANDLERS
+  // ADMIN & SUB-ADMIN ACTIVATION KEY GENERATION HANDLER
   const handleGenerateActivationKey = async (
     courseId: string, 
     autoCopy: boolean = true, 
     studentNameArg?: string, 
     durationArg?: '1day' | '1month' | '1year'
   ) => {
-    let targetCourseId = courseId;
+    if (!isMainAdmin && !isSubAdmin) {
+      showToast('अनधिकृत पहुँच! कोर्ष कोड बनाउने अनुमति छैन।', 'error');
+      return;
+    }
+
+    // Course Sub-Admins are strictly locked to their assigned courseId
+    let targetCourseId = isSubAdmin && subAdminSession ? subAdminSession.courseId : courseId;
     if (!targetCourseId && courses && courses.length > 0) {
       targetCourseId = courses[0].id;
     }
     
     const selectedCourseData = courses.find(c => c.id === targetCourseId);
-    const courseTitle = selectedCourseData ? selectedCourseData.title : (courses[0]?.title || 'All Courses Access');
-    const finalCourseId = selectedCourseData ? selectedCourseData.id : (courses[0]?.id || 'course-all');
+    const courseTitle = selectedCourseData
+      ? selectedCourseData.title
+      : (isSubAdmin && subAdminSession?.courseTitle) || courses[0]?.title || 'All Courses Access';
+    const finalCourseId = selectedCourseData ? selectedCourseData.id : targetCourseId || (courses[0]?.id || 'course-all');
 
     const studentName = (studentNameArg !== undefined ? studentNameArg : genStudentName).trim();
     const duration = durationArg || genSelectedDuration || '1year';
@@ -2314,13 +2594,24 @@ export default function App() {
       createdAt: Date.now(),
       courseId: finalCourseId,
       courseTitle: courseTitle,
-      studentName: studentName
+      studentName: studentName,
+      createdByRole: (isMainAdmin ? 'main_admin' : 'sub_admin') as 'main_admin' | 'sub_admin',
+      ...(isSubAdmin && subAdminSession
+        ? {
+            createdBySubAdminCode: subAdminSession.code,
+            createdByName: subAdminSession.name,
+          }
+        : {
+            createdByName: 'Main Admin',
+          }),
     };
 
-    // Instantly update UI and local cache
+    // Instantly update UI and local cache (only Main Admin writes full global cache)
     setAllActivationKeys(prev => {
       const updated = [newKeyDoc, ...prev.filter(k => k.code !== finalCode && k.id !== finalCode)];
-      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      if (isMainAdmin) {
+        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      }
       return updated;
     });
 
@@ -2345,8 +2636,165 @@ export default function App() {
     }
   };
 
-  // ADMIN PAYMENT QR SETTINGS HANDLER
+  // MAIN ADMIN ONLY: SUB-ADMIN CRUD HANDLERS
+  const handleCreateSubAdmin = async (
+    name: string,
+    courseId: string,
+    customCode?: string
+  ): Promise<SubAdminAccount | null> => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Sub-Admin कोड बनाउन सक्छ।', 'error');
+      return null;
+    }
+
+    const cleanName = name.trim();
+    const targetCourse = courses.find(c => c.id === courseId);
+    if (!cleanName || !targetCourse) {
+      showToast('Sub-Admin को नाम र कोर्ष अनिवार्य छ।', 'error');
+      return null;
+    }
+
+    let finalCode = (customCode || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9-]/g, '');
+
+    if (!finalCode) {
+      const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+      finalCode = `SUB-${rand}`;
+    }
+
+    // Prevent collision with Main Admin secret code
+    if (await verifyAdminSecret(finalCode)) {
+      showToast('यो कोड Main Admin कोडसँग मिल्छ, कृपया अर्को कोड प्रयोग गर्नुहोस्।', 'error');
+      return null;
+    }
+
+    // Prevent collision with existing Sub-Admin or Student key
+    if (subAdminList.some(s => s.code === finalCode)) {
+      showToast(`कोड "${finalCode}" पहिले नै प्रयोगमा छ। कृपया अर्को कोड राख्नुहोस्।`, 'error');
+      return null;
+    }
+
+    try {
+      const [existingSubSnap, existingKeySnap] = await Promise.all([
+        getDoc(doc(db, 'sub_admins', finalCode)).catch(() => null),
+        getDoc(doc(db, 'activation_keys', finalCode)).catch(() => null),
+      ]);
+      if (existingSubSnap?.exists() || existingKeySnap?.exists()) {
+        showToast(`कोड "${finalCode}" पहिले नै अवस्थित छ। कृपया फरक कोड राख्नुहोस्।`, 'error');
+        return null;
+      }
+    } catch {}
+
+    const newSubAdmin: SubAdminAccount = {
+      id: finalCode,
+      code: finalCode,
+      name: cleanName,
+      courseId: targetCourse.id,
+      courseTitle: targetCourse.title,
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    try {
+      await setDoc(doc(db, 'sub_admins', finalCode), newSubAdmin);
+      setSubAdminList(prev => {
+        const updated = [newSubAdmin, ...prev.filter(s => s.code !== finalCode)];
+        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        return updated;
+      });
+      return newSubAdmin;
+    } catch (err) {
+      console.error('Error creating Sub-Admin:', err);
+      showToast('Sub-Admin कोड सुरक्षित गर्न असफल भयो।', 'error');
+      return null;
+    }
+  };
+
+  const handleToggleSubAdminStatus = async (subAdmin: SubAdminAccount) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Sub-Admin स्थिति परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
+    const nextStatus: 'active' | 'disabled' = subAdmin.status === 'active' ? 'disabled' : 'active';
+    try {
+      await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
+        status: nextStatus,
+        updatedAt: Date.now(),
+      });
+      setSubAdminList(prev => {
+        const updated = prev.map(s => s.code === subAdmin.code ? { ...s, status: nextStatus, updatedAt: Date.now() } : s);
+        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(
+        nextStatus === 'active'
+          ? `Sub-Admin "${subAdmin.name}" सक्रिय (Active) गरियो। ✅`
+          : `Sub-Admin "${subAdmin.name}" निष्क्रिय (Disabled) गरियो। ⛔`,
+        nextStatus === 'active' ? 'success' : 'info'
+      );
+    } catch (err) {
+      console.error('Error toggling Sub-Admin status:', err);
+      showToast('Sub-Admin स्थिति अपडेट गर्न सकिएन।', 'error');
+    }
+  };
+
+  const handleUpdateSubAdminCourse = async (subAdmin: SubAdminAccount, newCourseId: string) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्ष परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
+    const targetCourse = courses.find(c => c.id === newCourseId);
+    if (!targetCourse) return;
+    try {
+      await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
+        courseId: targetCourse.id,
+        courseTitle: targetCourse.title,
+        updatedAt: Date.now(),
+      });
+      setSubAdminList(prev => {
+        const updated = prev.map(s =>
+          s.code === subAdmin.code
+            ? { ...s, courseId: targetCourse.id, courseTitle: targetCourse.title, updatedAt: Date.now() }
+            : s
+        );
+        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`"${subAdmin.name}" को कोर्ष "${targetCourse.title}" मा अपडेट गरियो!`, 'success');
+    } catch (err) {
+      console.error('Error updating Sub-Admin course:', err);
+      showToast('Sub-Admin कोर्ष अपडेट गर्न सकिएन।', 'error');
+    }
+  };
+
+  const handleDeleteSubAdmin = async (code: string) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Sub-Admin हटाउन सक्छ।', 'error');
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'sub_admins', code));
+      setSubAdminList(prev => {
+        const updated = prev.filter(s => s.code !== code);
+        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`Sub-Admin (${code}) स्थायी रूपमा हटाइयो।`, 'success');
+    } catch (err) {
+      console.error('Error deleting Sub-Admin:', err);
+      showToast('Sub-Admin हटाउन सकिएन।', 'error');
+    }
+  };
+
+  // ADMIN PAYMENT QR SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSavePaymentConfig = async (newConfig: PaymentQrConfig) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Global Payment सेटिङ परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
     setPaymentConfig(newConfig);
     localStorage.setItem('clipzone_payment_config', JSON.stringify(newConfig));
     try {
@@ -2357,8 +2805,12 @@ export default function App() {
     }
   };
 
-  // ADMIN FAQS SETTINGS HANDLER
+  // ADMIN FAQS SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSaveFaqs = async (newFaqs: FAQItem[]) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र FAQ परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
     setFaqs(newFaqs);
     localStorage.setItem('clipzone_faqs_config', JSON.stringify(newFaqs));
     try {
@@ -2372,8 +2824,12 @@ export default function App() {
     }
   };
 
-  // ADMIN OVERALL SITE SETTINGS HANDLER
+  // ADMIN OVERALL SITE SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSaveSiteSettings = async (newSettings: SiteSettingsConfig) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र Site सेटिङ परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
     setSiteSettings(newSettings);
     localStorage.setItem('clipzone_site_settings', JSON.stringify(newSettings));
     try {
@@ -2384,8 +2840,12 @@ export default function App() {
     }
   };
 
-  // ADMIN DIRECT COURSE UPDATE HANDLER (for per-course certificate config or instant edits)
+  // ADMIN & SCOPED SUB-ADMIN DIRECT COURSE UPDATE HANDLER
   const handleSaveCourseDirect = async (updatedCourse: Course) => {
+    if (!canEditCourse(updatedCourse.id)) {
+      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
+      return;
+    }
     const cleaned = cleanUndefined(updatedCourse);
     setCourses(prev => {
       const index = prev.findIndex(c => c.id === updatedCourse.id);
@@ -2412,7 +2872,29 @@ export default function App() {
     }
   };
 
+  // Helper to verify key belongs to Sub-Admin's assigned course before mutation
+  const verifyKeyPermission = async (code: string): Promise<boolean> => {
+    if (isMainAdmin) return true;
+    if (!isSubAdmin || !subAdminSession) return false;
+    const localKey = allActivationKeys.find(k => (k.code || k.id) === code);
+    if (localKey) {
+      return localKey.courseId === subAdminSession.courseId;
+    }
+    try {
+      const snap = await getDoc(doc(db, 'activation_keys', code));
+      if (snap.exists()) {
+        return snap.data()?.courseId === subAdminSession.courseId;
+      }
+    } catch {}
+    return false;
+  };
+
   const handleDeleteActivationKey = async (code: string) => {
+    if (!(await verifyKeyPermission(code))) {
+      showToast('तपाईं केवल आफ्नो तोकिएको कोर्षको कोड मात्र मेटाउन सक्नुहुन्छ।', 'error');
+      return;
+    }
+
     // 1. Delete document from Firestore
     try {
       await deleteDoc(doc(db, 'activation_keys', code));
@@ -2438,7 +2920,9 @@ export default function App() {
     // 2. Instantly update Admin state and local admin cache
     setAllActivationKeys(prev => {
       const updated = prev.filter(k => (k.code || k.id) !== code);
-      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      if (isMainAdmin) {
+        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      }
       return updated;
     });
 
@@ -2461,8 +2945,12 @@ export default function App() {
     }
   };
 
-  // ADMIN HANDLER: DELETE ALL STUDENT ACTIVATION KEYS PERMANENTLY
+  // ADMIN HANDLER: DELETE ALL STUDENT ACTIVATION KEYS PERMANENTLY (MAIN ADMIN ONLY)
   const handleDeleteAllKeys = async () => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र सबै कोडहरू मेटाउन सक्छ।', 'error');
+      return;
+    }
     setIsAdminLoadingKeys(true);
     try {
       const snap = await getDocs(collection(db, 'activation_keys'));
@@ -2491,6 +2979,10 @@ export default function App() {
 
   // ADMIN HANDLER: FORCE LOGOUT A SPECIFIC USER/KEY SESSION
   const handleLogoutUserKey = async (code: string) => {
+    if (!(await verifyKeyPermission(code))) {
+      showToast('तपाईं केवल आफ्नो तोकिएको कोर्षको डिभाइस मात्र लगआउट गर्न सक्नुहुन्छ।', 'error');
+      return;
+    }
     const logoutTime = Date.now();
     try {
       await updateDoc(doc(db, 'activation_keys', code), {
@@ -2511,7 +3003,9 @@ export default function App() {
         }
         return k;
       });
-      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      if (isMainAdmin) {
+        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      }
       return updated;
     });
 
@@ -2538,6 +3032,10 @@ export default function App() {
 
   // ADMIN HANDLER: EXPIRE A SPECIFIC USER/KEY IMMEDIATELY
   const handleExpireKey = async (code: string) => {
+    if (!(await verifyKeyPermission(code))) {
+      showToast('तपाईं केवल आफ्नो तोकिएको कोर्षको कोड मात्र Expire गर्न सक्नुहुन्छ।', 'error');
+      return;
+    }
     const expireTime = Date.now();
     try {
       await updateDoc(doc(db, 'activation_keys', code), {
@@ -2559,9 +3057,11 @@ export default function App() {
         }
         return k;
       });
-      try {
-        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
-      } catch (e) {}
+      if (isMainAdmin) {
+        try {
+          localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+        } catch (e) {}
+      }
       return updated;
     });
 
@@ -2591,9 +3091,13 @@ export default function App() {
     }
   };
 
-  // ADMIN HANDLER: FORCE LOGOUT ALL USER SESSIONS ACROSS ALL DEVICES
+  // ADMIN HANDLER: FORCE LOGOUT ALL USER SESSIONS ACROSS ALL DEVICES (MAIN ADMIN ONLY)
   const handleExecuteLogoutAllUserSessions = async (e?: FormEvent) => {
     if (e) e.preventDefault();
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र सबै डिभाइस लगआउट गर्न सक्छ।', 'error');
+      return;
+    }
 
     const inputCode = logoutSecretCodeInput.trim().toUpperCase();
     const isAuthorized = await verifyAdminSecret(inputCode);
@@ -2655,8 +3159,12 @@ export default function App() {
     }
   };
 
-  // Move Course Up / Down
+  // Move Course Up / Down (MAIN ADMIN ONLY)
   const handleMoveCourse = async (currentIndex: number, direction: 'up' | 'down') => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्ष क्रम परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex < 0 || targetIndex >= courses.length) return;
 
@@ -3024,11 +3532,17 @@ export default function App() {
   const [studentUnreadCount, setStudentUnreadCount] = useState(0);
   const [adminUnreadCount, setAdminUnreadCount] = useState(0);
 
-  // Helper boolean: is the current active session an admin & course activation check
-  const isUserAdminSession = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+  // Role-based admin checks (Main Admin vs Course Sub-Admin) & course activation checks
+  const isMainAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+  const isSubAdmin = Boolean(!isMainAdmin && subAdminSession && subAdminSession.status === 'active');
+  const isUserAdminSession = Boolean(isMainAdmin || isSubAdmin);
+  const canEditCourse = useCallback(
+    (courseId: string) => isMainAdmin || (isSubAdmin && subAdminSession?.courseId === courseId),
+    [isMainAdmin, isSubAdmin, subAdminSession?.courseId]
+  );
   const hasCourseActivated = activeCourseIds.length > 0;
-  const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
-  const askUnreadCount = isUserAdminSession ? adminUnreadCount : studentUnreadCount;
+  const isCourseActiveUser = Boolean(hasCourseActivated || isMainAdmin);
+  const askUnreadCount = isMainAdmin ? adminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
 
@@ -3090,10 +3604,9 @@ export default function App() {
     }
   }, [isCourseActiveUser, isAskOpen]);
 
-  // 1. Real-time listener for Admin: tracks unread messages sent by users/students
+  // 1. Real-time listener for Main Admin: tracks unread messages sent by users/students
   useEffect(() => {
-    const isUserAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-    if (!isUserAdmin) {
+    if (!isMainAdmin) {
       setAdminUnreadCount(0);
       return;
     }
@@ -3116,12 +3629,11 @@ export default function App() {
     } catch (e) {
       console.warn('Error setting up admin support conversation listener:', e);
     }
-  }, [isAdminActivated, currentUser]);
+  }, [isMainAdmin]);
 
   // 2. Real-time listener for Student: tracks unread replies sent by Admin
   useEffect(() => {
-    const isUserAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-    if (isUserAdmin) {
+    if (isUserAdminSession) {
       setStudentUnreadCount(0);
       return;
     }
@@ -3184,7 +3696,7 @@ export default function App() {
     } catch (e) {
       console.warn('Error setting up student support conversation listener:', e);
     }
-  }, [currentUser, isAdminActivated, allActivationKeys, authName]);
+  }, [currentUser, isUserAdminSession, allActivationKeys, authName]);
 
   // PWA Installation states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -3297,6 +3809,10 @@ export default function App() {
 
   // Trigger Edit Course Form
   const handleEditCourseClick = (course: Course) => {
+    if (!canEditCourse(course.id)) {
+      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
+      return;
+    }
     setEditingCourse(course);
     setFormId(course.id);
     setFormTitle(course.title);
@@ -3313,8 +3829,12 @@ export default function App() {
     setShowCourseFormModal(true);
   };
 
-  // Trigger Create Course Form
+  // Trigger Create Course Form (MAIN ADMIN ONLY)
   const handleCreateCourseClick = () => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र नयाँ कोर्ष थप्न सक्छ।', 'error');
+      return;
+    }
     setEditingCourse(null);
     setFormId('');
     setFormTitle('');
@@ -3334,6 +3854,14 @@ export default function App() {
   // Submit Course Form (Create/Edit)
   const handleCourseFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!editingCourse && !isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र नयाँ कोर्ष थप्न सक्छ।', 'error');
+      return;
+    }
+    if (editingCourse && !canEditCourse(editingCourse.id)) {
+      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
+      return;
+    }
     if (!formTitle.trim() || !formPrice.trim() || !formImage.trim()) {
       showToast('Please fill in all required fields (Title, Price, Image URL)', 'error');
       return;
@@ -3410,8 +3938,12 @@ export default function App() {
     }
   };
 
-  // Delete Course
+  // Delete Course (MAIN ADMIN ONLY)
   const handleDeleteCourse = async (courseId: string) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्ष मेटाउन सक्छ।', 'error');
+      return;
+    }
     try {
       // 1. Immediately update local deleted blacklist state & storage
       const localDeleted: string[] = (() => {
@@ -3488,8 +4020,12 @@ export default function App() {
     }
   };
 
-  // Trigger Confirmation & Permission Prompt before deleting any course
+  // Trigger Confirmation & Permission Prompt before deleting any course (MAIN ADMIN ONLY)
   const handlePromptDeleteCourse = (courseId: string) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्ष मेटाउन सक्छ।', 'error');
+      return;
+    }
     const target = courses.find(c => c.id === courseId) || null;
     if (!target) {
       showToast('कोर्ष फेला परेन (Course not found)', 'error');
@@ -3501,6 +4037,7 @@ export default function App() {
 
   // Execute Confirmed Delete Course Action
   const handleExecuteDeleteCourse = async () => {
+    if (!isMainAdmin) return;
     if (!courseToDelete) return;
     if (deleteConfirmInput.trim().toUpperCase() !== 'DELETE') {
       showToast('कृपया मेटाउन पुष्टि गर्न DELETE टाइप गर्नुहोस्! (Type DELETE to confirm)', 'error');
@@ -3519,8 +4056,12 @@ export default function App() {
     }
   };
 
-  // Handle Batch Deletion of multiple courses at once in a single bulk operation
+  // Handle Batch Deletion of multiple courses at once in a single bulk operation (MAIN ADMIN ONLY)
   const handleBatchDeleteCourses = async (courseIds: string[]) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्ष मेटाउन सक्छ।', 'error');
+      return;
+    }
     if (!courseIds || courseIds.length === 0) return;
     try {
       // 1. Immediately update local deleted blacklist state & storage
@@ -3645,13 +4186,38 @@ export default function App() {
     }
   }, [filteredTestimonials.length, currentSlide]);
 
-  // Render QR Code inside canvas once QR modal opens
+  // Effective Payment Config helper (per-course override with fallback to global paymentConfig)
+  const getEffectivePaymentConfig = useCallback((course?: Course | null): PaymentQrConfig => {
+    const cp = course?.paymentConfig;
+    if (!cp) return paymentConfig;
+
+    const hasCustomAccount = Boolean(
+      cp.esewaId?.trim() ||
+      cp.accountName?.trim() ||
+      cp.qrImageUrl?.trim()
+    );
+
+    return {
+      esewaId: cp.esewaId?.trim() || paymentConfig.esewaId,
+      accountName: cp.accountName?.trim() || paymentConfig.accountName,
+      whatsappNumber: cp.whatsappNumber?.trim() || paymentConfig.whatsappNumber,
+      qrImageUrl: hasCustomAccount ? (cp.qrImageUrl?.trim() || '') : (paymentConfig.qrImageUrl || ''),
+      bankName: hasCustomAccount ? (cp.bankName?.trim() || '') : (cp.bankName?.trim() || paymentConfig.bankName || ''),
+      bankAccountNo: hasCustomAccount ? (cp.bankAccountNo?.trim() || '') : (cp.bankAccountNo?.trim() || paymentConfig.bankAccountNo || ''),
+      bankBranch: hasCustomAccount ? (cp.bankBranch?.trim() || '') : (cp.bankBranch?.trim() || paymentConfig.bankBranch || ''),
+      paymentInstruction: cp.paymentInstruction?.trim() || paymentConfig.paymentInstruction || '',
+      updatedAt: cp.updatedAt || paymentConfig.updatedAt,
+    };
+  }, [paymentConfig]);
+
+  // Render QR Code inside canvas once QR modal opens (respecting per-course payment override)
   useEffect(() => {
-    if (showQrModal && selectedCourse && qrCanvasRef.current && !paymentConfig.qrImageUrl) {
-      // eSewa QR payload using dynamic paymentConfig - clean format without remarks
+    const effPayment = getEffectivePaymentConfig(selectedCourse);
+    if (showQrModal && selectedCourse && qrCanvasRef.current && !effPayment.qrImageUrl) {
+      // eSewa QR payload using effective payment config - clean format without remarks
       const qrPayload = JSON.stringify({ 
-        eSewa_id: paymentConfig.esewaId || "9763323268", 
-        name: paymentConfig.accountName || "Ayush Chaurasiya" 
+        eSewa_id: effPayment.esewaId || "9763323268", 
+        name: effPayment.accountName || "Ayush Chaurasiya" 
       });
       QRCode.toCanvas(
         qrCanvasRef.current,
@@ -3672,7 +4238,7 @@ export default function App() {
         }
       );
     }
-  }, [showQrModal, selectedCourse, paymentConfig]);
+  }, [showQrModal, selectedCourse, getEffectivePaymentConfig]);
 
   // Toggle single FAQ accordion
   const toggleFaq = (index: number) => {
@@ -3709,7 +4275,8 @@ export default function App() {
   };
 
   const getWhatsappPurchaseUrl = (course: Course) => {
-    const number = getFormattedWhatsappNumber(paymentConfig.whatsappNumber);
+    const effPayment = getEffectivePaymentConfig(course);
+    const number = getFormattedWhatsappNumber(effPayment.whatsappNumber);
     const text = course.message || `नमस्ते! म "${course.title}" (${course.price}) खरिद गर्न चाहन्छु। कृपया मलाई भुक्तानी विवरण र Secret Activation Key पठाइदिनुहोस्।`;
     return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
   };
@@ -3719,12 +4286,14 @@ export default function App() {
     setShowQrModal(true);
   };
 
-  // Confirm payment & launch WhatsApp message
+  // Confirm payment & launch WhatsApp message (using course-specific payment/WhatsApp config if set)
   const handleConfirmPayment = () => {
     if (!selectedCourse) return;
-    const fullNumber = getFormattedWhatsappNumber(paymentConfig.whatsappNumber);
-    const accountName = paymentConfig.accountName || 'Ayush Chaurasiya';
-    const message = `Hello! I have completed payment for "${selectedCourse.title}" (${selectedCourse.price}) via eSewa/QR (${accountName}). Please provide my secret course activation key!`;
+    const effPayment = getEffectivePaymentConfig(selectedCourse);
+    const fullNumber = getFormattedWhatsappNumber(effPayment.whatsappNumber);
+    const accountName = effPayment.accountName || 'Ayush Chaurasiya';
+    const customMsg = selectedCourse.message?.trim() ? `\n\n${selectedCourse.message.trim()}` : '';
+    const message = `Hello! I have completed payment for "${selectedCourse.title}" (${selectedCourse.price}) via eSewa/QR (${accountName}). Please provide my secret course activation key!${customMsg}`;
     window.open(`https://wa.me/${fullNumber}?text=${encodeURIComponent(message)}`, '_blank');
     setShowQrModal(false);
     setSelectedCourse(null);
@@ -4823,20 +5392,24 @@ export default function App() {
                               🔑 Add Course Code
                             </button>
 
-                            {isAdminActivated && (
+                            {(canEditCourse(currentClassroomCourse.id) || isMainAdmin) && (
                               <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditCourseClick(currentClassroomCourse)}
-                                  className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-blue-300 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
-                                >
-                                  ✏️ Edit Playlist & Videos
-                                </button>
-                                <button
-                                  onClick={() => handlePromptDeleteCourse(currentClassroomCourse.id)}
-                                  className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
-                                >
-                                  🗑️ Delete
-                                </button>
+                                {canEditCourse(currentClassroomCourse.id) && (
+                                  <button
+                                    onClick={() => handleEditCourseClick(currentClassroomCourse)}
+                                    className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-blue-300 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
+                                  >
+                                    ✏️ Edit Playlist & Videos
+                                  </button>
+                                )}
+                                {isMainAdmin && (
+                                  <button
+                                    onClick={() => handlePromptDeleteCourse(currentClassroomCourse.id)}
+                                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -5020,7 +5593,7 @@ export default function App() {
                                 <p className="text-xs text-zinc-500 font-sans max-w-sm mx-auto">
                                   एडमिनले Google Drive बाट PDF नोटहरू लिङ्क गरेपछि यहाँ सिधै Full Screen मा पढ्न सकिनेछ।
                                 </p>
-                                {isAdminActivated && (
+                                {canEditCourse(currentClassroomCourse.id) && (
                                   <button
                                     type="button"
                                     onClick={() => handleEditCourseClick(currentClassroomCourse)}
@@ -5038,8 +5611,8 @@ export default function App() {
                   );
                 })()}
 
-              {/* Dynamic Course Creator add-on for Admin directly under active listing */}
-              {isAdminActivated && (
+              {/* Dynamic Course Creator add-on for Main Admin directly under active listing */}
+              {isMainAdmin && (
                 <div className="flex justify-center mt-6">
                   <button
                     onClick={handleCreateCourseClick}
@@ -5452,23 +6025,27 @@ export default function App() {
                           </button>
                         )}
 
-                        {/* Admin Inline Controls */}
-                        {isAdminActivated && (
+                        {/* Admin Inline Controls (Course Sub-Admin sees edit ONLY on assigned course) */}
+                        {(canEditCourse(course.id) || isMainAdmin) && (
                           <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleEditCourseClick(course)}
-                              className="bg-zinc-800 hover:bg-zinc-700 text-blue-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-zinc-700"
-                              title="Edit Course"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => handlePromptDeleteCourse(course.id)}
-                              className="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-rose-800"
-                              title="Delete Course"
-                            >
-                              🗑️
-                            </button>
+                            {canEditCourse(course.id) && (
+                              <button
+                                onClick={() => handleEditCourseClick(course)}
+                                className="bg-zinc-800 hover:bg-zinc-700 text-blue-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-zinc-700"
+                                title="Edit Course"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                            {isMainAdmin && (
+                              <button
+                                onClick={() => handlePromptDeleteCourse(course.id)}
+                                className="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-rose-800"
+                                title="Delete Course"
+                              >
+                                🗑️
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -5476,7 +6053,7 @@ export default function App() {
                   </motion.div>
                 ))}
 
-              {isAdminActivated && (
+              {isMainAdmin && (
                 <motion.div
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
@@ -5516,7 +6093,7 @@ export default function App() {
               <p className="text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
                 नयाँ प्रिमियम कोर्षहरू चाँडै उपलब्ध हुनेछन्। थप जानकारीका लागि सम्पर्कमा रहनुहोला।
               </p>
-              {isAdminActivated && (
+              {isMainAdmin && (
                 <button
                   onClick={handleCreateCourseClick}
                   className="mt-6 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 cursor-pointer transition active:scale-95"
@@ -6127,7 +6704,7 @@ export default function App() {
                           🔑 + Add Course (कोड हाल्नुहोस्)
                         </button>
                       </div>
-                      {isAdminActivated && (
+                      {canEditCourse(selectedCourse.id) && (
                         <button
                           onClick={() => {
                             const courseToEdit = selectedCourse;
@@ -6554,6 +7131,14 @@ export default function App() {
                   >
                     <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)</span>
                   </button>
+                  <a
+                    href={getWhatsappPurchaseUrl(selectedCourse)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <span>💬 WhatsApp मा किन्नुहोस् / सन्देश पठाउनुहोस्</span>
+                  </a>
                 </div>
               </motion.div>
             )}
@@ -6563,9 +7148,11 @@ export default function App() {
 
       {/* USER PROFILE - Rendered as Full Screen Native Page View in <main> */}
 
-      {/* FONEPAY QR CODE DETAILS MODAL */}
+      {/* FONEPAY QR CODE DETAILS MODAL (supports per-course payment override) */}
       <AnimatePresence>
-        {showQrModal && selectedCourse && (
+        {showQrModal && selectedCourse && (() => {
+          const effectivePayment = getEffectivePaymentConfig(selectedCourse);
+          return (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             {/* Backdrop */}
             <motion.div 
@@ -6598,10 +7185,10 @@ export default function App() {
 
               {/* QR Canvas / Custom Image Container */}
               <div className="my-5 p-4 bg-zinc-950 border border-zinc-800 rounded-2xl w-full shadow-inner text-center">
-                {paymentConfig.qrImageUrl ? (
+                {effectivePayment.qrImageUrl ? (
                   <div className="flex flex-col items-center">
                     <img 
-                      src={paymentConfig.qrImageUrl} 
+                      src={effectivePayment.qrImageUrl} 
                       alt="Payment QR Code" 
                       className="max-h-64 w-auto rounded-xl shadow-md border border-zinc-700 object-contain mx-auto"
                     />
@@ -6616,24 +7203,24 @@ export default function App() {
                     eSewa Official Account
                   </span>
                   <h4 className="text-base font-black text-white mt-2 flex items-center justify-center gap-1.5">
-                    👤 {paymentConfig.accountName || 'Ayush Chaurasiya'}
+                    👤 {effectivePayment.accountName || 'Ayush Chaurasiya'}
                   </h4>
                   <p className="text-xs font-extrabold text-zinc-300 mt-1 flex items-center justify-center gap-1">
-                    📱 eSewa ID: <span className="font-mono text-emerald-400 bg-black px-2 py-0.5 rounded text-xs select-all font-bold border border-zinc-800">{paymentConfig.esewaId || '9763323268'}</span>
+                    📱 eSewa ID: <span className="font-mono text-emerald-400 bg-black px-2 py-0.5 rounded text-xs select-all font-bold border border-zinc-800">{effectivePayment.esewaId || '9763323268'}</span>
                   </p>
 
-                  {paymentConfig.bankAccountNo && (
+                  {effectivePayment.bankAccountNo && (
                     <div className="mt-2.5 pt-2 border-t border-dashed border-zinc-800 text-[11px] text-zinc-400 text-left bg-black p-2.5 rounded-lg border border-zinc-800">
-                      <p className="font-bold text-zinc-200">🏦 {paymentConfig.bankName || 'Bank Transfer'}</p>
-                      <p className="font-mono font-bold text-emerald-400">A/C: {paymentConfig.bankAccountNo}</p>
-                      {paymentConfig.bankBranch && <p className="text-[10px] text-zinc-500">Branch: {paymentConfig.bankBranch}</p>}
+                      <p className="font-bold text-zinc-200">🏦 {effectivePayment.bankName || 'Bank Transfer'}</p>
+                      <p className="font-mono font-bold text-emerald-400">A/C: {effectivePayment.bankAccountNo}</p>
+                      {effectivePayment.bankBranch && <p className="text-[10px] text-zinc-500">Branch: {effectivePayment.bankBranch}</p>}
                     </div>
                   )}
                 </div>
               </div>
 
               <div className="bg-emerald-500/10 p-3.5 rounded-xl border border-emerald-500/30 text-xs text-emerald-300 font-medium leading-normal mb-6 text-left">
-                📌 <strong>भुक्तानी निर्देशन:</strong> {paymentConfig.paymentInstruction || `QR स्क्यान गरी वा eSewa ID ${paymentConfig.esewaId || '9763323268'} (${paymentConfig.accountName || 'Ayush Chaurasiya'}) मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।`}
+                📌 <strong>भुक्तानी निर्देशन:</strong> {effectivePayment.paymentInstruction || `QR स्क्यान गरी वा eSewa ID ${effectivePayment.esewaId || '9763323268'} (${effectivePayment.accountName || 'Ayush Chaurasiya'}) मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।`}
               </div>
 
               {/* Action buttons */}
@@ -6653,7 +7240,8 @@ export default function App() {
               </div>
             </motion.div>
           </div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* QUICK ACTIVATION CODE MODAL FOR STUDENTS */}
@@ -6866,18 +7454,7 @@ export default function App() {
                     className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-4 pr-20 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono uppercase"
                     onKeyDown={async (e) => {
                       if (e.key === 'Enter') {
-                        const raw = adminCodeInput;
-                        const code = raw.trim().toUpperCase();
-                        const isValid = (await verifyAdminSecret(code)) || (await verifyAdminSecret(raw));
-                        if (isValid) {
-                          await handleActivateAdminSession();
-                          setShowAdminLoginModal(false);
-                          setAdminCodeInput('');
-                          setShowAdminDashboard(true);
-                          showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
-                        } else {
-                          showToast('Invalid activation key. Please try again.', 'error');
-                        }
+                        await handleVerifyAdminModalLogin();
                       }
                     }}
                   />
@@ -6907,20 +7484,7 @@ export default function App() {
 
               <div className="mt-8 flex flex-col gap-2">
                 <button
-                  onClick={async () => {
-                    const raw = adminCodeInput;
-                    const code = raw.trim().toUpperCase();
-                    const isValid = (await verifyAdminSecret(code)) || (await verifyAdminSecret(raw));
-                    if (isValid) {
-                      await handleActivateAdminSession();
-                      setShowAdminLoginModal(false);
-                      setAdminCodeInput('');
-                      setShowAdminDashboard(true);
-                      showToast('⚡ Admin Mode activated successfully! 👑 (Single Device Locked)', 'success');
-                    } else {
-                      showToast('Invalid activation key. Please try again.', 'error');
-                    }
-                  }}
+                  onClick={handleVerifyAdminModalLogin}
                   className="w-full bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition shadow-lg cursor-pointer text-center"
                 >
                   Admin Activate
@@ -6942,6 +7506,14 @@ export default function App() {
         isOpen={showAdminDashboard}
         onClose={() => setShowAdminDashboard(false)}
         courses={courses}
+        adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+        subAdminSession={isMainAdmin ? null : subAdminSession}
+        onLogoutAdminSession={handleLogoutAdminSession}
+        subAdmins={subAdminList}
+        onCreateSubAdmin={handleCreateSubAdmin}
+        onToggleSubAdminStatus={handleToggleSubAdminStatus}
+        onUpdateSubAdminCourse={handleUpdateSubAdminCourse}
+        onDeleteSubAdmin={handleDeleteSubAdmin}
         allActivationKeys={allActivationKeys}
         isAdminLoadingKeys={isAdminLoadingKeys}
         onGenerateKey={handleGenerateActivationKey}
@@ -8182,7 +8754,7 @@ export default function App() {
           siteSettings={siteSettings}
           currentUserId={
             (() => {
-              if (isAdminActivated || isFirebaseUserAdmin(currentUser?.email)) {
+              if (isMainAdmin) {
                 return currentUser?.uid || getOrCreateDeviceId();
               }
               try {
@@ -8216,7 +8788,7 @@ export default function App() {
           hasActivatedCourse={activeCourseIds.length > 0}
           onOpenActivationModal={() => setShowCodeInputModal(true)}
           showToast={showToast}
-          isAdmin={isAdminActivated || isFirebaseUserAdmin(currentUser?.email)}
+          isAdmin={isMainAdmin}
           allActivationKeys={allActivationKeys}
           studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
         />

@@ -32,18 +32,28 @@ import {
   CheckSquare,
   Square,
   ListChecks,
-  Clock
+  Clock,
+  UserCheck
 } from 'lucide-react';
 
-import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem } from '../types';
+import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount } from '../types';
 import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS, cleanLegacyLogoUrl } from '../data';
 import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
+import { AdminSubAdminsTab } from './AdminSubAdminsTab';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   courses: Course[];
+  adminRole?: 'main_admin' | 'sub_admin';
+  subAdminSession?: SubAdminAccount | null;
+  onLogoutAdminSession?: () => void;
+  subAdmins?: SubAdminAccount[];
+  onCreateSubAdmin?: (name: string, courseId: string, customCode?: string) => Promise<SubAdminAccount | null>;
+  onToggleSubAdminStatus?: (subAdmin: SubAdminAccount) => Promise<void>;
+  onUpdateSubAdminCourse?: (subAdmin: SubAdminAccount, courseId: string) => Promise<void>;
+  onDeleteSubAdmin?: (code: string) => Promise<void>;
   // Keys management
   allActivationKeys: any[];
   onGenerateKey: (courseId: string, autoCopy: boolean, studentName: string, duration: '1day' | '1month' | '1year') => Promise<void>;
@@ -74,7 +84,7 @@ interface AdminDashboardModalProps {
   onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteNotification?: (id: string) => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
-  initialTab?: 'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask';
+  initialTab?: 'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask';
   adminUnreadAskCount?: number;
 }
 
@@ -82,6 +92,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
   onClose,
   courses,
+  adminRole = 'main_admin',
+  subAdminSession = null,
+  onLogoutAdminSession,
+  subAdmins = [],
+  onCreateSubAdmin,
+  onToggleSubAdminStatus,
+  onUpdateSubAdminCourse,
+  onDeleteSubAdmin,
   allActivationKeys,
   onGenerateKey,
   onDeleteKey,
@@ -117,7 +135,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [showToastProp]);
 
-  const [activeTab, setActiveTab] = useState<'keys' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>(initialTab);
+  const isMainAdmin = adminRole !== 'sub_admin';
+  const isSubAdmin = adminRole === 'sub_admin' && Boolean(subAdminSession);
+  const assignedCourseId = isSubAdmin ? (subAdminSession?.courseId || '') : '';
+  const visibleCourses = isMainAdmin ? courses : courses.filter(c => c.id === assignedCourseId);
+  const scopedActivationKeys = isMainAdmin
+    ? allActivationKeys
+    : allActivationKeys.filter(k => k.courseId === assignedCourseId);
+  const assignedCourse = isSubAdmin ? courses.find(c => c.id === assignedCourseId) : undefined;
+
+  const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>(initialTab);
 
   // Key Deletion Confirmation state
   const [keyToDelete, setKeyToDelete] = useState<any | null>(null);
@@ -187,24 +214,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // When initialTab changes, update activeTab
+  // Enforce role-based activeTab and assigned course lock
   useEffect(() => {
-    if (initialTab) {
+    if (isSubAdmin) {
+      if (!['keys', 'courses', 'qr'].includes(activeTab)) {
+        setActiveTab('keys');
+      }
+      if (assignedCourseId) {
+        setGenSelectedCourseId(assignedCourseId);
+        setSelectedPaymentScope(assignedCourseId);
+      }
+    } else if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab, isOpen]);
+  }, [initialTab, isOpen, isSubAdmin, assignedCourseId]);
 
   // Keys Tab states
-  const [genSelectedCourseId, setGenSelectedCourseId] = useState('');
+  const [genSelectedCourseId, setGenSelectedCourseId] = useState(assignedCourseId || '');
   const [genSelectedDuration, setGenSelectedDuration] = useState<'1day' | '1month' | '1year'>('1year');
   const [genStudentName, setGenStudentName] = useState('');
   const [adminSearchKeyQuery, setAdminSearchKeyQuery] = useState('');
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
 
-  // QR & Payment Tab states
+  // QR & Payment Tab states (supports 'global' for Main Admin, or specific courseId)
+  const [selectedPaymentScope, setSelectedPaymentScope] = useState<string>(isSubAdmin && assignedCourseId ? assignedCourseId : 'global');
   const [qrEsewaId, setQrEsewaId] = useState(paymentConfig.esewaId || '9763323268');
   const [qrAccountName, setQrAccountName] = useState(paymentConfig.accountName || 'Ayush Chaurasiya');
   const [qrWhatsappNumber, setQrWhatsappNumber] = useState(paymentConfig.whatsappNumber || '9763323268');
+  const [qrWhatsappMessage, setQrWhatsappMessage] = useState('');
   const [qrBankName, setQrBankName] = useState(paymentConfig.bankName || 'Global IME / Nabil Bank');
   const [qrBankAccountNo, setQrBankAccountNo] = useState(paymentConfig.bankAccountNo || '');
   const [qrBankBranch, setQrBankBranch] = useState(paymentConfig.bankBranch || '');
@@ -257,19 +294,43 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const [isSavingSiteSettings, setIsSavingSiteSettings] = useState(false);
 
-  // Sync state when props change
+  // Load payment & WhatsApp fields for the active scope ('global' or specific courseId)
+  const loadPaymentScopeFields = useCallback((scopeId: string) => {
+    if (scopeId === 'global' && isMainAdmin) {
+      setQrEsewaId(paymentConfig.esewaId || '9763323268');
+      setQrAccountName(paymentConfig.accountName || 'Ayush Chaurasiya');
+      setQrWhatsappNumber(paymentConfig.whatsappNumber || '9763323268');
+      setQrWhatsappMessage('');
+      setQrBankName(paymentConfig.bankName || 'Global IME / Nabil Bank');
+      setQrBankAccountNo(paymentConfig.bankAccountNo || '');
+      setQrBankBranch(paymentConfig.bankBranch || '');
+      setQrImageUrl(paymentConfig.qrImageUrl || '');
+      setQrPaymentInstruction(
+        paymentConfig.paymentInstruction || '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
+      );
+    } else {
+      const targetId = isSubAdmin ? assignedCourseId : scopeId;
+      const crs = courses.find((c) => c.id === targetId);
+      const cp = crs?.paymentConfig;
+      setQrEsewaId(cp?.esewaId ?? (isMainAdmin ? '' : paymentConfig.esewaId || ''));
+      setQrAccountName(cp?.accountName ?? (isMainAdmin ? '' : paymentConfig.accountName || ''));
+      setQrWhatsappNumber(cp?.whatsappNumber ?? (isMainAdmin ? '' : paymentConfig.whatsappNumber || ''));
+      setQrWhatsappMessage(crs?.message || (crs ? `I want to buy ${crs.title}` : ''));
+      setQrBankName(cp?.bankName ?? '');
+      setQrBankAccountNo(cp?.bankAccountNo ?? '');
+      setQrBankBranch(cp?.bankBranch ?? '');
+      setQrImageUrl(cp?.qrImageUrl ?? '');
+      setQrPaymentInstruction(
+        cp?.paymentInstruction ?? '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
+      );
+    }
+  }, [isMainAdmin, isSubAdmin, assignedCourseId, courses, paymentConfig]);
+
+  // Sync payment fields when props or selected scope changes
   useEffect(() => {
-    setQrEsewaId(paymentConfig.esewaId || '9763323268');
-    setQrAccountName(paymentConfig.accountName || 'Ayush Chaurasiya');
-    setQrWhatsappNumber(paymentConfig.whatsappNumber || '9763323268');
-    setQrBankName(paymentConfig.bankName || 'Global IME / Nabil Bank');
-    setQrBankAccountNo(paymentConfig.bankAccountNo || '');
-    setQrBankBranch(paymentConfig.bankBranch || '');
-    setQrImageUrl(paymentConfig.qrImageUrl || '');
-    setQrPaymentInstruction(
-      paymentConfig.paymentInstruction || '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
-    );
-  }, [paymentConfig]);
+    const effectiveScope = isSubAdmin ? assignedCourseId : selectedPaymentScope;
+    loadPaymentScopeFields(effectiveScope);
+  }, [isSubAdmin, assignedCourseId, selectedPaymentScope, paymentConfig, courses, loadPaymentScopeFields]);
 
   useEffect(() => {
     setLocalFaqs(faqs);
@@ -330,31 +391,80 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle Save Payment QR Config
+  // Handle Save Payment QR Config (Global for Main Admin, or Per-Course for Main Admin / Sub-Admin)
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    const effectiveScope = isSubAdmin ? assignedCourseId : selectedPaymentScope;
+
     if (!qrEsewaId.trim() || !qrAccountName.trim()) {
       showToast('eSewa ID and Account Name are required!', 'error');
       return;
     }
+
     setIsSavingQr(true);
     try {
-      const updatedConfig: PaymentQrConfig = {
-        esewaId: qrEsewaId.trim(),
-        accountName: qrAccountName.trim(),
-        whatsappNumber: qrWhatsappNumber.trim(),
-        bankName: qrBankName.trim(),
-        bankAccountNo: qrBankAccountNo.trim(),
-        bankBranch: qrBankBranch.trim(),
-        qrImageUrl: qrImageUrl.trim(),
-        paymentInstruction: qrPaymentInstruction.trim(),
-        updatedAt: Date.now()
-      };
-      await onSavePaymentConfig(updatedConfig);
-      showToast('QR & Payment details saved successfully! 💳', 'success');
+      if (effectiveScope === 'global' && isMainAdmin) {
+        const updatedConfig: PaymentQrConfig = {
+          esewaId: qrEsewaId.trim(),
+          accountName: qrAccountName.trim(),
+          whatsappNumber: qrWhatsappNumber.trim(),
+          bankName: qrBankName.trim(),
+          bankAccountNo: qrBankAccountNo.trim(),
+          bankBranch: qrBankBranch.trim(),
+          qrImageUrl: qrImageUrl.trim(),
+          paymentInstruction: qrPaymentInstruction.trim(),
+          updatedAt: Date.now()
+        };
+        await onSavePaymentConfig(updatedConfig);
+        showToast('Global QR & Payment details saved successfully! 💳', 'success');
+      } else {
+        const targetCourse = courses.find((c) => c.id === effectiveScope);
+        if (!targetCourse || !onSaveCourse) {
+          showToast('Target course not found!', 'error');
+          return;
+        }
+        const updatedCourse: Course = {
+          ...targetCourse,
+          message: qrWhatsappMessage.trim() || targetCourse.message || `I want to buy ${targetCourse.title}`,
+          paymentConfig: {
+            esewaId: qrEsewaId.trim(),
+            accountName: qrAccountName.trim(),
+            whatsappNumber: qrWhatsappNumber.trim(),
+            bankName: qrBankName.trim(),
+            bankAccountNo: qrBankAccountNo.trim(),
+            bankBranch: qrBankBranch.trim(),
+            qrImageUrl: qrImageUrl.trim(),
+            paymentInstruction: qrPaymentInstruction.trim(),
+            updatedAt: Date.now()
+          }
+        };
+        await onSaveCourse(updatedCourse);
+        showToast(`"${targetCourse.title}" को Payment र WhatsApp विवरण सुरक्षित भयो! 💳`, 'success');
+      }
     } catch (err) {
       console.error('Error saving payment config:', err);
       showToast('Failed to save payment settings.', 'error');
+    } finally {
+      setIsSavingQr(false);
+    }
+  };
+
+  // Reset per-course payment config back to Global Default (Main Admin only)
+  const handleResetCoursePaymentToGlobal = async () => {
+    if (!isMainAdmin || selectedPaymentScope === 'global') return;
+    const targetCourse = courses.find((c) => c.id === selectedPaymentScope);
+    if (!targetCourse || !onSaveCourse) return;
+    setIsSavingQr(true);
+    try {
+      const updatedCourse: Course = {
+        ...targetCourse,
+        paymentConfig: undefined
+      };
+      await onSaveCourse(updatedCourse);
+      loadPaymentScopeFields(selectedPaymentScope);
+      showToast(`"${targetCourse.title}" अब Global Default Payment प्रयोग गर्नेछ!`, 'info');
+    } catch (err) {
+      showToast('Failed to reset course payment settings.', 'error');
     } finally {
       setIsSavingQr(false);
     }
@@ -672,33 +782,55 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         className="bg-black max-w-5xl w-full rounded-3xl p-4 sm:p-6 md:p-8 shadow-2xl relative z-10 max-h-[92vh] flex flex-col border border-zinc-800 overflow-hidden text-zinc-200"
       >
         {/* Top Header Bar */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800 shrink-0">
+        <div className="flex items-center justify-between pb-4 border-b border-zinc-800 shrink-0 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-blue-500/20">
-              👑
+            <div className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center font-black text-lg shadow-md ${
+              isMainAdmin ? 'bg-blue-600 shadow-blue-500/20' : 'bg-purple-600 shadow-purple-500/20'
+            }`}>
+              {isMainAdmin ? '👑' : '🛡️'}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  Admin Master Control
+                  {isMainAdmin ? 'Admin Master Control' : 'Sub-Admin Course Control'}
                 </h3>
                 <span className="bg-emerald-950/80 text-emerald-400 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-emerald-500/40">
                   Live Cloud Sync
                 </span>
+                {isSubAdmin && subAdminSession && (
+                  <span className="bg-purple-950/80 text-purple-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-purple-500/40">
+                    👤 {subAdminSession.name}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-zinc-400 font-medium mt-0.5">
-                Manage secret keys, dynamic eSewa QR payment details, FAQs section, and overall website settings.
+                {isMainAdmin
+                  ? 'Manage all courses, Sub-Admin codes, student activation keys, payments, FAQs, and global settings.'
+                  : `तोकिएको कोर्ष मात्र: "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}" — Course Details, Payment/WhatsApp & Student Codes.`}
               </p>
             </div>
           </div>
 
-          <button 
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 flex items-center justify-center transition cursor-pointer shrink-0"
-            title="Close Admin Panel"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onLogoutAdminSession && (
+              <button
+                type="button"
+                onClick={onLogoutAdminSession}
+                className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/30 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+                title={isMainAdmin ? 'Logout Main Admin' : 'Logout Sub-Admin'}
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 flex items-center justify-center transition cursor-pointer shrink-0"
+              title="Close Admin Panel"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation Menu */}
@@ -712,8 +844,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             }`}
           >
             <Key className="w-3.5 h-3.5" />
-            Activation Keys ({allActivationKeys?.length || 0})
+            {isMainAdmin ? `Activation Keys (${scopedActivationKeys.length})` : `🔑 Student Course Codes (${scopedActivationKeys.length})`}
           </button>
+
+          {isMainAdmin && (
+            <button
+              onClick={() => setActiveTab('subadmins')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'subadmins'
+                  ? 'bg-purple-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5 text-purple-300" />
+              🛡️ Sub-Admins ({subAdmins.length})
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('qr')}
@@ -724,44 +870,50 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             }`}
           >
             <QrIcon className="w-3.5 h-3.5" />
-            💳 QR & Payment Details
+            {isMainAdmin ? '💳 QR & Payment Details' : '💳 Course Payment & WhatsApp'}
           </button>
 
-          <button
-            onClick={() => setActiveTab('faqs')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'faqs'
-                ? 'bg-blue-600 text-white shadow-md font-bold'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            ❓ FAQs Section ({localFaqs.length})
-          </button>
+          {isMainAdmin && (
+            <button
+              onClick={() => setActiveTab('faqs')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'faqs'
+                  ? 'bg-blue-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              ❓ FAQs Section ({localFaqs.length})
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('overall')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'overall'
-                ? 'bg-blue-600 text-white shadow-md font-bold'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5" />
-            🏛️ Institute Branding & Site
-          </button>
+          {isMainAdmin && (
+            <button
+              onClick={() => setActiveTab('overall')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'overall'
+                  ? 'bg-blue-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              🏛️ Institute Branding & Site
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('certificate')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'certificate'
-                ? 'bg-blue-600 text-white shadow-md font-bold'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            📜 Certificate Designer & Signatures
-          </button>
+          {isMainAdmin && (
+            <button
+              onClick={() => setActiveTab('certificate')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'certificate'
+                  ? 'bg-blue-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              📜 Certificate Designer & Signatures
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('courses')}
@@ -772,37 +924,41 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            📚 Course Catalog ({courses?.length || 0})
+            {isMainAdmin ? `📚 Course Catalog (${visibleCourses.length})` : '📚 My Course Details'}
           </button>
 
-          <button
-            onClick={() => setActiveTab('notifications')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'notifications'
-                ? 'bg-blue-600 text-white shadow-md font-bold'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5 text-purple-400" />
-            📢 Push Notifications ({notifications?.length || 0})
-          </button>
+          {isMainAdmin && (
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'notifications'
+                  ? 'bg-blue-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5 text-purple-400" />
+              📢 Push Notifications ({notifications?.length || 0})
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('ask')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
-              activeTab === 'ask'
-                ? 'bg-blue-600 text-white shadow-md font-bold'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-            💬 Ask (User Messages)
-            {adminUnreadAskCount > 0 && (
-              <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-zinc-900 absolute -top-1.5 -right-1.5 shadow-sm animate-pulse" title="New unread student messages">
-                {adminUnreadAskCount > 99 ? '99+' : adminUnreadAskCount}
-              </span>
-            )}
-          </button>
+          {isMainAdmin && (
+            <button
+              onClick={() => setActiveTab('ask')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
+                activeTab === 'ask'
+                  ? 'bg-blue-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+              💬 Ask (User Messages)
+              {adminUnreadAskCount > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-zinc-900 absolute -top-1.5 -right-1.5 shadow-sm animate-pulse" title="New unread student messages">
+                  {adminUnreadAskCount > 99 ? '99+' : adminUnreadAskCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Tab Body Scrollable Container */}
@@ -814,11 +970,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {activeTab === 'keys' && (
             <div className="space-y-6">
               <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-800 font-semibold leading-relaxed flex items-start gap-3">
-                <span className="text-base select-none">✅</span>
+                <span className="text-base select-none">{isMainAdmin ? '✅' : '🛡️'}</span>
                 <div>
-                  <strong className="font-black text-emerald-900">Admin Mode Activated (offline-first & auto-synced)</strong>
+                  <strong className="font-black text-emerald-900">
+                    {isMainAdmin
+                      ? 'Admin Mode Activated (offline-first & auto-synced)'
+                      : `Sub-Admin Course Codes — "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}"`}
+                  </strong>
                   <p className="mt-0.5">
-                    Generate unreleased secret activation codes to unlock dynamic courses. Share generated keys with students to enable high-speed learning.
+                    {isMainAdmin
+                      ? 'Generate unreleased secret activation codes to unlock dynamic courses. Share generated keys with students to enable high-speed learning.'
+                      : 'तपाईंले केवल मेन एडमिनले तोकेको यही एउटा कोर्षको मात्र Student Course Code बनाउन र व्यवस्थापन गर्न सक्नुहुन्छ।'}
                   </p>
                 </div>
               </div>
@@ -845,18 +1007,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                      Select Course Catalog *
+                      {isMainAdmin ? 'Select Course Catalog *' : 'Assigned Course (Locked) *'}
                     </label>
-                    <select 
-                      value={genSelectedCourseId}
-                      onChange={(e) => setGenSelectedCourseId(e.target.value)}
-                      className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-700"
-                    >
-                      <option value="">-- Choose Course --</option>
-                      {courses.map(course => (
-                        <option key={course.id} value={course.id}>{course.title}</option>
-                      ))}
-                    </select>
+                    {isSubAdmin ? (
+                      <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-purple-900 flex items-center justify-between gap-2">
+                        <span className="truncate">🔒 {assignedCourse?.title || subAdminSession?.courseTitle || assignedCourseId}</span>
+                        <span className="text-[9px] bg-purple-200 text-purple-800 px-2 py-0.5 rounded-md uppercase shrink-0">Only This Course</span>
+                      </div>
+                    ) : (
+                      <select 
+                        value={genSelectedCourseId}
+                        onChange={(e) => setGenSelectedCourseId(e.target.value)}
+                        className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-700"
+                      >
+                        <option value="">-- Choose Course --</option>
+                        {courses.map(course => (
+                          <option key={course.id} value={course.id}>{course.title}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -905,7 +1074,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       disabled={isGeneratingKey}
                       onClick={async () => {
                         setIsGeneratingKey(true);
-                        await onGenerateKey(genSelectedCourseId, true, genStudentName, genSelectedDuration);
+                        await onGenerateKey(isSubAdmin ? assignedCourseId : genSelectedCourseId, true, genStudentName, genSelectedDuration);
                         setGenStudentName('');
                         setIsGeneratingKey(false);
                       }}
@@ -918,7 +1087,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       disabled={isGeneratingKey}
                       onClick={async () => {
                         setIsGeneratingKey(true);
-                        await onGenerateKey(genSelectedCourseId, false, genStudentName, genSelectedDuration);
+                        await onGenerateKey(isSubAdmin ? assignedCourseId : genSelectedCourseId, false, genStudentName, genSelectedDuration);
                         setGenStudentName('');
                         setIsGeneratingKey(false);
                       }}
@@ -933,10 +1102,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div className="lg:col-span-7 flex flex-col">
                   <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                     <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-                      📋 Active Licenses & Status ({allActivationKeys?.length || 0})
+                      📋 Active Licenses & Status ({scopedActivationKeys?.length || 0})
                     </h4>
                     <div className="flex items-center gap-2">
-                      {(allActivationKeys?.length || 0) > 0 && onDeleteAllKeys && (
+                      {isMainAdmin && (scopedActivationKeys?.length || 0) > 0 && onDeleteAllKeys && (
                         <button
                           type="button"
                           onClick={() => {
@@ -947,7 +1116,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           title="Delete all old student course codes permanently"
                         >
                           <Trash2 className="w-3 h-3 text-rose-600" />
-                          <span>Delete All ({allActivationKeys?.length || 0})</span>
+                          <span>Delete All ({scopedActivationKeys?.length || 0})</span>
                         </button>
                       )}
                       <button
@@ -970,7 +1139,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
 
                   <div className="overflow-y-auto max-h-[380px] space-y-2.5 pr-1">
-                    {allActivationKeys
+                    {scopedActivationKeys
                       .filter(k => {
                         if (!adminSearchKeyQuery) return true;
                         const q = adminSearchKeyQuery.toLowerCase();
@@ -1021,6 +1190,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-bold">
                                 {key.duration === '1day' ? '24 Hours' : key.duration === '1month' ? '30 Days' : '1 Year'}
                               </span>
+                              {key.createdByRole === 'sub_admin' && (
+                                <span className="text-[9px] text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-black border border-purple-200">
+                                  🛡️ Sub-Admin: {key.createdByName || key.createdBySubAdminCode}
+                                </span>
+                              )}
                             </div>
 
                             <p className="text-[11px] font-black text-slate-800 truncate">
@@ -1103,32 +1277,50 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               </div>
 
-              {/* Emergency Session Reset */}
-              <div className="bg-gradient-to-r from-rose-950 via-slate-900 to-red-950 rounded-2xl p-5 border border-rose-500/30 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center font-black text-xs border border-rose-500/40 shrink-0">
-                      🚨
-                    </span>
-                    <h4 className="text-sm font-black text-white">
-                      Logout All User Devices (सबै डिभाइस सेसन लगआउट)
-                    </h4>
+              {/* Emergency Session Reset (Main Admin Only) */}
+              {isMainAdmin && (
+                <div className="bg-gradient-to-r from-rose-950 via-slate-900 to-red-950 rounded-2xl p-5 border border-rose-500/30 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center font-black text-xs border border-rose-500/40 shrink-0">
+                        🚨
+                      </span>
+                      <h4 className="text-sm font-black text-white">
+                        Logout All User Devices (सबै डिभाइस सेसन लगआउट)
+                      </h4>
+                    </div>
+                    <p className="text-xs text-rose-200/80 font-medium">
+                      वेबसाइटमा समस्या आउँदा वा नयाँ अपडेट पछि सबै युजर/विद्यार्थीहरुका Active Devices र Sessions एकैपटक स्वतः लगआउट गराउनुहोस्।
+                    </p>
                   </div>
-                  <p className="text-xs text-rose-200/80 font-medium">
-                    वेबसाइटमा समस्या आउँदा वा नयाँ अपडेट पछि सबै युजर/विद्यार्थीहरुका Active Devices र Sessions एकैपटक स्वतः लगआउट गराउनुहोस्।
-                  </p>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={onOpenLogoutConfirm}
-                  className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition shadow-lg cursor-pointer shrink-0 active:scale-95 border border-rose-400/30 flex items-center gap-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Logout All User Devices 🚀
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={onOpenLogoutConfirm}
+                    className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition shadow-lg cursor-pointer shrink-0 active:scale-95 border border-rose-400/30 flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Logout All User Devices 🚀
+                  </button>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 1B: SUB-ADMIN ACCOUNTS & COURSE ACCESS (MAIN ADMIN ONLY) */}
+          {/* ========================================================================= */}
+          {isMainAdmin && activeTab === 'subadmins' && onCreateSubAdmin && onToggleSubAdminStatus && onUpdateSubAdminCourse && onDeleteSubAdmin && (
+            <AdminSubAdminsTab
+              courses={courses}
+              subAdmins={subAdmins}
+              allActivationKeys={allActivationKeys}
+              onCreateSubAdmin={onCreateSubAdmin}
+              onToggleStatus={onToggleSubAdminStatus}
+              onUpdateCourse={onUpdateSubAdminCourse}
+              onDeleteSubAdmin={onDeleteSubAdmin}
+              showToast={showToast}
+            />
           )}
 
           {/* ========================================================================= */}
@@ -1138,13 +1330,90 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <form onSubmit={handleSavePayment} className="space-y-6">
               <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-xs text-indigo-900 font-semibold leading-relaxed flex items-start gap-3">
                 <span className="text-base select-none">💳</span>
-                <div>
-                  <strong className="font-black text-indigo-950">Dynamic Payment & eSewa QR Configuration</strong>
+                <div className="grow">
+                  <strong className="font-black text-indigo-950">
+                    {isMainAdmin
+                      ? 'Dynamic Payment, QR & Per-Course WhatsApp Configuration'
+                      : `Course Payment & WhatsApp Settings — "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}"`}
+                  </strong>
                   <p className="mt-0.5 text-indigo-800">
-                    यहाँबाट eSewa ID, खातावालाको नाम, WhatsApp नम्बर वा आफ्नै QR Code तस्विर सिधै फेर्न सक्नुहुन्छ। यो सम्पूर्ण वेबसाइटको Checkout Modal र Chatbot मा तुरुन्तै अपडेट हुन्छ।
+                    {isMainAdmin
+                      ? 'Global Default वा कुनै पनि कोर्षको व्यक्तिगत eSewa ID, खातावालाको नाम, WhatsApp नम्बर, QR Code र WhatsApp म्यासेज यहाँबाट फेर्न सक्नुहुन्छ।'
+                      : 'तपाईंले केवल आफ्नो तोकिएको यही कोर्षको eSewa/Bank Payment विवरण, QR र WhatsApp नम्बर/म्यासेज मात्र परिवर्तन गर्न सक्नुहुन्छ।'}
                   </p>
                 </div>
               </div>
+
+              {/* Payment Scope Selector (Main Admin can pick Global or any Course; Sub-Admin locked to Assigned Course) */}
+              {isMainAdmin ? (
+                <div className="bg-zinc-950 text-white p-4 rounded-2xl border border-zinc-800 space-y-2.5 shadow-md">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="block text-[11px] font-black uppercase text-blue-400 tracking-wider">
+                      🎯 Select Payment & WhatsApp Target (Global वा कुन कोर्षको लागि?):
+                    </label>
+                    {selectedPaymentScope !== 'global' && (
+                      <button
+                        type="button"
+                        onClick={handleResetCoursePaymentToGlobal}
+                        className="text-[11px] bg-rose-950 hover:bg-rose-900 text-rose-300 hover:text-rose-100 font-bold px-3 py-1 rounded-lg border border-rose-800 transition cursor-pointer self-start sm:self-auto"
+                      >
+                        ⚡ Reset Course to Global Default
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPaymentScope('global');
+                        loadPaymentScopeFields('global');
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                        selectedPaymentScope === 'global'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+                      }`}
+                    >
+                      🌐 Global Default Payment
+                    </button>
+                    {courses.map((c) => {
+                      const hasCustom = Boolean(c.paymentConfig?.esewaId || c.paymentConfig?.whatsappNumber || c.paymentConfig?.qrImageUrl);
+                      const isSelected = selectedPaymentScope === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPaymentScope(c.id);
+                            loadPaymentScopeFields(c.id);
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-purple-600 text-white shadow-md font-black ring-2 ring-purple-400'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                          }`}
+                        >
+                          <span>💳 {c.title.slice(0, 26)}{c.title.length > 26 ? '...' : ''}</span>
+                          {hasCustom && (
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-1.5 py-0.2 rounded border border-emerald-400/40">
+                              Custom
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-purple-950/60 text-purple-100 p-3.5 rounded-2xl border border-purple-500/40 flex items-center justify-between gap-2 text-xs">
+                  <span className="font-black">
+                    🔒 Course Payment Scope: <span className="text-white">{assignedCourse?.title || subAdminSession?.courseTitle}</span>
+                  </span>
+                  <span className="text-[10px] bg-purple-600 text-white px-2.5 py-0.5 rounded-full font-black uppercase">
+                    Course Only
+                  </span>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Form Fields Column */}
@@ -1286,6 +1555,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-medium text-slate-800"
                     />
                   </div>
+
+                  {(isSubAdmin || selectedPaymentScope !== 'global') && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5">
+                        WhatsApp Purchase Message (विद्यार्थीले "WhatsApp बाट किन्नुहोस्" थिच्दा जाने म्यासेज)
+                      </label>
+                      <textarea 
+                        rows={2}
+                        value={qrWhatsappMessage}
+                        onChange={(e) => setQrWhatsappMessage(e.target.value)}
+                        placeholder={`उदा: I want to buy ${assignedCourse?.title || 'this course'}`}
+                        className="w-full bg-purple-50/50 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-bold text-slate-800"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Live Preview Box Column */}
@@ -1325,40 +1609,46 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </div>
 
               {/* Save Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex gap-3">
+              <div className="pt-3 border-t border-slate-100 flex gap-3 flex-wrap">
                 <button
                   type="submit"
                   disabled={isSavingQr}
                   className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-3.5 px-6 rounded-xl text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
-                  {isSavingQr ? 'Saving to Firebase...' : '💾 Save QR & Payment Settings'}
+                  {isSavingQr
+                    ? 'Saving to Firebase...'
+                    : isSubAdmin || selectedPaymentScope !== 'global'
+                    ? '💾 Save Course Payment & WhatsApp'
+                    : '💾 Save Global QR & Payment Settings'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQrEsewaId(DEFAULT_PAYMENT_CONFIG.esewaId);
-                    setQrAccountName(DEFAULT_PAYMENT_CONFIG.accountName);
-                    setQrWhatsappNumber(DEFAULT_PAYMENT_CONFIG.whatsappNumber);
-                    setQrBankName(DEFAULT_PAYMENT_CONFIG.bankName || '');
-                    setQrBankAccountNo('');
-                    setQrBankBranch('');
-                    setQrImageUrl('');
-                    setQrPaymentInstruction(DEFAULT_PAYMENT_CONFIG.paymentInstruction || '');
-                    showToast('Reset form to initial defaults. Click Save to apply.', 'info');
-                  }}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs transition cursor-pointer"
-                >
-                  Reset Defaults
-                </button>
+                {isMainAdmin && selectedPaymentScope === 'global' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQrEsewaId(DEFAULT_PAYMENT_CONFIG.esewaId);
+                      setQrAccountName(DEFAULT_PAYMENT_CONFIG.accountName);
+                      setQrWhatsappNumber(DEFAULT_PAYMENT_CONFIG.whatsappNumber);
+                      setQrBankName(DEFAULT_PAYMENT_CONFIG.bankName || '');
+                      setQrBankAccountNo('');
+                      setQrBankBranch('');
+                      setQrImageUrl('');
+                      setQrPaymentInstruction(DEFAULT_PAYMENT_CONFIG.paymentInstruction || '');
+                      showToast('Reset form to initial defaults. Click Save to apply.', 'info');
+                    }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs transition cursor-pointer"
+                  >
+                    Reset Defaults
+                  </button>
+                )}
               </div>
             </form>
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 3: FAQ SECTION MANAGER */}
+          {/* TAB 3: FAQ SECTION MANAGER (MAIN ADMIN ONLY) */}
           {/* ========================================================================= */}
-          {activeTab === 'faqs' && (
+          {isMainAdmin && activeTab === 'faqs' && (
             <div className="space-y-6">
               <div className="bg-zinc-900 border border-blue-500/30 rounded-2xl p-4 text-xs text-zinc-300 font-semibold leading-relaxed flex items-start gap-3">
                 <span className="text-base select-none">❓</span>
@@ -1542,9 +1832,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 4: INSTITUTE BRANDING & OVERALL SITE SETTINGS */}
+          {/* TAB 4: INSTITUTE BRANDING & OVERALL SITE SETTINGS (MAIN ADMIN ONLY) */}
           {/* ========================================================================= */}
-          {activeTab === 'overall' && (
+          {isMainAdmin && activeTab === 'overall' && (
             <form onSubmit={handleSaveOverallSettings} className="space-y-6">
               <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-xs text-purple-950 font-semibold leading-relaxed flex items-start gap-3">
                 <span className="text-base select-none">🏛️</span>
@@ -1818,9 +2108,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 5: CERTIFICATE DESIGNER & SIGNATURES */}
+          {/* TAB 5: CERTIFICATE DESIGNER & SIGNATURES (MAIN ADMIN ONLY) */}
           {/* ========================================================================= */}
-          {activeTab === 'certificate' && (
+          {isMainAdmin && activeTab === 'certificate' && (
             <form onSubmit={handleSaveCertificateSettings} className="space-y-6">
               <div className="bg-zinc-900 border border-blue-500/30 rounded-2xl p-4 text-xs text-zinc-200 font-semibold leading-relaxed flex items-start gap-3">
                 <span className="text-base select-none">📜</span>
@@ -2451,48 +2741,52 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <span>📚 Dynamic Course Catalog</span>
+                    <span>{isMainAdmin ? '📚 Dynamic Course Catalog' : '🔒 My Assigned Course Only'}</span>
                     <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-bold">
-                      {courses?.length || 0}
+                      {visibleCourses?.length || 0}
                     </span>
                   </h4>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Add new courses with custom chapters, Drive/YouTube videos, price tags, and thumbnail graphics.
+                    {isMainAdmin
+                      ? 'Add new courses with custom chapters, Drive/YouTube videos, price tags, and thumbnail graphics.'
+                      : 'तपाईंले केवल मेन एडमिनले तोकेको यही एउटा कोर्षको विवरण, भिडियो, PDF र WhatsApp म्यासेज मात्र परिवर्तन गर्न सक्नुहुन्छ।'}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBatchModeCourses(prev => !prev);
-                      if (isBatchModeCourses) {
-                        setSelectedCourseIds([]);
-                      }
-                    }}
-                    className={`font-extrabold py-2.5 px-3.5 rounded-xl text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider ${
-                      isBatchModeCourses 
-                        ? 'bg-purple-100 text-purple-800 border border-purple-300 hover:bg-purple-200' 
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-                    }`}
-                  >
-                    <ListChecks className="w-4 h-4 text-purple-600" />
-                    {isBatchModeCourses ? 'Exit Batch Select' : 'Batch Select'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onCreateCourseClick();
-                    }}
-                    className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider shrink-0"
-                  >
-                    <Plus className="w-4 h-4" /> Add New Course
-                  </button>
-                </div>
+                {isMainAdmin && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBatchModeCourses(prev => !prev);
+                        if (isBatchModeCourses) {
+                          setSelectedCourseIds([]);
+                        }
+                      }}
+                      className={`font-extrabold py-2.5 px-3.5 rounded-xl text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider ${
+                        isBatchModeCourses 
+                          ? 'bg-purple-100 text-purple-800 border border-purple-300 hover:bg-purple-200' 
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      <ListChecks className="w-4 h-4 text-purple-600" />
+                      {isBatchModeCourses ? 'Exit Batch Select' : 'Batch Select'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onCreateCourseClick();
+                      }}
+                      className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 uppercase tracking-wider shrink-0"
+                    >
+                      <Plus className="w-4 h-4" /> Add New Course
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Batch Selection Action Bar */}
-              {isBatchModeCourses && (
+              {/* Batch Selection Action Bar (Main Admin Only) */}
+              {isMainAdmin && isBatchModeCourses && (
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -2552,18 +2846,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {courses.map((course) => {
+                {visibleCourses.map((course) => {
                   const isSelected = selectedCourseIds.includes(course.id);
                   return (
                     <div 
                       key={course.id}
                       onClick={() => {
-                        if (isBatchModeCourses) {
+                        if (isMainAdmin && isBatchModeCourses) {
                           handleToggleSelectCourse(course.id);
                         }
                       }}
                       className={`relative bg-white border rounded-2xl p-4 shadow-xs flex items-start gap-3 transition ${
-                        isBatchModeCourses ? 'cursor-pointer select-none' : ''
+                        isMainAdmin && isBatchModeCourses ? 'cursor-pointer select-none' : ''
                       } ${
                         isSelected 
                           ? 'border-purple-500 bg-purple-50/50 ring-2 ring-purple-500/50 shadow-md' 
@@ -2571,7 +2865,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       }`}
                     >
                       {/* Checkbox button */}
-                      {isBatchModeCourses && (
+                      {isMainAdmin && isBatchModeCourses && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2596,7 +2890,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400';
                         }}
                       />
-                      <div className={`grow space-y-1 overflow-hidden ${isBatchModeCourses ? 'pr-6' : ''}`}>
+                      <div className={`grow space-y-1 overflow-hidden ${isMainAdmin && isBatchModeCourses ? 'pr-6' : ''}`}>
                         <div className="flex items-center gap-2">
                           <span className="text-purple-700 bg-purple-50 text-[10px] font-black px-2 py-0.5 rounded border border-purple-200">
                             {course.price}
@@ -2624,31 +2918,38 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             }}
                             className="bg-slate-100 hover:bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
                           >
-                            <Edit3 className="w-3 h-3" /> Edit
+                            <Edit3 className="w-3 h-3" /> Edit Course Details
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCourseToDeleteAdmin(course);
-                              setAdminDeleteConfirmText('');
-                            }}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
-                          >
-                            <Trash2 className="w-3 h-3" /> Delete
-                          </button>
+                          {isMainAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCourseToDeleteAdmin(course);
+                                setAdminDeleteConfirmText('');
+                              }}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" /> Delete
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
                   );
                 })}
+                {visibleCourses.length === 0 && (
+                  <div className="md:col-span-2 bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-8 text-center text-xs text-slate-500 font-bold">
+                    Assigned course not found in catalog. Please contact Main Admin.
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 7: PUSH NOTIFICATIONS & BROADCASTS */}
+          {/* TAB 7: PUSH NOTIFICATIONS & BROADCASTS (MAIN ADMIN ONLY) */}
           {/* ========================================================================= */}
-          {activeTab === 'notifications' && (
+          {isMainAdmin && activeTab === 'notifications' && (
             <AdminNotificationsTab
               notifications={notifications || []}
               onSendNotification={onSendNotification || (async () => {})}
@@ -2660,9 +2961,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 8: ASK & STUDENT LIVE SUPPORT (MESSENGER) */}
+          {/* TAB 8: ASK & STUDENT LIVE SUPPORT (MAIN ADMIN ONLY) */}
           {/* ========================================================================= */}
-          {activeTab === 'ask' && (
+          {isMainAdmin && activeTab === 'ask' && (
             <AdminAskTab
               showToast={showToast}
               instituteName={siteSettings.instituteName || 'AI CLIPZONE'}
@@ -2677,7 +2978,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0 text-xs text-slate-400 font-medium">
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            AI Clipzone Admin Console
+            {isMainAdmin ? 'AI Clipzone Main Admin Console' : `Sub-Admin Course Console (${subAdminSession?.name})`}
           </span>
           <button
             onClick={onClose}
