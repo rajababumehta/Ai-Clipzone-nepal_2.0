@@ -1289,54 +1289,52 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
   };
 
-  // WhatsApp Dark Wallpaper pattern inline style
+  // Simple Pure-Black Website Background (no dot pattern or teal reflection)
   const whatsappWallpaperStyle: React.CSSProperties = {
-    backgroundColor: '#0b141a',
-    backgroundImage: `radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.02) 1px, transparent 1px)`,
-    backgroundSize: '24px 24px'
+    backgroundColor: '#000000'
   };
 
   // ==========================================================================
   // RENDER COMPONENT
   // ==========================================================================
   const outerWrapperClass = embedded
-    ? 'w-full flex-1 min-h-0 flex flex-col select-none text-[#e9edef]'
-    : `fixed inset-0 z-[5500] flex ${isFullScreen ? 'p-0' : 'sm:items-center sm:justify-center sm:p-4'} bg-[#0b141a] sm:bg-black/85 sm:backdrop-blur-md select-none text-[#e9edef] overflow-hidden`;
+    ? 'w-full flex-1 min-h-0 flex flex-col select-none text-zinc-100 bg-black'
+    : `fixed inset-0 z-[5500] flex ${isFullScreen ? 'p-0' : 'sm:items-center sm:justify-center sm:p-4'} bg-black sm:bg-black/85 sm:backdrop-blur-md select-none text-zinc-100 overflow-hidden`;
 
   const innerFrameClass = embedded
-    ? 'flex flex-col w-full flex-1 min-h-0 bg-[#111b21] rounded-none border-0 shadow-none overflow-hidden relative pb-0'
+    ? 'flex flex-col w-full flex-1 min-h-0 bg-black rounded-none border-0 shadow-none overflow-hidden relative pb-0'
     : isFullScreen
-      ? 'flex flex-col h-full w-full bg-[#111b21] sm:rounded-none sm:border-none shadow-none overflow-hidden relative pb-0'
+      ? 'flex flex-col h-full w-full bg-black sm:rounded-none sm:border-none shadow-none overflow-hidden relative pb-0'
       : isAdmin
-        ? 'flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[860px] sm:max-w-5xl bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-0'
-        : 'flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[860px] sm:max-w-3xl bg-[#111b21] sm:rounded-2xl sm:border sm:border-[#222d34] shadow-2xl overflow-hidden relative pb-0';
+        ? 'flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[860px] sm:max-w-5xl bg-black sm:rounded-2xl sm:border sm:border-zinc-800 shadow-2xl overflow-hidden relative pb-0'
+        : 'flex flex-col h-full w-full sm:h-[92vh] sm:max-h-[860px] sm:max-w-3xl bg-black sm:rounded-2xl sm:border sm:border-zinc-800 shadow-2xl overflow-hidden relative pb-0';
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, scale: embedded ? 1 : 0.98, y: embedded ? 6 : isRunningInAppMode ? 15 : 10 }}
+        initial={embedded ? false : { opacity: 0, scale: 0.98, y: isRunningInAppMode ? 15 : 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: embedded ? 1 : 0.98, y: embedded ? 6 : isRunningInAppMode ? 15 : 10 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
+        exit={embedded ? undefined : { opacity: 0, scale: 0.98, y: isRunningInAppMode ? 15 : 10 }}
+        transition={embedded ? { duration: 0 } : { duration: 0.18, ease: 'easeOut' }}
         className={outerWrapperClass}
       >
         <div className={innerFrameClass}>
 
           {/* ================================================================= */}
-          {/* CASE A: ADMIN VIEW (WhatsApp Web style for Admin)                  */}
+          {/* CASE A: ADMIN VIEW                                                */}
           {/* ================================================================= */}
           {isAdmin ? (
-            <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-[#111b21]">
-              {/* Master-Detail Split Layout (WhatsApp Web Style) */}
+            <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-black">
+              {/* Master-Detail Split Layout */}
               <div className="grow min-h-0 flex overflow-hidden">
                 {/* 1. CONTACTS SIDEBAR */}
                 <div
-                  className={`flex-col bg-[#111b21] border-r border-[#222d34] shrink-0 w-full md:w-80 lg:w-96 overflow-hidden ${
+                  className={`flex-col bg-black border-r border-zinc-800 shrink-0 w-full md:w-80 lg:w-96 overflow-hidden ${
                     selectedAdminConvId ? 'hidden md:flex' : 'flex'
                   }`}
                 >
                   {/* Search Bar Row */}
-                  <div className="p-3 border-b border-[#222d34] bg-[#111b21] flex items-center gap-2">
+                  <div className="p-3 border-b border-zinc-800 bg-zinc-950 flex items-center gap-2">
                     {!embedded && (
                       <button
                         type="button"
@@ -1354,12 +1352,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         value={adminSearchQuery}
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
                         placeholder={isMainAdminMode ? "Search Sub-Admin..." : "Search student or Main Admin..."}
-                        className="w-full bg-[#202c33] border border-transparent focus:border-[#00a884]/50 rounded-lg pl-9 pr-8 py-2 text-xs text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition"
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-[#00a884]/60 rounded-lg pl-9 pr-8 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition"
                       />
                       {adminSearchQuery && (
                         <button
                           onClick={() => setAdminSearchQuery('')}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8696a0] hover:text-[#e9edef] text-xs cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white text-xs cursor-pointer"
                         >
                           ✕
                         </button>
@@ -1368,7 +1366,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   </div>
 
                   {/* Contacts List Scrollable */}
-                  <div className="grow overflow-y-auto divide-y divide-[#222d34]/60 scrollbar-none">
+                  <div className="grow overflow-y-auto divide-y divide-zinc-900 scrollbar-none">
                     {isLoadingAdminConvs ? (
                       <div className="py-12 text-center text-[#8696a0] text-xs">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#00a884]" />
@@ -1403,14 +1401,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             onClick={() => setSelectedAdminConvId(conv.id)}
                             className={`w-full text-left px-3.5 py-3 transition flex items-center gap-3 cursor-pointer relative group ${
                               isSelected
-                                ? 'bg-[#2a3942]'
-                                : 'hover:bg-[#202c33]'
+                                ? 'bg-zinc-900'
+                                : 'hover:bg-zinc-950'
                             }`}
                           >
                             <div className="relative shrink-0">
                               {renderAdminContactAvatar(conv, 'w-11 h-11')}
                               {hasUnread && (
-                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-[#00a884] text-[11px] font-black text-[#111b21] flex items-center justify-center px-1 shadow-md ring-2 ring-[#111b21]">
+                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-[#00a884] text-[11px] font-black text-black flex items-center justify-center px-1 shadow-md ring-2 ring-black">
                                   {unreadCount > 99 ? '99+' : unreadCount}
                                 </span>
                               )}
@@ -1515,12 +1513,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   {selectedAdminConv ? (
                     <>
                       {/* Active Chat Header */}
-                      <div className="bg-[#202c33] border-b border-[#222d34] px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
+                      <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-2.5 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-3 min-w-0">
                           <button
                             type="button"
                             onClick={() => setSelectedAdminConvId(null)}
-                            className="md:hidden p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full hover:bg-[#111b21] cursor-pointer shrink-0"
+                            className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-900 cursor-pointer shrink-0"
                             title="Back to Contact List"
                           >
                             <ArrowLeft className="w-5 h-5" />
@@ -1573,7 +1571,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                   className="fixed inset-0 z-30" 
                                   onClick={() => setAdminMenuOpen(false)} 
                                 />
-                                <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#202c33] border border-[#222d34] rounded-xl shadow-2xl py-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                                <div className="absolute right-0 top-full mt-1.5 w-64 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-40 text-xs text-zinc-100">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1707,8 +1705,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                   <div
                                     className={`rounded-xl px-3.5 pt-2 pb-1.5 shadow-sm break-words relative ${
                                       isMyMsg
-                                        ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
-                                        : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
+                                        ? 'bg-[#005c4b] text-zinc-100 rounded-tr-xs'
+                                        : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                     }`}
                                   >
                                     {!isMyMsg && (
@@ -1833,13 +1831,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </div>
 
                       {/* Admin / Sub-Admin Quick Replies */}
-                      <div className="px-3 py-2 bg-[#202c33] border-t border-[#222d34] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                        <span className="text-[10px] text-[#8696a0] uppercase font-bold shrink-0">द्रुत जवाफ:</span>
+                      <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">द्रुत जवाफ:</span>
                         {(isSelectedMainAdminChat ? SUB_ADMIN_TO_MAIN_PRESETS : ADMIN_QUICK_PRESETS).map((preset, idx) => (
                           <button
                             key={idx}
                             onClick={() => handleAdminSendReply(preset)}
-                            className="bg-[#111b21] hover:bg-[#2a3942] border border-[#222d34] text-[#e9edef] text-xs px-2.5 py-1 rounded-full whitespace-nowrap cursor-pointer transition active:scale-95"
+                            className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-100 text-xs px-2.5 py-1 rounded-full whitespace-nowrap cursor-pointer transition active:scale-95"
                           >
                             {preset}
                           </button>
@@ -1848,7 +1846,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                       {/* Admin Pending Attachment Preview Bar */}
                       {adminPendingAttachment && (
-                        <div className="px-3 py-2 bg-[#111b21] border-t border-[#222d34] flex items-center justify-between gap-3 shrink-0 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
                           <div className="flex items-center gap-2.5 min-w-0">
                             {adminPendingAttachment.type === 'image' ? (
                               <img
@@ -1887,7 +1885,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           e.preventDefault();
                           handleAdminSendReply();
                         }}
-                        className="p-3 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 shrink-0 relative"
+                        className="p-3 bg-zinc-950 border-t border-zinc-800 flex items-center gap-2 shrink-0 relative"
                       >
                         {/* Hidden file inputs */}
                         <input
@@ -1925,7 +1923,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 className="fixed inset-0 z-30"
                                 onClick={() => setShowAdminAttachMenu(false)}
                               />
-                              <div className="absolute left-0 bottom-full mb-2 w-52 bg-[#202c33] border border-[#222d34] rounded-2xl shadow-2xl p-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                              <div className="absolute left-0 bottom-full mb-2 w-52 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 z-40 text-xs text-zinc-100">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1963,7 +1961,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           )}
                         </div>
 
-                        <div className="grow bg-[#2a3942] rounded-full px-4 py-2 flex items-center">
+                        <div className="grow bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2 flex items-center">
                           <input
                             ref={adminReplyInputRef}
                             type="text"
@@ -2012,7 +2010,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         </div>
                       )}
                       <div className="my-auto flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 rounded-full bg-[#202c33] border border-[#222d34] flex items-center justify-center mb-3 text-[#00a884]">
+                        <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3 text-[#00a884]">
                           <MessageCircle className="w-8 h-8" />
                         </div>
                         <h4 className="font-bold text-sm text-[#e9edef] mb-1">
@@ -2031,11 +2029,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             </div>
           ) : (
             /* =============================================================== */
-            /* CASE B: STUDENT VIEW (Authentic WhatsApp Chat Experience)       */
+            /* CASE B: STUDENT VIEW (Clean Website Black Theme)                */
             /* =============================================================== */
-            <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-[#0b141a]">
+            <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-black">
               {/* Clean Executive Chat Header Bar */}
-              <div className="bg-[#1a242b] border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 shadow-md z-10">
+              <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3 flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-3 min-w-0">
                   {!embedded && (
                     <button
@@ -2067,7 +2065,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         }}
                       />
                     </div>
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-[#1a242b]"></span>
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-zinc-950"></span>
                   </div>
 
                   <div className="min-w-0">
@@ -2123,7 +2121,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           className="fixed inset-0 z-30" 
                           onClick={() => setStudentMenuOpen(false)} 
                         />
-                        <div className="absolute right-0 top-full mt-1.5 w-60 bg-[#202c33] border border-[#222d34] rounded-xl shadow-2xl py-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                        <div className="absolute right-0 top-full mt-1.5 w-60 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-40 text-xs text-zinc-100">
                           {!embedded && (
                             <button
                               type="button"
@@ -2178,7 +2176,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
               {/* Clean Contact Switcher (shown only if student chats with multiple assigned contacts, showing ONLY names) */}
               {hasActivatedCourse && studentSubAdminTargets.length > 1 && (
-                <div className="bg-[#141d23] border-b border-white/5 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
+                <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
                   {studentSubAdminTargets.map((target) => {
                     const isActiveTarget = target.subAdmin.code === activeStudentTarget?.subAdmin.code;
                     return (
@@ -2188,8 +2186,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         onClick={() => setSelectedStudentSubCode(target.subAdmin.code)}
                         className={`pl-1.5 pr-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition inline-flex items-center gap-2 border ${
                           isActiveTarget
-                            ? 'bg-[#00a884] text-[#0b141a] border-[#00a884] shadow-sm'
-                            : 'bg-[#1f2c34] text-[#e9edef] border-white/10 hover:bg-[#2a3942]'
+                            ? 'bg-[#00a884] text-black border-[#00a884] shadow-sm'
+                            : 'bg-zinc-900 text-zinc-100 border-zinc-800 hover:bg-zinc-800'
                         }`}
                       >
                         <img
@@ -2253,7 +2251,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   <>
                     {/* Clean Privacy Pill */}
                     <div className="flex justify-center my-1">
-                      <div className="bg-[#182229]/90 text-[#8696a0] text-[11px] px-3.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5 shadow-xs">
+                      <div className="bg-zinc-900 text-zinc-400 text-[11px] px-3.5 py-1 rounded-full border border-zinc-800 flex items-center gap-1.5">
                         <Lock className="w-3 h-3 text-[#00a884] shrink-0" />
                         <span>Direct chat with {activeStudentTarget.subAdmin.name}</span>
                       </div>
@@ -2303,7 +2301,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             <button
                               key={idx}
                               onClick={() => handleStudentSendMessage(chip)}
-                              className="text-left text-xs bg-[#1a242b]/90 hover:bg-[#23313a] border border-white/10 text-[#e9edef] px-4 py-2.5 rounded-2xl cursor-pointer flex items-center justify-between group transition active:scale-[0.99] shadow-xs"
+                              className="text-left text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-100 px-4 py-2.5 rounded-2xl cursor-pointer flex items-center justify-between group transition active:scale-[0.99]"
                             >
                               <span className="truncate pr-2">{chip}</span>
                               <Send className="w-3.5 h-3.5 text-[#00a884] opacity-70 group-hover:opacity-100 shrink-0" />
@@ -2340,8 +2338,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               <div
                                 className={`rounded-2xl px-3.5 pt-2 pb-1.5 text-sm shadow-sm break-words relative ${
                                   isMe
-                                    ? 'bg-gradient-to-br from-[#005c4b] to-[#004d40] text-[#e9edef] rounded-tr-xs'
-                                    : 'bg-[#1f2c34] border border-white/5 text-[#e9edef] rounded-tl-xs'
+                                    ? 'bg-[#005c4b] text-zinc-100 rounded-tr-xs'
+                                    : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                 }`}
                               >
                                 {!isMe && (
@@ -2475,15 +2473,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 <div ref={studentEndRef} />
               </div>
 
-              {/* Quick Suggestion Strip (WhatsApp Style) */}
+              {/* Quick Suggestion Strip */}
               {(isAdmin || (hasActivatedCourse && Boolean(activeStudentTarget))) && studentMessages.length > 0 && (
-                <div className="px-3 py-1.5 bg-[#202c33] border-t border-[#222d34] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                  <span className="text-[10px] text-[#8696a0] uppercase font-bold shrink-0">सुझाव:</span>
+                <div className="px-3 py-1.5 bg-zinc-950 border-t border-zinc-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+                  <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">सुझाव:</span>
                   {['धन्यवाद!', 'हजुर, बुझेँ।', 'पेमेन्ट स्क्रिनसट पठाएँ', 'प्रमाणपत्र कहाँ हेर्ने?'].map((sug, i) => (
                     <button
                       key={i}
                       onClick={() => handleStudentSendMessage(sug)}
-                      className="bg-[#111b21] hover:bg-[#2a3942] border border-[#222d34] text-[#e9edef] text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap cursor-pointer transition active:scale-95"
+                      className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-100 text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap cursor-pointer transition active:scale-95"
                     >
                       {sug}
                     </button>
@@ -2493,13 +2491,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
               {/* Emoji quick row toggle */}
               {showEmojiBar && (
-                <div className="px-3 py-2 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 overflow-x-auto shrink-0">
+                <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-800 flex items-center gap-2 overflow-x-auto shrink-0">
                   {WHATSAPP_QUICK_EMOJIS.map((emoji, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setStudentInputText(prev => prev + emoji)}
-                      className="text-lg p-1.5 hover:bg-[#2a3942] rounded-lg transition active:scale-110 cursor-pointer"
+                      className="text-lg p-1.5 hover:bg-zinc-800 rounded-lg transition active:scale-110 cursor-pointer"
                     >
                       {emoji}
                     </button>
@@ -2509,7 +2507,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
               {/* Student Pending Attachment Preview Tray */}
               {studentPendingAttachment && (
-                <div className="px-3.5 py-2 bg-[#111b21] border-t border-[#222d34] flex items-center justify-between gap-3 shrink-0 animate-in fade-in slide-in-from-bottom-2">
+                <div className="px-3.5 py-2 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
                   <div className="flex items-center gap-2.5 min-w-0">
                     {studentPendingAttachment.type === 'image' ? (
                       <img
@@ -2523,7 +2521,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-[#e9edef] truncate">
+                      <p className="text-xs font-semibold text-zinc-100 truncate">
                         {studentPendingAttachment.name}
                       </p>
                       <p className="text-[10px] text-[#00a884]">
@@ -2534,7 +2532,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setStudentPendingAttachment(null)}
-                    className="p-1.5 text-[#8696a0] hover:text-red-400 hover:bg-[#202c33] rounded-full transition cursor-pointer"
+                    className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-900 rounded-full transition cursor-pointer"
                     title="Remove attachment"
                   >
                     <X className="w-4 h-4" />
@@ -2542,13 +2540,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
               )}
 
-              {/* WhatsApp Chat Input Bar */}
+              {/* Chat Input Bar */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleStudentSendMessage();
                 }}
-                className="p-2.5 bg-[#202c33] border-t border-[#222d34] flex items-center gap-2 shrink-0 relative"
+                className="p-2.5 bg-zinc-950 border-t border-zinc-800 flex items-center gap-2 shrink-0 relative"
               >
                 {/* Hidden file inputs for student */}
                 <input
@@ -2594,7 +2592,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   </div>
                 ) : (
                   <>
-                    <div className="grow bg-[#2a3942] rounded-full px-3 py-1.5 flex items-center gap-1.5 relative">
+                    <div className="grow bg-zinc-900 border border-zinc-800 rounded-full px-3 py-1.5 flex items-center gap-1.5 relative">
                       <button
                         type="button"
                         onClick={() => setShowEmojiBar(!showEmojiBar)}
@@ -2624,7 +2622,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               className="fixed inset-0 z-30"
                               onClick={() => setShowStudentAttachMenu(false)}
                             />
-                            <div className="absolute left-0 bottom-full mb-3 w-52 bg-[#202c33] border border-[#222d34] rounded-2xl shadow-2xl p-1.5 z-40 text-xs text-[#e9edef] animate-in fade-in zoom-in-95">
+                            <div className="absolute left-0 bottom-full mb-3 w-52 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-1.5 z-40 text-xs text-zinc-100">
                               <button
                                 type="button"
                                 onClick={() => {

@@ -4649,14 +4649,16 @@ export default function App() {
 
   return (
     <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
-      {/* Sleek Pure Black Ambient Lighting: Situational Blue, Green, Red Accents */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
-        <div className="absolute -top-32 -left-32 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
-        <div className="absolute top-1/4 -right-32 w-[500px] h-[500px] bg-emerald-600/8 rounded-full blur-[140px]" />
-        <div className="absolute top-2/3 -left-20 w-[450px] h-[450px] bg-rose-600/8 rounded-full blur-[130px]" />
-        <div className="absolute -bottom-32 right-10 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:26px_26px] opacity-[0.06]" />
-      </div>
+      {/* Sleek Pure Black Ambient Lighting: Hidden in Ask view so background stays simple pure black */}
+      {!(currentView === 'ask' && isCourseActiveUser) && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+          <div className="absolute -top-32 -left-32 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
+          <div className="absolute top-1/4 -right-32 w-[500px] h-[500px] bg-emerald-600/8 rounded-full blur-[140px]" />
+          <div className="absolute top-2/3 -left-20 w-[450px] h-[450px] bg-rose-600/8 rounded-full blur-[130px]" />
+          <div className="absolute -bottom-32 right-10 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:26px_26px] opacity-[0.06]" />
+        </div>
+      )}
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -4678,7 +4680,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Top Header & Navigation Container */}
+      {/* Top Header & Navigation Container (hidden in Ask view so Ask covers full top area) */}
+      {!(currentView === 'ask' && isCourseActiveUser) && (
       <div className="sticky top-0 z-[100] w-full shrink-0 shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
         {/* Dynamic Global Notice Banner from Admin Settings (Red Urgency Notice) */}
         {siteSettings.showNoticeBanner && siteSettings.noticeBannerText && (
@@ -4888,13 +4891,14 @@ export default function App() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Container for Course List / Classroom / Account / Ask */}
-      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
 
         {/* 1. EMBEDDED ACCOUNT / ASK / CLASSROOM / HOME VIEWS */}
         {currentView === 'ask' && isCourseActiveUser ? (
-          <section id="ask-embedded-view" className="w-full flex-1 min-h-0 flex flex-col animate-in fade-in duration-200">
+          <section id="ask-embedded-view" className="w-full flex-1 min-h-0 flex flex-col bg-black">
             <AskChatModal
               embedded={true}
               isOpen={true}
@@ -8694,7 +8698,7 @@ export default function App() {
                 if (!isUserAdminSession) {
                   setStudentUnreadCount(0);
                 }
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: 'auto' });
               }}
               className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
                 currentView === 'ask'
