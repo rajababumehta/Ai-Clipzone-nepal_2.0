@@ -48,6 +48,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { VerifiedBadge } from './VerifiedBadge';
 import { cleanLegacyLogoUrl } from '../data';
 import { Course, SubAdminAccount, SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
 
@@ -1418,8 +1419,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               {isSubMainThread ? (
                                 <>
                                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                                    <h5 className="font-bold text-sm text-[#e9edef] truncate">
-                                      {brandName}
+                                    <h5 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 min-w-0">
+                                      <span className="truncate">{brandName}</span>
+                                      <VerifiedBadge variant="main_admin" className="w-4 h-4" />
                                     </h5>
                                     <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
                                       {formatRelativeTime(conv.lastMessageAt)}
@@ -1446,8 +1448,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     </p>
                                   )}
                                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                                    <h5 className="font-bold text-sm text-[#e9edef] truncate">
-                                      {conv.userName}
+                                    <h5 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 min-w-0">
+                                      <span className="truncate">{conv.userName}</span>
+                                      <VerifiedBadge variant="sub_admin" className="w-4 h-4" />
                                     </h5>
                                     <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
                                       {formatRelativeTime(conv.lastMessageAt)}
@@ -1469,8 +1472,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               ) : (
                                 <>
                                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                                    <h5 className="font-bold text-sm text-[#e9edef] truncate">
-                                      {conv.userName}
+                                    <h5 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 min-w-0">
+                                      <span className="truncate">{conv.userName}</span>
+                                      <VerifiedBadge variant="student" className="w-4 h-4" />
                                     </h5>
                                     <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
                                       {formatRelativeTime(conv.lastMessageAt)}
@@ -1526,8 +1530,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           {renderAdminContactAvatar(selectedAdminConv, 'w-10 h-10', true)}
                           <div className="min-w-0">
                             {isSelectedMainAdminChat ? (
-                              <h4 className="font-bold text-sm text-[#e9edef] truncate">
-                                {brandName}
+                              <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 min-w-0">
+                                <span className="truncate">{brandName}</span>
+                                <VerifiedBadge variant="main_admin" className="w-4 h-4" />
                               </h4>
                             ) : isMainAdminMode ? (
                               <>
@@ -1536,14 +1541,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     {selectedAdminConv.activeCourse}
                                   </p>
                                 )}
-                                <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
-                                  {selectedAdminConv.userName}
+                                <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight min-w-0">
+                                  <span className="truncate">{selectedAdminConv.userName}</span>
+                                  <VerifiedBadge variant="sub_admin" className="w-4 h-4" />
                                 </h4>
                               </>
                             ) : (
                               <>
-                                <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
-                                  {selectedAdminConv.userName}
+                                <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight min-w-0">
+                                  <span className="truncate">{selectedAdminConv.userName}</span>
+                                  <VerifiedBadge variant="student" className="w-4 h-4" />
                                 </h4>
                                 <p className="text-[11px] text-[#00a884] font-medium truncate leading-tight">
                                   {selectedAdminConv.activeCourse || 'Verified Student'}
@@ -1709,9 +1716,21 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                     }`}
                                   >
-                                    {!isMyMsg && (
+                                    {!isMyMsg ? (
                                       <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
-                                        <span>{incomingSenderName}</span>
+                                        <span className="inline-flex items-center gap-1 min-w-0">
+                                          <span className="truncate">{incomingSenderName}</span>
+                                          <VerifiedBadge
+                                            variant={
+                                              isSelectedMainAdminChat
+                                                ? 'main_admin'
+                                                : isMainAdminMode
+                                                ? 'sub_admin'
+                                                : 'student'
+                                            }
+                                            className="w-3.5 h-3.5"
+                                          />
+                                        </span>
                                         <button
                                           type="button"
                                           onClick={() => handleCopyMessage(msg)}
@@ -1724,6 +1743,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                             <Copy className="w-3 h-3" />
                                           )}
                                         </button>
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10.5px] font-bold text-emerald-200/90 mb-1 flex items-center justify-end gap-1">
+                                        <span className="truncate">
+                                          {isMainAdminMode ? brandName : subAdminSession?.name || 'Sub-Admin'}
+                                        </span>
+                                        <VerifiedBadge
+                                          variant={isMainAdminMode ? 'main_admin' : 'sub_admin'}
+                                          className="w-3.5 h-3.5"
+                                        />
                                       </div>
                                     )}
 
@@ -2073,7 +2102,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       <span className="truncate">
                         {activeStudentTarget ? activeStudentTarget.subAdmin.name : brandName}
                       </span>
-                      <CheckCircle2 className="w-4 h-4 text-[#00a884] fill-[#00a884]/20 shrink-0" />
+                      <VerifiedBadge
+                        variant={
+                          !activeStudentTarget || activeStudentTarget.subAdmin.code === 'MAIN_ADMIN'
+                            ? 'main_admin'
+                            : 'sub_admin'
+                        }
+                        className="w-4 h-4"
+                      />
                     </h4>
                     <p className="text-[11px] text-[#00a884] font-medium leading-tight mt-0.5">
                       Online
@@ -2200,6 +2236,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           }}
                         />
                         <span>{target.subAdmin.name}</span>
+                        <VerifiedBadge
+                          variant={target.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
+                          className="w-3.5 h-3.5"
+                        />
                       </button>
                     );
                   })}
@@ -2289,7 +2329,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           />
                         </div>
                         <div className="space-y-1">
-                          <h4 className="text-[#e9edef] font-bold text-base">{activeStudentTarget.subAdmin.name}</h4>
+                          <h4 className="text-[#e9edef] font-bold text-base inline-flex items-center justify-center gap-1.5">
+                            <span>{activeStudentTarget.subAdmin.name}</span>
+                            <VerifiedBadge
+                              variant={activeStudentTarget.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
+                              className="w-4 h-4"
+                            />
+                          </h4>
                           <p className="text-[#8696a0] text-xs max-w-xs mx-auto leading-relaxed">
                             आफ्नो प्रश्न लेखेर {activeStudentTarget.subAdmin.name} लाई सिधै पठाउनुहोस्।
                           </p>
@@ -2342,11 +2388,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                 }`}
                               >
-                                {!isMe && (
+                                {!isMe ? (
                                   <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-1">
-                                      <span>{targetName}</span>
-                                      <CheckCircle2 className="w-3 h-3 text-[#00a884]" />
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span className="truncate">{targetName}</span>
+                                      <VerifiedBadge
+                                        variant={
+                                          activeStudentTarget?.subAdmin.code === 'MAIN_ADMIN'
+                                            ? 'main_admin'
+                                            : 'sub_admin'
+                                        }
+                                        className="w-3.5 h-3.5"
+                                      />
                                     </div>
                                     <button
                                       type="button"
@@ -2360,6 +2413,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         <Copy className="w-3 h-3" />
                                       )}
                                     </button>
+                                  </div>
+                                ) : (
+                                  <div className="text-[10.5px] font-bold text-emerald-200/90 mb-1 flex items-center justify-end gap-1">
+                                    <span className="truncate">{cleanRealName(studentName) || 'Student'}</span>
+                                    <VerifiedBadge variant="student" className="w-3.5 h-3.5" />
                                   </div>
                                 )}
 

@@ -38,6 +38,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { VerifiedBadge } from './VerifiedBadge';
 import { cleanLegacyLogoUrl } from '../data';
 import { Course, SubAdminAccount, SupportConversation, SupportMessage } from '../types';
 
@@ -851,8 +852,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                         <>
                           {/* Sub-Admin viewing Main Admin: ONLY AI Clipzone Name + Logo */}
                           <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <h5 className="font-bold text-[13.5px] text-white truncate">
-                              {brandName}
+                            <h5 className="font-bold text-[13.5px] text-white flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{brandName}</span>
+                              <VerifiedBadge variant="main_admin" className="w-4 h-4" />
                             </h5>
                             <span className="text-[10px] text-zinc-500 shrink-0 font-medium">
                               {formatRelativeTime(conv.lastMessageAt)}
@@ -872,8 +874,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                             </p>
                           )}
                           <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <h5 className="font-bold text-[13.5px] text-white truncate">
-                              {conv.userName}
+                            <h5 className="font-bold text-[13.5px] text-white flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{conv.userName}</span>
+                              <VerifiedBadge variant="sub_admin" className="w-4 h-4" />
                             </h5>
                             <span className="text-[10px] text-zinc-500 shrink-0 font-medium">
                               {formatRelativeTime(conv.lastMessageAt)}
@@ -888,8 +891,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                         <>
                           {/* Sub-Admin viewing Course Student */}
                           <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <h5 className="font-bold text-[13.5px] text-white truncate">
-                              {conv.userName}
+                            <h5 className="font-bold text-[13.5px] text-white flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{conv.userName}</span>
+                              <VerifiedBadge variant="student" className="w-4 h-4" />
                             </h5>
                             <span className="text-[10px] text-zinc-500 shrink-0 font-medium">
                               {formatRelativeTime(conv.lastMessageAt)}
@@ -926,8 +930,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                   <div className="min-w-0">
                     {isSelectedMainAdminChat ? (
                       /* Sub-Admin viewing Main Admin: ONLY "AI Clipzone" */
-                      <h4 className="font-bold text-sm sm:text-base text-white tracking-tight truncate">
-                        {brandName}
+                      <h4 className="font-bold text-sm sm:text-base text-white tracking-tight flex items-center gap-1.5 min-w-0">
+                        <span className="truncate">{brandName}</span>
+                        <VerifiedBadge variant="main_admin" className="w-4 h-4" />
                       </h4>
                     ) : isMainAdmin ? (
                       /* Main Admin viewing Sub-Admin: Course ABOVE Sub-Admin Name */
@@ -937,15 +942,17 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                             {selectedConv.activeCourse}
                           </p>
                         )}
-                        <h4 className="font-bold text-sm sm:text-base text-white tracking-tight truncate leading-tight">
-                          {selectedConv.userName}
+                        <h4 className="font-bold text-sm sm:text-base text-white tracking-tight flex items-center gap-1.5 leading-tight min-w-0">
+                          <span className="truncate">{selectedConv.userName}</span>
+                          <VerifiedBadge variant="sub_admin" className="w-4 h-4" />
                         </h4>
                       </>
                     ) : (
                       /* Sub-Admin viewing Course Student */
                       <>
-                        <h4 className="font-bold text-sm sm:text-base text-white tracking-tight truncate leading-tight">
-                          {selectedConv.userName}
+                        <h4 className="font-bold text-sm sm:text-base text-white tracking-tight flex items-center gap-1.5 leading-tight min-w-0">
+                          <span className="truncate">{selectedConv.userName}</span>
+                          <VerifiedBadge variant="student" className="w-4 h-4" />
                         </h4>
                         {selectedConv.activeCourse && (
                           <p className="text-[11px] text-emerald-400 font-medium truncate mt-0.5">
@@ -1036,11 +1043,25 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           >
                             <div className="flex items-center justify-between gap-4 mb-1">
                               <span
-                                className={`text-[10.5px] font-semibold ${
+                                className={`text-[10.5px] font-semibold inline-flex items-center gap-1 min-w-0 ${
                                   isMyMsg ? 'text-blue-100' : 'text-emerald-400'
                                 }`}
                               >
-                                {isMyMsg ? mySenderName : incomingSenderName}
+                                <span className="truncate">{isMyMsg ? mySenderName : incomingSenderName}</span>
+                                <VerifiedBadge
+                                  variant={
+                                    isMyMsg
+                                      ? isSubAdmin
+                                        ? 'sub_admin'
+                                        : 'main_admin'
+                                      : isSelectedMainAdminChat
+                                      ? 'main_admin'
+                                      : isMainAdmin
+                                      ? 'sub_admin'
+                                      : 'student'
+                                  }
+                                  className="w-3.5 h-3.5"
+                                />
                               </span>
                               <button
                                 type="button"

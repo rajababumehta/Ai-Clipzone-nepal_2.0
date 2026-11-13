@@ -78,6 +78,7 @@ import { CertificateModal } from './components/CertificateModal';
 import { ImageAdjustModal } from './components/ImageAdjustModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { AskChatModal } from './components/AskChatModal';
+import { VerifiedBadge } from './components/VerifiedBadge';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
@@ -4878,8 +4879,8 @@ export default function App() {
                         {(currentUser.displayName || currentUser.email || 'ST').substring(0, 2)}
                       </span>
                       {/* Facebook Style Blue Tick Verification Badge */}
-                      <span className="absolute -bottom-0.5 -right-0.5 bg-blue-600 text-white w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-black shadow-sm" title="Verified Active Student">
-                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-black flex items-center justify-center">
+                        <VerifiedBadge variant="student" className="w-4 h-4" />
                       </span>
                     </>
                   ) : (
@@ -5189,9 +5190,7 @@ export default function App() {
                           <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
                             {currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
                           </h2>
-                          <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center p-0.5 shadow-xs" title="Official Verified Student">
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          </span>
+                          <VerifiedBadge variant="student" className="w-5 h-5" title="Official Verified Student" />
                           <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-semibold px-2 py-0.5 rounded-md flex items-center gap-1" title="नाम परिवर्तन गर्न मिल्दैन (Name is permanently registered)">
                             🔒 Registered
                           </span>
