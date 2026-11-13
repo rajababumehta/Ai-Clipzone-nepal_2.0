@@ -48,6 +48,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cleanLegacyLogoUrl } from '../data';
 import { Course, SubAdminAccount, SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
 
 interface AskChatModalProps {
@@ -118,6 +119,22 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 }) => {
   const isMainAdminMode = Boolean(isAdmin && adminRole === 'main_admin');
   const isSubAdminMode = Boolean(isAdmin && adminRole === 'sub_admin' && subAdminSession?.code);
+  const brandName =
+    (siteSettings.instituteName && !/official|admin/i.test(siteSettings.instituteName)
+      ? siteSettings.instituteName
+      : 'AI Clipzone'
+    ).trim() || 'AI Clipzone';
+  const officialLogoUrl = cleanLegacyLogoUrl(siteSettings.instituteLogoUrl);
+  const isRenderableAvatar = (url?: string): boolean => {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    return (
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('data:') ||
+      trimmed.startsWith('/')
+    );
+  };
   // Helper to ensure name is a real student name - strictly never "Student Learner" or generic placeholder
   const cleanRealName = (name: string | undefined | null): string => {
     if (!name) return '';
@@ -478,19 +495,22 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             if (!sub.code) return;
             seen.add(sub.code);
             const remote = subDocMap.get(sub.code);
+            const courseObj = courses.find((c) => c.id === sub.courseId);
+            const courseName = courseObj?.title || sub.courseTitle || '';
+            const avatar = sub.avatarUrl || remote?.userAvatar || '';
             list.push({
               id: `subadmin_main__${sub.code}`,
               userId: sub.code,
-              userName: sub.name || `Sub-Admin (${sub.code})`,
-              userEmail: `Course: ${sub.courseTitle || sub.courseId}`,
-              userAvatar: '',
+              userName: sub.name || 'Sub-Admin',
+              userEmail: '',
+              userAvatar: avatar,
               channelType: 'subadmin_mainadmin',
               subAdminCode: sub.code,
               subAdminName: sub.name,
               courseId: sub.courseId,
-              activeCourse: sub.courseTitle,
-              purchasedCourses: sub.courseTitle ? [sub.courseTitle] : [],
-              lastMessage: remote?.lastMessage || `🛡️ Sub-Admin Chat (${sub.status === 'active' ? 'Active' : 'Disabled'})`,
+              activeCourse: courseName,
+              purchasedCourses: courseName ? [courseName] : [],
+              lastMessage: remote?.lastMessage || 'कुनै म्यासेज छैन',
               lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
               lastSender: remote?.lastSender || 'system',
               unreadAdminCount: remote?.unreadAdminCount || 0,
@@ -507,15 +527,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             list.push({
               id: remote.id || `subadmin_main__${code}`,
               userId: code,
-              userName: remote.subAdminName || remote.userName || `Sub-Admin (${code})`,
-              userEmail: remote.activeCourse ? `Course: ${remote.activeCourse}` : '',
+              userName: remote.subAdminName || remote.userName || 'Sub-Admin',
+              userEmail: '',
+              userAvatar: remote.userAvatar || '',
               channelType: 'subadmin_mainadmin',
               subAdminCode: code,
               subAdminName: remote.subAdminName || remote.userName,
               courseId: remote.courseId || '',
               activeCourse: remote.activeCourse || '',
               purchasedCourses: remote.activeCourse ? [remote.activeCourse] : [],
-              lastMessage: remote.lastMessage || '🛡️ Sub-Admin Conversation',
+              lastMessage: remote.lastMessage || 'कुनै म्यासेज छैन',
               lastMessageAt: remote.lastMessageAt || remote.updatedAt || Date.now(),
               lastSender: remote.lastSender || 'user',
               unreadAdminCount: remote.unreadAdminCount || 0,
@@ -581,15 +602,20 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             if (!belongsToSub) return;
 
             const rawStudentId = d.userId || docSnap.id.replace(`substudent__${subAdminSession.code}__`, '');
+            const convRealName = cleanRealName(d.userName);
+
             const matchedKey = Array.isArray(allActivationKeys)
-              ? allActivationKeys.find((k: any) =>
-                  isKeyForThisSubCourse(k) &&
-                  ((k.claimedByUid && k.claimedByUid === rawStudentId) ||
-                    (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()))
-                )
+              ? allActivationKeys.find((k: any) => {
+                  if (!isKeyForThisSubCourse(k)) return false;
+                  if (k.claimedByUid && k.claimedByUid === rawStudentId) return true;
+                  if (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()) return true;
+                  const kName = cleanRealName(k.studentName) || cleanRealName(k.claimedByName);
+                  if (kName && convRealName && kName.toLowerCase() === convRealName.toLowerCase()) return true;
+                  return false;
+                })
               : undefined;
 
-            let resolvedName = cleanRealName(d.userName);
+            let resolvedName = convRealName;
             if (!resolvedName && matchedKey) {
               resolvedName = cleanRealName(matchedKey.claimedByName) || cleanRealName(matchedKey.studentName);
             }
@@ -600,13 +626,22 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             if (!resolvedName) resolvedName = 'Student';
 
             const courseTitle = subAdminSession.courseTitle || d.activeCourse || matchedKey?.courseTitle || 'Course';
+
+            // Resolve newest saved student avatar between Firestore conversation doc and activation key
+            const keyAvatar = matchedKey?.studentAvatar || '';
+            const convAvatar = d.userAvatar || '';
+            const resolvedAvatar =
+              (matchedKey?.studentAvatarUpdatedAt || 0) >= (d.updatedAt || 0)
+                ? keyAvatar || convAvatar
+                : convAvatar || keyAvatar;
+
             const convObj: SupportConversation = {
               id: docSnap.id,
               userId: rawStudentId,
               userName: resolvedName,
               userEmail: d.userEmail || matchedKey?.claimedByEmail || '',
               userPhone: d.userPhone || '',
-              userAvatar: d.userAvatar || matchedKey?.studentAvatar || '',
+              userAvatar: resolvedAvatar,
               channelType: 'student_subadmin',
               subAdminCode: subAdminSession.code,
               subAdminName: subAdminSession.name,
@@ -626,8 +661,19 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
             const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', rawStudentId, matchedKey?.code);
             const existing = studentContactMap.get(dedupKey);
-            if (!existing || (convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
-              studentContactMap.set(dedupKey, existing ? { ...existing, ...convObj } : convObj);
+            if (!existing) {
+              studentContactMap.set(dedupKey, convObj);
+            } else {
+              const newerIsCurrent = (convObj.lastMessageAt || 0) >= (existing.lastMessageAt || 0);
+              const bestAvatar = newerIsCurrent
+                ? convObj.userAvatar || existing.userAvatar || ''
+                : existing.userAvatar || convObj.userAvatar || '';
+              studentContactMap.set(
+                dedupKey,
+                newerIsCurrent
+                  ? { ...existing, ...convObj, userAvatar: bestAvatar }
+                  : { ...convObj, ...existing, userAvatar: bestAvatar }
+              );
             }
           });
 
@@ -658,7 +704,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   courseId: subAdminSession.courseId,
                   activeCourse: courseTitle,
                   purchasedCourses: [courseTitle],
-                  lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
+                  lastMessage: `Activated: ${key.code || key.id}`,
                   lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
                   lastSender: 'system',
                   unreadAdminCount: 0,
@@ -668,8 +714,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   clearedByUserAt: 0,
                   clearedByAdminAt: 0
                 });
-              } else if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
-                existing.userName = keyRealName;
+              } else {
+                if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
+                  existing.userName = keyRealName;
+                }
+                if (key.studentAvatar && (!existing.userAvatar || (key.studentAvatarUpdatedAt || 0) >= (existing.updatedAt || 0))) {
+                  existing.userAvatar = key.studentAvatar;
+                }
               }
             });
           }
@@ -677,16 +728,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           const officialConv: SupportConversation = {
             id: officialThreadId,
             userId: 'MAIN_OFFICIAL_ADMIN',
-            userName: `${siteSettings.instituteName || 'AI CLIPZONE'} Official Admin`,
-            userEmail: 'Official Main Admin Support',
-            userAvatar: siteSettings.instituteLogoUrl || '',
+            userName: brandName,
+            userEmail: '',
+            userAvatar: officialLogoUrl,
             channelType: 'subadmin_mainadmin',
             subAdminCode: subAdminSession.code,
             subAdminName: subAdminSession.name,
             courseId: subAdminSession.courseId,
-            activeCourse: 'Official Main Admin',
-            purchasedCourses: ['Official Admin'],
-            lastMessage: officialRemote?.lastMessage || '👑 Main Official Admin सँग सिधा कुराकानी गर्नुहोस्',
+            activeCourse: '',
+            purchasedCourses: [],
+            lastMessage: officialRemote?.lastMessage || `${brandName} सँग कुराकानी गर्नुहोस्`,
             lastMessageAt: officialRemote?.lastMessageAt || Date.now(),
             lastSender: officialRemote?.lastSender || 'system',
             unreadAdminCount: officialRemote?.unreadAdminCount || 0,
@@ -719,7 +770,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, selectedAdminConvId, siteSettings.instituteName, siteSettings.instituteLogoUrl]);
+  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, selectedAdminConvId, brandName, officialLogoUrl]);
 
   // ==========================================================================
   // 3. ADMIN / SUB-ADMIN MODE: Listener for messages in selected conversation
@@ -1071,9 +1122,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     const isMainViewingSubAdmin = isMainAdminMode && (targetConv?.channelType === 'subadmin_mainadmin' || selectedAdminConvId.startsWith('subadmin_main__'));
 
     const msgSender: 'admin' | 'user' = isSubViewingMainAdmin ? 'user' : 'admin';
-    const senderLabel = isSubAdminMode && subAdminSession
-      ? `${subAdminSession.name} (${subAdminSession.courseTitle})`
-      : `${siteSettings.instituteName || 'AI CLIPZONE'} Official Admin`;
+    const senderLabel = isSubAdminMode && subAdminSession ? subAdminSession.name : brandName;
+    const senderPhoto = isSubAdminMode && subAdminSession ? subAdminSession.avatarUrl || '' : officialLogoUrl;
 
     try {
       const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
@@ -1081,6 +1131,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         conversationId: selectedAdminConvId,
         sender: msgSender,
         senderName: senderLabel,
+        senderAvatar: senderPhoto || undefined,
         text,
         timestamp: now,
         isSeen: false,
@@ -1091,7 +1142,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         attachmentSize: attachmentToSend?.size || undefined
       });
 
-      const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
+      const summaryText = text || (attachmentToSend?.type === 'image' ? 'Photo' : attachmentToSend?.name || 'Document');
 
       let realUserName = cleanRealName(targetConv?.userName);
       if (!realUserName && targetConv?.userEmail) {
@@ -1117,6 +1168,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         convPayload.activeCourse = subAdminSession.courseTitle;
         convPayload.userId = subAdminSession.code;
         convPayload.userName = subAdminSession.name;
+        if (subAdminSession.avatarUrl) {
+          convPayload.userAvatar = subAdminSession.avatarUrl;
+        }
         convPayload.unreadAdminCount = increment(1);
         convPayload.unreadUserCount = 0;
       } else if (isMainViewingSubAdmin) {
@@ -1139,6 +1193,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         convPayload.userId = targetConv?.userId || selectedAdminConvId.replace(`substudent__${subAdminSession.code}__`, '');
         convPayload.userName = realUserName;
         convPayload.userEmail = targetConv?.userEmail || '';
+        if (targetConv?.userAvatar) {
+          convPayload.userAvatar = targetConv.userAvatar;
+        }
         convPayload.purchasedCourses = targetConv?.purchasedCourses || [subAdminSession.courseTitle];
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);
@@ -1191,6 +1248,45 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const selectedAdminConv = adminConversations.find(c => c.id === selectedAdminConvId);
   const isSelectedMainAdminChat = Boolean(isSubAdminMode && selectedAdminConv?.channelType === 'subadmin_mainadmin');
 
+  const renderAdminContactAvatar = (conv: SupportConversation, sizeClass: string = 'w-11 h-11', clickable: boolean = false) => {
+    const isSubMainRow = Boolean(isSubAdminMode && conv.channelType === 'subadmin_mainadmin');
+    const src = isSubMainRow ? officialLogoUrl : conv.userAvatar;
+    const initial = (conv.userName || 'A').charAt(0).toUpperCase();
+
+    if (isSubMainRow || isRenderableAvatar(src)) {
+      return (
+        <img
+          src={src || officialLogoUrl}
+          alt={isSubMainRow ? brandName : conv.userName}
+          onClick={
+            clickable && (src || isSubMainRow)
+              ? () => setLightboxImage({ url: src || officialLogoUrl, name: isSubMainRow ? brandName : conv.userName })
+              : undefined
+          }
+          onError={(e) => {
+            const img = e.currentTarget as HTMLImageElement;
+            if (isSubMainRow && !img.src.includes('/logo.png')) {
+              img.src = '/logo.png';
+            } else {
+              img.style.display = 'none';
+            }
+          }}
+          className={`${sizeClass} rounded-full object-cover bg-zinc-900 border border-white/15 shadow-sm shrink-0 ${
+            clickable ? 'cursor-pointer hover:ring-2 hover:ring-[#00a884]/60 transition' : ''
+          }`}
+        />
+      );
+    }
+
+    return (
+      <div
+        className={`${sizeClass} rounded-full bg-gradient-to-br from-slate-700 to-zinc-800 border border-zinc-700 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-sm`}
+      >
+        {initial}
+      </div>
+    );
+  };
+
   // WhatsApp Dark Wallpaper pattern inline style
   const whatsappWallpaperStyle: React.CSSProperties = {
     backgroundColor: '#0b141a',
@@ -1238,50 +1334,65 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     </button>
                   )}
 
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black shrink-0 shadow-sm ${
-                    isSubAdminMode
-                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
-                      : 'bg-[#00a884] text-[#111b21]'
-                  }`}>
-                    {isSubAdminMode ? (
-                      <span className="text-lg">🛡️</span>
-                    ) : (
-                      <MessageCircle className="w-5 h-5 text-[#111b21]" />
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5">
-                        {selectedAdminConv
-                          ? selectedAdminConv.userName
-                          : isMainAdminMode
-                            ? 'Sub-Admin Contacts & Messenger'
-                            : 'Students & Official Admin'}
-                      </h4>
-                      <span className="bg-[#00a884]/20 text-[#00a884] text-[10px] px-2 py-0.5 rounded-full font-bold border border-[#00a884]/30">
-                        {isMainAdminMode ? 'Main Admin • Sub-Admins Only' : `Sub-Admin • ${subAdminSession?.courseTitle || 'Course'}`}
-                      </span>
+                  {selectedAdminConv ? (
+                    renderAdminContactAvatar(selectedAdminConv, 'w-10 h-10', true)
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#111b21] border border-white/15 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+                      <img
+                        src={isSubAdminMode && subAdminSession?.avatarUrl ? subAdminSession.avatarUrl : officialLogoUrl}
+                        alt={isMainAdminMode ? brandName : subAdminSession?.name || brandName}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          if (!img.src.includes('/logo.png')) img.src = '/logo.png';
+                        }}
+                      />
                     </div>
-                    <p className="text-[11px] text-[#8696a0]">
-                      {selectedAdminConv ? (
-                        <span className="text-[#00a884] font-medium">
-                          {isSelectedMainAdminChat
-                            ? '👑 AI CLIPZONE Official Main Admin'
-                            : isMainAdminMode
-                              ? `🛡️ Course Sub-Admin${selectedAdminConv.activeCourse ? ` • ${selectedAdminConv.activeCourse}` : ''}`
-                              : selectedAdminConv.purchasedCourses?.length
-                                ? `🎓 ${selectedAdminConv.purchasedCourses.join(', ')}`
-                                : 'Active conversation'}
-                        </span>
+                  )}
+
+                  <div className="min-w-0">
+                    {selectedAdminConv ? (
+                      isSelectedMainAdminChat ? (
+                        <h4 className="font-bold text-sm text-[#e9edef] truncate">
+                          {brandName}
+                        </h4>
+                      ) : isMainAdminMode ? (
+                        <>
+                          {selectedAdminConv.activeCourse && (
+                            <p className="text-[10.5px] font-semibold text-[#00a884] truncate leading-tight">
+                              {selectedAdminConv.activeCourse}
+                            </p>
+                          )}
+                          <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
+                            {selectedAdminConv.userName}
+                          </h4>
+                        </>
                       ) : (
-                        <span>
+                        <>
+                          <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
+                            {selectedAdminConv.userName}
+                          </h4>
+                          {selectedAdminConv.activeCourse && (
+                            <p className="text-[11px] text-[#00a884] font-medium truncate leading-tight">
+                              {selectedAdminConv.activeCourse}
+                            </p>
+                          )}
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <h4 className="font-bold text-sm text-[#e9edef] truncate">
                           {isMainAdminMode
-                            ? 'सबै Course Sub-Admin हरू सँग मात्र च्याट (कोर्ष विद्यार्थी च्याट यहाँ आउँदैन)'
-                            : 'तपाईंको कोर्षका विद्यार्थीहरू र Official Main Admin सँगको म्यासेज'}
-                        </span>
-                      )}
-                    </p>
+                            ? 'Sub-Admin Messenger'
+                            : `Ask Messenger — ${subAdminSession?.courseTitle || 'Course'}`}
+                        </h4>
+                        <p className="text-[11px] text-[#8696a0] truncate">
+                          {isMainAdminMode
+                            ? 'सबै Sub-Admin हरूसँग प्रत्यक्ष संवाद'
+                            : `${brandName} तथा तपाईंको कोर्षका विद्यार्थीहरूसँग प्रत्यक्ष संवाद`}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1361,7 +1472,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         const isMainViewingSub = Boolean(isMainAdminMode && conv.channelType === 'subadmin_mainadmin');
                         const unreadCount = isSubMainThread ? (conv.unreadUserCount || 0) : (conv.unreadAdminCount || 0);
                         const hasUnread = unreadCount > 0;
-                        const initialLetter = (conv.userName || 'S').charAt(0).toUpperCase();
                         const primaryCourse = conv.activeCourse || conv.purchasedCourses?.[0];
                         const isLastFromMe = isSubMainThread ? conv.lastSender === 'user' : conv.lastSender === 'admin';
                         const isOtherReadLast = isSubMainThread ? conv.unreadAdminCount === 0 : conv.unreadUserCount === 0;
@@ -1370,76 +1480,102 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <button
                             key={conv.id}
                             onClick={() => setSelectedAdminConvId(conv.id)}
-                            className={`w-full text-left p-3 transition flex items-start gap-3 cursor-pointer relative group ${
+                            className={`w-full text-left px-3.5 py-3 transition flex items-center gap-3 cursor-pointer relative group ${
                               isSelected
                                 ? 'bg-[#2a3942]'
                                 : 'hover:bg-[#202c33]'
                             }`}
                           >
                             <div className="relative shrink-0">
-                              {isSubMainThread ? (
-                                <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-lg flex items-center justify-center shadow-xs">
-                                  👑
-                                </div>
-                              ) : isMainViewingSub ? (
-                                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-lg flex items-center justify-center shadow-xs">
-                                  🛡️
-                                </div>
-                              ) : conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:')) ? (
-                                <img
-                                  src={conv.userAvatar}
-                                  alt={conv.userName}
-                                  className="w-12 h-12 rounded-full object-cover shadow-xs border border-zinc-700"
-                                />
-                              ) : (
-                                <div className="w-12 h-12 rounded-full bg-[#6a7b83] text-[#111b21] font-bold text-base flex items-center justify-center shadow-xs">
-                                  {initialLetter}
-                                </div>
-                              )}
+                              {renderAdminContactAvatar(conv, 'w-11 h-11')}
                               {hasUnread && (
-                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-red-600 text-[11px] font-black text-white flex items-center justify-center px-1 shadow-md ring-2 ring-[#111b21] animate-pulse">
+                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-[#00a884] text-[11px] font-black text-[#111b21] flex items-center justify-center px-1 shadow-md ring-2 ring-[#111b21]">
                                   {unreadCount > 99 ? '99+' : unreadCount}
                                 </span>
                               )}
                             </div>
 
                             <div className="grow min-w-0">
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <h5 className="font-semibold text-sm text-[#e9edef] truncate">
-                                  {conv.userName}
-                                </h5>
-                                <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
-                                  {formatRelativeTime(conv.lastMessageAt)}
-                                </span>
-                              </div>
-
-                              {(isSubMainThread || primaryCourse) && (
-                                <div className="mb-1">
-                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate inline-block max-w-[200px] border ${
-                                    isSubMainThread
-                                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                                      : isMainViewingSub
-                                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                        : 'bg-[#202c33] text-[#00a884] border-[#00a884]/30'
-                                  }`}>
-                                    {isSubMainThread ? '👑 Official Main Admin' : `${isMainViewingSub ? '🛡️' : '🎓'} ${primaryCourse}`}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* WhatsApp style snippet with tick */}
-                              <p className={`text-xs truncate flex items-center gap-1 ${hasUnread ? 'text-[#e9edef] font-semibold' : 'text-[#8696a0]'}`}>
-                                {isLastFromMe && (
-                                  <span className="shrink-0 inline-flex items-center">
-                                    {isOtherReadLast ? (
-                                      <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] stroke-[2.5]" />
-                                    ) : (
-                                      <CheckCheck className="w-3.5 h-3.5 text-[#8696a0] stroke-[2]" />
+                              {isSubMainThread ? (
+                                <>
+                                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                                    <h5 className="font-bold text-sm text-[#e9edef] truncate">
+                                      {brandName}
+                                    </h5>
+                                    <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
+                                      {formatRelativeTime(conv.lastMessageAt)}
+                                    </span>
+                                  </div>
+                                  <p className={`text-xs truncate flex items-center gap-1 ${hasUnread ? 'text-[#e9edef] font-semibold' : 'text-[#8696a0]'}`}>
+                                    {isLastFromMe && (
+                                      <span className="shrink-0 inline-flex items-center">
+                                        {isOtherReadLast ? (
+                                          <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] stroke-[2.5]" />
+                                        ) : (
+                                          <CheckCheck className="w-3.5 h-3.5 text-[#8696a0] stroke-[2]" />
+                                        )}
+                                      </span>
                                     )}
-                                  </span>
-                                )}
-                                <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
-                              </p>
+                                    <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
+                                  </p>
+                                </>
+                              ) : isMainViewingSub ? (
+                                <>
+                                  {primaryCourse && (
+                                    <p className="text-[10.5px] font-semibold text-[#00a884] truncate leading-tight mb-0.5">
+                                      {primaryCourse}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                                    <h5 className="font-bold text-sm text-[#e9edef] truncate">
+                                      {conv.userName}
+                                    </h5>
+                                    <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
+                                      {formatRelativeTime(conv.lastMessageAt)}
+                                    </span>
+                                  </div>
+                                  <p className={`text-xs truncate flex items-center gap-1 ${hasUnread ? 'text-[#e9edef] font-semibold' : 'text-[#8696a0]'}`}>
+                                    {isLastFromMe && (
+                                      <span className="shrink-0 inline-flex items-center">
+                                        {isOtherReadLast ? (
+                                          <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] stroke-[2.5]" />
+                                        ) : (
+                                          <CheckCheck className="w-3.5 h-3.5 text-[#8696a0] stroke-[2]" />
+                                        )}
+                                      </span>
+                                    )}
+                                    <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                                    <h5 className="font-bold text-sm text-[#e9edef] truncate">
+                                      {conv.userName}
+                                    </h5>
+                                    <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
+                                      {formatRelativeTime(conv.lastMessageAt)}
+                                    </span>
+                                  </div>
+                                  {primaryCourse && (
+                                    <p className="text-[10.5px] font-medium text-[#00a884]/90 truncate mb-0.5">
+                                      {primaryCourse}
+                                    </p>
+                                  )}
+                                  <p className={`text-xs truncate flex items-center gap-1 ${hasUnread ? 'text-[#e9edef] font-semibold' : 'text-[#8696a0]'}`}>
+                                    {isLastFromMe && (
+                                      <span className="shrink-0 inline-flex items-center">
+                                        {isOtherReadLast ? (
+                                          <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] stroke-[2.5]" />
+                                        ) : (
+                                          <CheckCheck className="w-3.5 h-3.5 text-[#8696a0] stroke-[2]" />
+                                        )}
+                                      </span>
+                                    )}
+                                    <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
+                                  </p>
+                                </>
+                              )}
                             </div>
                           </button>
                         );
@@ -1459,46 +1595,38 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     <>
                       {/* Active Chat Header */}
                       <div className="bg-[#202c33] border-b border-[#222d34] px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
-                        <div className="flex items-center gap-3">
-                          {isSelectedMainAdminChat ? (
-                            <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-base flex items-center justify-center shrink-0">
-                              👑
-                            </div>
-                          ) : isMainAdminMode ? (
-                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-base flex items-center justify-center shrink-0">
-                              🛡️
-                            </div>
-                          ) : selectedAdminConv.userAvatar && (selectedAdminConv.userAvatar.startsWith('http') || selectedAdminConv.userAvatar.startsWith('data:')) ? (
-                            <img
-                              src={selectedAdminConv.userAvatar}
-                              alt={selectedAdminConv.userName}
-                              className="w-10 h-10 rounded-full object-cover shadow-xs border border-zinc-700 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-[#6a7b83] text-[#111b21] font-bold text-sm flex items-center justify-center shrink-0">
-                              {(selectedAdminConv.userName || 'S').charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div>
-                            <h4 className="font-semibold text-sm text-[#e9edef]">
-                              {selectedAdminConv.userName}
-                            </h4>
-                            <p className="text-[11px] text-[#00a884]">
-                              {isSelectedMainAdminChat
-                                ? 'AI CLIPZONE Official Main Admin'
-                                : isMainAdminMode
-                                  ? `Course Sub-Admin${selectedAdminConv.activeCourse ? ` • ${selectedAdminConv.activeCourse}` : ''}`
-                                  : selectedAdminConv.purchasedCourses?.[0] || 'Verified Student'}
-                            </p>
+                        <div className="flex items-center gap-3 min-w-0">
+                          {renderAdminContactAvatar(selectedAdminConv, 'w-10 h-10', true)}
+                          <div className="min-w-0">
+                            {isSelectedMainAdminChat ? (
+                              <h4 className="font-bold text-sm text-[#e9edef] truncate">
+                                {brandName}
+                              </h4>
+                            ) : isMainAdminMode ? (
+                              <>
+                                {selectedAdminConv.activeCourse && (
+                                  <p className="text-[10.5px] font-semibold text-[#00a884] truncate leading-tight">
+                                    {selectedAdminConv.activeCourse}
+                                  </p>
+                                )}
+                                <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
+                                  {selectedAdminConv.userName}
+                                </h4>
+                              </>
+                            ) : (
+                              <>
+                                <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
+                                  {selectedAdminConv.userName}
+                                </h4>
+                                <p className="text-[11px] text-[#00a884] font-medium truncate leading-tight">
+                                  {selectedAdminConv.activeCourse || 'Verified Student'}
+                                </p>
+                              </>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {selectedAdminConv.userEmail && (
-                            <span className="text-[11px] text-[#8696a0] bg-[#111b21] px-2.5 py-1 rounded-full border border-[#222d34] hidden sm:inline-block">
-                              {selectedAdminConv.userEmail}
-                            </span>
-                          )}
+                        <div className="flex items-center gap-2 shrink-0">
 
                           {/* WhatsApp 3-dots Menu for Admin */}
                           <div className="relative">
@@ -1575,10 +1703,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         {displayedAdminMessages.length === 0 ? (
                           <div className="py-12 text-center text-[#8696a0] text-xs space-y-2">
                             <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
-                            <p className="font-semibold text-[#e9edef]">{selectedAdminConv.userName} सँग कुराकानी सुरु गर्नुहोस्</p>
+                            <p className="font-semibold text-[#e9edef]">
+                              {isSelectedMainAdminChat ? brandName : selectedAdminConv.userName} सँग कुराकानी सुरु गर्नुहोस्
+                            </p>
                             <p className="text-[11px] text-[#8696a0]">
                               {isSelectedMainAdminChat
-                                ? 'तलको बक्सबाट AI CLIPZONE Official Admin लाई सिधै म्यासेज वा फोटो/कागजात पठाउनुहोस्।'
+                                ? `तलको बक्सबाट ${brandName} लाई सिधै म्यासेज वा फोटो/कागजात पठाउनुहोस्।`
                                 : isMainAdminMode
                                   ? 'तलको बक्सबाट Sub-Admin लाई सिधै जवाफ वा फोटो/कागजात पठाउनुहोस्।'
                                   : 'तलको बक्सबाट सिधै विद्यार्थीलाई जवाफ पठाउनुहोस् वा फोटो/कागजात पठाउनुहोस्।'}
@@ -1589,36 +1719,65 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             const isMyMsg = isSelectedMainAdminChat ? msg.sender === 'user' : msg.sender === 'admin';
                             const isSeen = msg.isSeen || msg.status === 'seen';
                             const isCopied = copiedMessageId === msg.id;
+                            const incomingAvatar = isSelectedMainAdminChat
+                              ? officialLogoUrl
+                              : selectedAdminConv.userAvatar || msg.senderAvatar || '';
+                            const incomingSenderName = isSelectedMainAdminChat
+                              ? brandName
+                              : selectedAdminConv.userName || msg.senderName;
 
                             return (
                               <div
                                 key={msg.id}
                                 className={`flex flex-col group/bubble ${isMyMsg ? 'items-end' : 'items-start'}`}
                               >
-                                <div
-                                  className={`rounded-xl px-3.5 pt-2 pb-1.5 shadow-sm break-words max-w-[85%] sm:max-w-[70%] relative ${
-                                    isMyMsg
-                                      ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
-                                      : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
-                                  }`}
-                                >
+                                <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[70%]">
                                   {!isMyMsg && (
-                                    <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
-                                      <span>{msg.senderName}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCopyMessage(msg)}
-                                        className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
-                                        title="Copy message (कपी गर्नुहोस्)"
-                                      >
-                                        {isCopied ? (
-                                          <Check className="w-3 h-3 text-[#00a884]" />
-                                        ) : (
-                                          <Copy className="w-3 h-3" />
-                                        )}
-                                      </button>
-                                    </div>
+                                    isSelectedMainAdminChat || isRenderableAvatar(incomingAvatar) ? (
+                                      <img
+                                        src={incomingAvatar || officialLogoUrl}
+                                        alt={incomingSenderName}
+                                        onError={(e) => {
+                                          const img = e.currentTarget as HTMLImageElement;
+                                          if (isSelectedMainAdminChat && !img.src.includes('/logo.png')) {
+                                            img.src = '/logo.png';
+                                          } else {
+                                            img.style.display = 'none';
+                                          }
+                                        }}
+                                        className="w-7 h-7 rounded-full object-cover shrink-0 mb-1 border border-white/15 bg-[#111b21]"
+                                      />
+                                    ) : (
+                                      <div className="w-7 h-7 rounded-full bg-[#2a3942] text-[#e9edef] flex items-center justify-center text-[11px] font-bold shrink-0 mb-1 border border-white/10">
+                                        {(incomingSenderName || 'U').charAt(0).toUpperCase()}
+                                      </div>
+                                    )
                                   )}
+
+                                  <div
+                                    className={`rounded-xl px-3.5 pt-2 pb-1.5 shadow-sm break-words relative ${
+                                      isMyMsg
+                                        ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
+                                        : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
+                                    }`}
+                                  >
+                                    {!isMyMsg && (
+                                      <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
+                                        <span>{incomingSenderName}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyMessage(msg)}
+                                          className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
+                                          title="Copy message (कपी गर्नुहोस्)"
+                                        >
+                                          {isCopied ? (
+                                            <Check className="w-3 h-3 text-[#00a884]" />
+                                          ) : (
+                                            <Copy className="w-3 h-3" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
 
                                   {/* IMAGE ATTACHMENT */}
                                   {msg.attachmentType === 'image' && msg.attachmentUrl && (
@@ -1713,6 +1872,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         </span>
                                       )
                                     )}
+                                  </div>
                                   </div>
                                 </div>
                               </div>
@@ -1862,7 +2022,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             placeholder={
                               adminPendingAttachment
                                 ? `Add a caption for ${adminPendingAttachment.name}...`
-                                : `Type message to ${selectedAdminConv.userName}...`
+                                : `Type message to ${isSelectedMainAdminChat ? brandName : selectedAdminConv.userName}...`
                             }
                             disabled={isAdminSending || isAdminAttaching}
                             className="grow bg-transparent text-sm text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition disabled:opacity-50"
@@ -1889,8 +2049,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </h4>
                       <p className="text-xs text-[#8696a0] max-w-xs">
                         {isMainAdminMode
-                          ? 'च्याट गर्न र निर्देशन पठाउन बाँयापट्टिको सूचीबाट Course Sub-Admin छान्नुहोस्।'
-                          : 'कुराकानी गर्न बाँयापट्टिको सूचीबाट विद्यार्थी वा AI CLIPZONE Official Admin छान्नुहोस्।'}
+                          ? 'च्याट गर्न बायाँपट्टिको सूचीबाट Sub-Admin छान्नुहोस्।'
+                          : `कुराकानी गर्न बायाँपट्टिको सूचीबाट विद्यार्थी वा ${brandName} छान्नुहोस्।`}
                       </p>
                     </div>
                   )}
@@ -1914,11 +2074,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   </button>
 
                   <div className="relative">
-                    <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-xs">
+                    <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center overflow-hidden border border-white/15 shrink-0 shadow-xs">
                       <img
-                        src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"}
-                        alt="Logo"
-                        className="w-full h-full object-cover"
+                        src={activeStudentTarget?.subAdmin.avatarUrl || officialLogoUrl}
+                        alt={activeStudentTarget?.subAdmin.name || brandName}
+                        className="w-full h-full object-cover cursor-pointer"
+                        onClick={() =>
+                          setLightboxImage({
+                            url: activeStudentTarget?.subAdmin.avatarUrl || officialLogoUrl,
+                            name: activeStudentTarget?.subAdmin.name || brandName
+                          })
+                        }
                         onError={(e) => {
                           const img = e.currentTarget as HTMLImageElement;
                           if (!img.src.includes('/logo.png')) {
@@ -1930,22 +2096,28 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-[#202c33]"></span>
                   </div>
 
-                  <div>
-                    <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight">
-                      <span>
-                        {activeStudentTarget
-                          ? `${activeStudentTarget.subAdmin.name} • ${activeStudentTarget.courseTitle}`
-                          : `${siteSettings.instituteName || 'AI CLIPZONE'} Course Support`}
-                      </span>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20 shrink-0" />
-                    </h4>
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#00a884] font-medium leading-tight">
-                      <span>
-                        {activeStudentTarget
-                          ? 'online • Course Sub-Admin'
-                          : 'Course Sub-Admin Support'}
-                      </span>
-                    </div>
+                  <div className="min-w-0">
+                    {activeStudentTarget ? (
+                      <>
+                        <p className="text-[10.5px] font-semibold text-[#00a884] truncate leading-tight">
+                          {activeStudentTarget.courseTitle}
+                        </p>
+                        <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight truncate">
+                          <span className="truncate">{activeStudentTarget.subAdmin.name}</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20 shrink-0" />
+                        </h4>
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight">
+                          <span>{brandName} Course Support</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20 shrink-0" />
+                        </h4>
+                        <p className="text-[11px] text-[#00a884] font-medium leading-tight">
+                          Course Sub-Admin Support
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -2051,20 +2223,20 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
 
                 {activeStudentTarget ? (
-                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2 py-0.5 rounded-full truncate max-w-[180px] shrink-0">
-                    🛡️ {activeStudentTarget.subAdmin.name}
+                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2.5 py-0.5 rounded-full truncate max-w-[180px] shrink-0">
+                    {activeStudentTarget.subAdmin.name}
                   </span>
                 ) : activeCourseName ? (
-                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2 py-0.5 rounded-full truncate max-w-[160px] shrink-0">
-                    🎓 {activeCourseName}
+                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2.5 py-0.5 rounded-full truncate max-w-[160px] shrink-0">
+                    {activeCourseName}
                   </span>
                 ) : hasActivatedCourse ? (
                   <span className="text-[10px] font-medium bg-[#00a884]/20 text-[#00a884] px-2 py-0.5 rounded-full shrink-0">
-                    ✓ Enrolled
+                    Enrolled
                   </span>
                 ) : (
                   <span className="text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full shrink-0">
-                    🔒 Not Activated
+                    Not Activated
                   </span>
                 )}
               </div>
@@ -2086,7 +2258,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             : 'bg-[#202c33] text-[#e9edef] border-[#222d34] hover:bg-[#2a3942]'
                         }`}
                       >
-                        🎓 {target.courseTitle} — 🛡️ {target.subAdmin.name}
+                        {target.courseTitle} — {target.subAdmin.name}
                       </button>
                     );
                   })}

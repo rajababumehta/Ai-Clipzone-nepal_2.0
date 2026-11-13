@@ -33,7 +33,8 @@ import {
   Square,
   ListChecks,
   Clock,
-  UserCheck
+  UserCheck,
+  Camera
 } from 'lucide-react';
 
 import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount } from '../types';
@@ -41,6 +42,7 @@ import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_
 import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
 import { AdminSubAdminsTab } from './AdminSubAdminsTab';
+import { compressImageFile } from '../utils/chatMedia';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -50,9 +52,10 @@ interface AdminDashboardModalProps {
   subAdminSession?: SubAdminAccount | null;
   onLogoutAdminSession?: () => void;
   subAdmins?: SubAdminAccount[];
-  onCreateSubAdmin?: (name: string, courseId: string, customCode?: string) => Promise<SubAdminAccount | null>;
+  onCreateSubAdmin?: (name: string, courseId: string, customCode?: string, avatarUrl?: string) => Promise<SubAdminAccount | null>;
   onToggleSubAdminStatus?: (subAdmin: SubAdminAccount) => Promise<void>;
   onUpdateSubAdminCourse?: (subAdmin: SubAdminAccount, courseId: string) => Promise<void>;
+  onUpdateSubAdminAvatar?: (subAdmin: SubAdminAccount, avatarUrl: string) => Promise<void>;
   onDeleteSubAdmin?: (code: string) => Promise<void>;
   // Keys management
   allActivationKeys: any[];
@@ -99,6 +102,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onCreateSubAdmin,
   onToggleSubAdminStatus,
   onUpdateSubAdminCourse,
+  onUpdateSubAdminAvatar,
   onDeleteSubAdmin,
   allActivationKeys,
   onGenerateKey,
@@ -786,11 +790,58 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         {/* Top Header Bar */}
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800 shrink-0 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center font-black text-lg shadow-md ${
-              isMainAdmin ? 'bg-blue-600 shadow-blue-500/20' : 'bg-purple-600 shadow-purple-500/20'
-            }`}>
-              {isMainAdmin ? '👑' : '🛡️'}
-            </div>
+            {isMainAdmin ? (
+              <div className="w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 shadow-md">
+                <img
+                  src={cleanLegacyLogoUrl(siteSettings.instituteLogoUrl)}
+                  alt={siteSettings.instituteName || 'AI Clipzone'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const img = e.currentTarget as HTMLImageElement;
+                    if (!img.src.includes('/logo.png')) img.src = '/logo.png';
+                  }}
+                />
+              </div>
+            ) : (
+              <label
+                className="relative w-11 h-11 rounded-2xl bg-purple-600/30 border border-purple-500/40 overflow-hidden text-white flex items-center justify-center font-black text-base shadow-md cursor-pointer group/subhead shrink-0"
+                title="आफ्नो लोगो / फोटो अपलोड वा परिवर्तन गर्नुहोस्"
+              >
+                {subAdminSession?.avatarUrl ? (
+                  <img
+                    src={subAdminSession.avatarUrl}
+                    alt={subAdminSession.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{(subAdminSession?.name || 'S').charAt(0).toUpperCase()}</span>
+                )}
+                {onUpdateSubAdminAvatar && subAdminSession && (
+                  <>
+                    <div className="absolute inset-0 bg-black/55 opacity-0 group-hover/subhead:opacity-100 transition flex items-center justify-center">
+                      <Camera className="w-4 h-4 text-white" />
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const compressed = await compressImageFile(file, 400, 0.85);
+                          await onUpdateSubAdminAvatar(subAdminSession, compressed.url);
+                        } catch (err: any) {
+                          showToast(err?.message || 'फोटो अपडेट गर्न सकिएन', 'error');
+                        } finally {
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </>
+                )}
+              </label>
+            )}
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
@@ -801,7 +852,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </span>
                 {isSubAdmin && subAdminSession && (
                   <span className="bg-purple-950/80 text-purple-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-purple-500/40">
-                    👤 {subAdminSession.name}
+                    {subAdminSession.name}
                   </span>
                 )}
               </div>
@@ -1318,6 +1369,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               onCreateSubAdmin={onCreateSubAdmin}
               onToggleStatus={onToggleSubAdminStatus}
               onUpdateCourse={onUpdateSubAdminCourse}
+              onUpdateAvatar={onUpdateSubAdminAvatar}
               onDeleteSubAdmin={onDeleteSubAdmin}
               showToast={showToast}
             />
@@ -2966,8 +3018,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {activeTab === 'ask' && (
             <AdminAskTab
               showToast={showToast}
-              instituteName={siteSettings.instituteName || 'AI CLIPZONE'}
-              instituteLogoUrl={siteSettings.instituteLogoUrl}
+              instituteName={siteSettings.instituteName || 'AI Clipzone'}
+              instituteLogoUrl={cleanLegacyLogoUrl(siteSettings.instituteLogoUrl)}
               allActivationKeys={allActivationKeys}
               adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
               subAdminSession={isMainAdmin ? null : subAdminSession}

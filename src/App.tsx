@@ -478,38 +478,138 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  const syncStudentAvatarToFirestore = async (avatarUrl: string) => {
+    const cleanAvatar = avatarUrl || '';
+    const realName =
+      cleanRealName(currentUser?.displayName) ||
+      cleanRealName(authName) ||
+      cleanRealName(localStorage.getItem('clipzone_student_name')) ||
+      userActivationKeys.find((k: any) => cleanRealName(k.studentName))?.studentName ||
+      'Student';
+
+    let activeCodes: string[] = [];
+    try {
+      activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+    } catch {}
+    userActivationKeys.forEach((k: any) => {
+      const code = k?.code || k?.id;
+      if (code && !activeCodes.includes(code)) {
+        activeCodes.push(code);
+      }
+    });
+
+    // 1. Persist permanently on every active key in Firestore
+    activeCodes.forEach((code) => {
+      if (!code) return;
+      setDoc(
+        doc(db, 'activation_keys', code),
+        {
+          studentAvatar: cleanAvatar,
+          studentAvatarUpdatedAt: Date.now()
+        },
+        { merge: true }
+      ).catch(() => {});
+    });
+
+    setUserActivationKeys((prev) => {
+      const updated = prev.map((k: any) => ({ ...k, studentAvatar: cleanAvatar }));
+      try {
+        localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // 2. Sync to assigned Course Sub-Admin support_conversations in Firestore
+    const keyClaimedUids = userActivationKeys
+      .map((k: any) => k?.claimedByUid)
+      .filter((uid: any) => typeof uid === 'string' && uid.length > 0);
+    const primaryUid =
+      localStorage.getItem('clipzone_student_uid') ||
+      keyClaimedUids[0] ||
+      currentUser?.uid ||
+      getOrCreateDeviceId();
+
+    const candidateUids = Array.from(
+      new Set([primaryUid, ...keyClaimedUids, currentUser?.uid, getOrCreateDeviceId()].filter(Boolean))
+    ) as string[];
+
+    const enrolledCourseIds = Array.from(
+      new Set([
+        ...activeCourseIds,
+        ...userActivationKeys.map((k: any) => k?.courseId).filter(Boolean)
+      ])
+    );
+
+    let poolSubs: SubAdminAccount[] = Array.from(
+      new Map(
+        [...activeSubAdmins, ...subAdminList]
+          .filter((s) => s.status === 'active')
+          .map((s) => [s.code, s])
+      ).values()
+    );
+
+    if (poolSubs.length === 0) {
+      try {
+        const subSnap = await getDocs(
+          query(collection(db, 'sub_admins'), where('status', '==', 'active'))
+        );
+        const fetched: SubAdminAccount[] = [];
+        subSnap.forEach((d) => {
+          fetched.push({ id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) });
+        });
+        poolSubs = fetched;
+      } catch {}
+    }
+
+    const targetSubs = poolSubs.filter((s) => {
+      if (enrolledCourseIds.includes('course-all') || enrolledCourseIds.includes(s.courseId)) {
+        return true;
+      }
+      return userActivationKeys.some(
+        (k: any) =>
+          k?.courseTitle &&
+          s.courseTitle &&
+          k.courseTitle.trim().toLowerCase() === s.courseTitle.trim().toLowerCase()
+      );
+    });
+
+    targetSubs.forEach((sub) => {
+      const courseObj = courses.find((c) => c.id === sub.courseId);
+      const courseTitle = sub.courseTitle || courseObj?.title || 'Course';
+      candidateUids.forEach((uid) => {
+        const convId = `substudent__${sub.code}__${uid}`;
+        setDoc(
+          doc(db, 'support_conversations', convId),
+          {
+            id: convId,
+            userId: uid,
+            userName: realName,
+            channelType: 'student_subadmin',
+            subAdminCode: sub.code,
+            subAdminName: sub.name,
+            courseId: sub.courseId,
+            activeCourse: courseTitle,
+            purchasedCourses: [courseTitle],
+            userAvatar: cleanAvatar,
+            updatedAt: Date.now()
+          },
+          { merge: true }
+        ).catch(() => {});
+      });
+    });
+  };
+
   const handleConfirmAdjustedAvatar = (croppedDataUrl: string) => {
     setUserAvatar(croppedDataUrl);
     try {
       localStorage.setItem('clipzone_student_avatar', croppedDataUrl);
     } catch (err) {}
 
-    // Sync student photo to assigned Course Sub-Admin conversation(s) in Firestore
-    const targetUid = localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
-    if (targetUid) {
-      const effectiveSubs = Array.from(
-        new Map(
-          [...activeSubAdmins, ...subAdminList]
-            .filter(s => s.status === 'active')
-            .map(s => [s.code, s])
-        ).values()
-      );
-      const targetSubs = effectiveSubs.filter(
-        s => activeCourseIds.includes('course-all') || activeCourseIds.includes(s.courseId)
-      );
-      targetSubs.forEach((sub) => {
-        try {
-          setDoc(doc(db, 'support_conversations', `substudent__${sub.code}__${targetUid}`), {
-            userAvatar: croppedDataUrl,
-            updatedAt: Date.now()
-          }, { merge: true }).catch(() => {});
-        } catch (e) {}
-      });
-    }
+    syncStudentAvatarToFirestore(croppedDataUrl);
 
     setShowImageAdjustModal(false);
     setTempImageForAdjust(null);
-    showToast('📸 प्रोफाइल फोटो सफलतापूर्वक मिलाइयो र सुरक्षित भयो!', 'success');
+    showToast('📸 प्रोफाइल फोटो सफलतापूर्वक डाटाबेसमा सुरक्षित भयो!', 'success');
   };
 
   const handleSaveStudentName = () => {
@@ -1819,10 +1919,37 @@ export default function App() {
         } catch (e) {}
       }
 
-      // If we verified keys, update state and local storage
       const secArr = Array.from(secondaryCourseIdsSet);
       setSecondaryCourseIds(secArr);
       localStorage.setItem('clipzone_secondary_course_ids', JSON.stringify(secArr));
+
+      // Restore student avatar from database if present on any primary claimed key
+      const dbAvatarKey = verifiedKeys.find((k) => {
+        const keyOwnerUid = k.originalOwnerUid || k.claimedByUid;
+        const isSec = Boolean(keyOwnerUid && currentUid && keyOwnerUid !== currentUid && k.status === 'used');
+        return !isSec && typeof k.studentAvatar === 'string' && k.studentAvatar.length > 0;
+      });
+      if (dbAvatarKey?.studentAvatar) {
+        setUserAvatar(dbAvatarKey.studentAvatar);
+        try {
+          localStorage.setItem('clipzone_student_avatar', dbAvatarKey.studentAvatar);
+        } catch {}
+      } else {
+        const localSavedAvatar = localStorage.getItem('clipzone_student_avatar') || '';
+        if (localSavedAvatar) {
+          verifiedKeys.forEach((k) => {
+            const keyOwnerUid = k.originalOwnerUid || k.claimedByUid;
+            const isSec = Boolean(keyOwnerUid && currentUid && keyOwnerUid !== currentUid && k.status === 'used');
+            if (!isSec && !k.studentAvatar && (k.code || k.id)) {
+              setDoc(
+                doc(db, 'activation_keys', k.code || k.id),
+                { studentAvatar: localSavedAvatar, studentAvatarUpdatedAt: Date.now() },
+                { merge: true }
+              ).catch(() => {});
+            }
+          });
+        }
+      }
 
       const finalActiveIds = Array.from(verifiedCourseIds);
       setUserActivationKeys(verifiedKeys);
@@ -2467,6 +2594,20 @@ export default function App() {
         localStorage.setItem('clipzone_student_uid', permanentStudentUid);
       } catch (e) {}
 
+      // Resolve persisted student photo from database key or current local state
+      const savedKeyAvatar =
+        !isSecondaryLogin && typeof keyData?.studentAvatar === 'string' && keyData.studentAvatar
+          ? keyData.studentAvatar
+          : '';
+      const currentLocalAvatar = userAvatar || localStorage.getItem('clipzone_student_avatar') || '';
+      const resolvedStudentAvatar = savedKeyAvatar || currentLocalAvatar;
+      if (resolvedStudentAvatar) {
+        setUserAvatar(resolvedStudentAvatar);
+        try {
+          localStorage.setItem('clipzone_student_avatar', resolvedStudentAvatar);
+        } catch (e) {}
+      }
+
       // Attempt to update status in Firestore with 1.5s timeout guard
       if (keyDocRef) {
         try {
@@ -2486,6 +2627,10 @@ export default function App() {
             updatePayload.expiresAt = Date.now() + durationMs;
           } else if (!isSecondaryLogin) {
             updatePayload.studentName = assignedStudentName;
+          }
+          if (!isSecondaryLogin && resolvedStudentAvatar && !keyData.studentAvatar) {
+            updatePayload.studentAvatar = resolvedStudentAvatar;
+            updatePayload.studentAvatarUpdatedAt = Date.now();
           }
 
           await Promise.race([
@@ -2520,6 +2665,7 @@ export default function App() {
             userId: permanentStudentUid,
             userName: assignedStudentName,
             userEmail: assignedStudentName,
+            ...(resolvedStudentAvatar ? { userAvatar: resolvedStudentAvatar } : {}),
             channelType: 'student_subadmin',
             subAdminCode: matchedSub.code,
             subAdminName: matchedSub.name,
@@ -2697,7 +2843,8 @@ export default function App() {
   const handleCreateSubAdmin = async (
     name: string,
     courseId: string,
-    customCode?: string
+    customCode?: string,
+    avatarUrl?: string
   ): Promise<SubAdminAccount | null> => {
     if (!isMainAdmin) {
       showToast('केवल Main Admin ले मात्र Sub-Admin कोड बनाउन सक्छ।', 'error');
@@ -2744,12 +2891,14 @@ export default function App() {
       }
     } catch {}
 
+    const cleanAvatarUrl = (avatarUrl || '').trim();
     const newSubAdmin: SubAdminAccount = {
       id: finalCode,
       code: finalCode,
       name: cleanName,
       courseId: targetCourse.id,
       courseTitle: targetCourse.title,
+      ...(cleanAvatarUrl ? { avatarUrl: cleanAvatarUrl } : {}),
       status: 'active',
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -2757,6 +2906,24 @@ export default function App() {
 
     try {
       await setDoc(doc(db, 'sub_admins', finalCode), newSubAdmin);
+      if (cleanAvatarUrl) {
+        setDoc(
+          doc(db, 'support_conversations', `subadmin_main__${finalCode}`),
+          {
+            id: `subadmin_main__${finalCode}`,
+            channelType: 'subadmin_mainadmin',
+            subAdminCode: finalCode,
+            subAdminName: cleanName,
+            userId: finalCode,
+            userName: cleanName,
+            userAvatar: cleanAvatarUrl,
+            courseId: targetCourse.id,
+            activeCourse: targetCourse.title,
+            updatedAt: Date.now(),
+          },
+          { merge: true }
+        ).catch(() => {});
+      }
       setSubAdminList(prev => {
         const updated = [newSubAdmin, ...prev.filter(s => s.code !== finalCode)];
         localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
@@ -2767,6 +2934,59 @@ export default function App() {
       console.error('Error creating Sub-Admin:', err);
       showToast('Sub-Admin कोड सुरक्षित गर्न असफल भयो।', 'error');
       return null;
+    }
+  };
+
+  const handleUpdateSubAdminAvatar = async (subAdmin: SubAdminAccount, avatarUrl: string) => {
+    const canUpdate = isMainAdmin || (isSubAdmin && subAdminSession?.code === subAdmin.code);
+    if (!canUpdate) {
+      showToast('अनुमति छैन।', 'error');
+      return;
+    }
+    const cleanAvatar = (avatarUrl || '').trim();
+    const now = Date.now();
+    try {
+      await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
+        avatarUrl: cleanAvatar,
+        updatedAt: now,
+      });
+      setDoc(
+        doc(db, 'support_conversations', `subadmin_main__${subAdmin.code}`),
+        {
+          id: `subadmin_main__${subAdmin.code}`,
+          channelType: 'subadmin_mainadmin',
+          subAdminCode: subAdmin.code,
+          subAdminName: subAdmin.name,
+          userId: subAdmin.code,
+          userName: subAdmin.name,
+          userAvatar: cleanAvatar,
+          courseId: subAdmin.courseId,
+          activeCourse: subAdmin.courseTitle,
+          updatedAt: now,
+        },
+        { merge: true }
+      ).catch(() => {});
+
+      setSubAdminList(prev => {
+        const updated = prev.map(s =>
+          s.code === subAdmin.code ? { ...s, avatarUrl: cleanAvatar, updatedAt: now } : s
+        );
+        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        return updated;
+      });
+
+      if (subAdminSession && subAdminSession.code === subAdmin.code) {
+        const nextSess = { ...subAdminSession, avatarUrl: cleanAvatar, updatedAt: now };
+        setSubAdminSession(nextSess);
+        try {
+          localStorage.setItem('clipzone_sub_admin_session', JSON.stringify(nextSess));
+        } catch {}
+      }
+
+      showToast(cleanAvatar ? `"${subAdmin.name}" को फोटो/लोगो अपडेट भयो!` : 'फोटो/लोगो हटाइयो।', 'success');
+    } catch (err) {
+      console.error('Error updating Sub-Admin avatar:', err);
+      showToast('फोटो/लोगो अपडेट गर्न सकिएन।', 'error');
     }
   };
 
@@ -4950,7 +5170,8 @@ export default function App() {
                             try {
                               localStorage.removeItem('clipzone_student_avatar');
                             } catch (e) {}
-                            showToast('फोटो हटाइयो (Photo removed, restored to initials)', 'info');
+                            syncStudentAvatarToFirestore('');
+                            showToast('फोटो हटाइयो (Photo removed from database)', 'info');
                           }}
                           className="bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 border border-zinc-800 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 active:scale-95"
                           title="Remove photo (फोटो हटाउनुहोस्)"
@@ -7101,6 +7322,7 @@ export default function App() {
         onCreateSubAdmin={handleCreateSubAdmin}
         onToggleSubAdminStatus={handleToggleSubAdminStatus}
         onUpdateSubAdminCourse={handleUpdateSubAdminCourse}
+        onUpdateSubAdminAvatar={handleUpdateSubAdminAvatar}
         onDeleteSubAdmin={handleDeleteSubAdmin}
         allActivationKeys={allActivationKeys}
         isAdminLoadingKeys={isAdminLoadingKeys}

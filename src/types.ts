@@ -137,6 +137,8 @@ export interface ActivationKey {
   status: 'unused' | 'used' | 'expired';
   duration: '1day' | '1month' | '1year';
   createdAt: number;
+  studentName?: string;
+  claimedByName?: string;
   claimedByEmail?: string;
   claimedByUid?: string;
   claimedAt?: number;
@@ -144,6 +146,8 @@ export interface ActivationKey {
   courseId?: string; // "all" or specific courseId e.g. "ai-masterclass"
   courseTitle?: string; // "All Courses" or specific course name
   activeDeviceId?: string;
+  studentAvatar?: string;
+  studentAvatarUpdatedAt?: number;
   createdByRole?: 'main_admin' | 'sub_admin';
   createdBySubAdminCode?: string;
   createdByName?: string;
@@ -155,6 +159,7 @@ export interface SubAdminAccount {
   name: string;
   courseId: string;
   courseTitle: string;
+  avatarUrl?: string;
   status: 'active' | 'disabled';
   createdAt: number;
   updatedAt?: number;

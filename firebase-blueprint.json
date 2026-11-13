@@ -98,6 +98,14 @@
         "createdByName": {
           "type": "string",
           "description": "Display name of the Sub-Admin who generated this key"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student name assigned to this activation key"
+        },
+        "studentAvatar": {
+          "type": "string",
+          "description": "Saved profile photo or logo data URI/URL for the student"
         }
       },
       "required": ["code", "status", "duration", "createdAt"]
@@ -112,6 +120,7 @@
         "name": { "type": "string", "description": "Display label/name for the Sub-Admin" },
         "courseId": { "type": "string", "description": "The single course ID this Sub-Admin is permitted to manage" },
         "courseTitle": { "type": "string", "description": "The title of the assigned course" },
+        "avatarUrl": { "type": "string", "description": "Custom logo or profile image URL/data URI for the Sub-Admin" },
         "status": { "type": "string", "enum": ["active", "disabled"] },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" },
@@ -257,6 +266,7 @@
         "userId": { "type": "string" },
         "userName": { "type": "string" },
         "userEmail": { "type": "string" },
+        "userAvatar": { "type": "string" },
         "channelType": { "type": "string", "enum": ["student_mainadmin", "student_subadmin", "subadmin_mainadmin"] },
         "subAdminCode": { "type": "string" },
         "subAdminName": { "type": "string" },
