@@ -1716,7 +1716,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                     }`}
                                   >
-                                    {!isMyMsg ? (
+                                    {!isMyMsg && (
                                       <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
                                         <span className="inline-flex items-center gap-1 min-w-0">
                                           <span className="truncate">{incomingSenderName}</span>
@@ -1743,16 +1743,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                             <Copy className="w-3 h-3" />
                                           )}
                                         </button>
-                                      </div>
-                                    ) : (
-                                      <div className="text-[10.5px] font-bold text-emerald-200/90 mb-1 flex items-center justify-end gap-1">
-                                        <span className="truncate">
-                                          {isMainAdminMode ? brandName : subAdminSession?.name || 'Sub-Admin'}
-                                        </span>
-                                        <VerifiedBadge
-                                          variant={isMainAdminMode ? 'main_admin' : 'sub_admin'}
-                                          className="w-3.5 h-3.5"
-                                        />
                                       </div>
                                     )}
 
@@ -2388,7 +2378,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                 }`}
                               >
-                                {!isMe ? (
+                                {!isMe && (
                                   <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1 min-w-0">
                                       <span className="truncate">{targetName}</span>
@@ -2413,11 +2403,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         <Copy className="w-3 h-3" />
                                       )}
                                     </button>
-                                  </div>
-                                ) : (
-                                  <div className="text-[10.5px] font-bold text-emerald-200/90 mb-1 flex items-center justify-end gap-1">
-                                    <span className="truncate">{cleanRealName(studentName) || 'Student'}</span>
-                                    <VerifiedBadge variant="student" className="w-3.5 h-3.5" />
                                   </div>
                                 )}
 

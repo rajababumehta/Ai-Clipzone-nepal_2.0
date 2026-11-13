@@ -1004,7 +1004,6 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                       : isMainAdmin
                       ? selectedConv.userName
                       : selectedConv.userName || msg.senderName;
-                    const mySenderName = isSubAdmin ? subAdminSession?.name || 'Sub-Admin' : brandName;
 
                     return (
                       <div
@@ -1041,28 +1040,22 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                                 : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-bl-xs'
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-4 mb-1">
-                              <span
-                                className={`text-[10.5px] font-semibold inline-flex items-center gap-1 min-w-0 ${
-                                  isMyMsg ? 'text-blue-100' : 'text-emerald-400'
-                                }`}
-                              >
-                                <span className="truncate">{isMyMsg ? mySenderName : incomingSenderName}</span>
-                                <VerifiedBadge
-                                  variant={
-                                    isMyMsg
-                                      ? isSubAdmin
+                            <div className={`flex items-center gap-4 mb-1 ${isMyMsg ? 'justify-end' : 'justify-between'}`}>
+                              {!isMyMsg && (
+                                <span className="text-[10.5px] font-semibold inline-flex items-center gap-1 min-w-0 text-emerald-400">
+                                  <span className="truncate">{incomingSenderName}</span>
+                                  <VerifiedBadge
+                                    variant={
+                                      isSelectedMainAdminChat
+                                        ? 'main_admin'
+                                        : isMainAdmin
                                         ? 'sub_admin'
-                                        : 'main_admin'
-                                      : isSelectedMainAdminChat
-                                      ? 'main_admin'
-                                      : isMainAdmin
-                                      ? 'sub_admin'
-                                      : 'student'
-                                  }
-                                  className="w-3.5 h-3.5"
-                                />
-                              </span>
+                                        : 'student'
+                                    }
+                                    className="w-3.5 h-3.5"
+                                  />
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => handleCopyMessage(msg)}
