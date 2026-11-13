@@ -1040,36 +1040,6 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                                 : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-bl-xs'
                             }`}
                           >
-                            <div className={`flex items-center gap-4 mb-1 ${isMyMsg ? 'justify-end' : 'justify-between'}`}>
-                              {!isMyMsg && (
-                                <span className="text-[10.5px] font-semibold inline-flex items-center gap-1 min-w-0 text-emerald-400">
-                                  <span className="truncate">{incomingSenderName}</span>
-                                  <VerifiedBadge
-                                    variant={
-                                      isSelectedMainAdminChat
-                                        ? 'main_admin'
-                                        : isMainAdmin
-                                        ? 'sub_admin'
-                                        : 'student'
-                                    }
-                                    className="w-3.5 h-3.5"
-                                  />
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleCopyMessage(msg)}
-                                className="opacity-60 hover:opacity-100 p-0.5 rounded transition text-zinc-300 hover:text-white hover:bg-black/20 cursor-pointer"
-                                title="Copy message"
-                              >
-                                {isCopied ? (
-                                  <Check className="w-3 h-3 text-emerald-300" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
-                            </div>
-
                             {msg.attachmentType === 'image' && msg.attachmentUrl && (
                               <div className="mb-2 overflow-hidden rounded-xl bg-black/40 border border-white/10 relative group/img cursor-pointer">
                                 <img
@@ -1144,6 +1114,18 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                                 isMyMsg ? 'text-blue-100/80' : 'text-zinc-500'
                               }`}
                             >
+                              <button
+                                type="button"
+                                onClick={() => handleCopyMessage(msg)}
+                                className="opacity-60 hover:opacity-100 p-0.5 rounded transition hover:text-white cursor-pointer"
+                                title="Copy message"
+                              >
+                                {isCopied ? (
+                                  <Check className="w-3 h-3 text-emerald-300" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
                               <span>{timeStr}</span>
                               {isMyMsg &&
                                 (msg.isSeen || msg.status === 'seen' ? (

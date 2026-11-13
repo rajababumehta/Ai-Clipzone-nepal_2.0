@@ -1716,36 +1716,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                     }`}
                                   >
-                                    {!isMyMsg && (
-                                      <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
-                                        <span className="inline-flex items-center gap-1 min-w-0">
-                                          <span className="truncate">{incomingSenderName}</span>
-                                          <VerifiedBadge
-                                            variant={
-                                              isSelectedMainAdminChat
-                                                ? 'main_admin'
-                                                : isMainAdminMode
-                                                ? 'sub_admin'
-                                                : 'student'
-                                            }
-                                            className="w-3.5 h-3.5"
-                                          />
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCopyMessage(msg)}
-                                          className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
-                                          title="Copy message (कपी गर्नुहोस्)"
-                                        >
-                                          {isCopied ? (
-                                            <Check className="w-3 h-3 text-[#00a884]" />
-                                          ) : (
-                                            <Copy className="w-3 h-3" />
-                                          )}
-                                        </button>
-                                      </div>
-                                    )}
-
                                   {/* IMAGE ATTACHMENT */}
                                   {msg.attachmentType === 'image' && msg.attachmentUrl && (
                                     <div className="mb-2 overflow-hidden rounded-lg bg-black/30 border border-white/10 relative group/img cursor-pointer">
@@ -2378,34 +2348,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-xs'
                                 }`}
                               >
-                                {!isMe && (
-                                  <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-1 min-w-0">
-                                      <span className="truncate">{targetName}</span>
-                                      <VerifiedBadge
-                                        variant={
-                                          activeStudentTarget?.subAdmin.code === 'MAIN_ADMIN'
-                                            ? 'main_admin'
-                                            : 'sub_admin'
-                                        }
-                                        className="w-3.5 h-3.5"
-                                      />
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCopyMessage(msg)}
-                                      className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
-                                      title="Copy message (कपी गर्नुहोस्)"
-                                    >
-                                      {isCopied ? (
-                                        <Check className="w-3 h-3 text-[#00a884]" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </button>
-                                  </div>
-                                )}
-
                               {/* IMAGE ATTACHMENT */}
                               {msg.attachmentType === 'image' && msg.attachmentUrl && (
                                 <div className="mb-2 overflow-hidden rounded-lg bg-black/30 border border-white/10 relative group/img cursor-pointer">
