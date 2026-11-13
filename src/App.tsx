@@ -2208,7 +2208,6 @@ export default function App() {
     setAuthName('');
     setShowProfileModal(false);
     setShowUserMenu(false);
-    setIsAskOpen(false);
 
     // Release device claims in Firestore for active codes so Session shows "⚪ Logged Out"
     const codesToRelease = new Set<string>();
@@ -3543,7 +3542,7 @@ export default function App() {
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'account'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'ask' | 'account'>('home');
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
 
   // Automatically route any legacy modal trigger to full screen account view
@@ -3804,8 +3803,7 @@ export default function App() {
   const [contactCourse, setContactCourse] = useState('General Inquiry / सामान्य सोधपुछ');
   const [contactMsg, setContactMsg] = useState('');
 
-  // Ask & Live Support chat state
-  const [isAskOpen, setIsAskOpen] = useState(false);
+  // Ask & Live Support unread badge counts
   const [studentUnreadCount, setStudentUnreadCount] = useState(0);
   const [adminUnreadCount, setAdminUnreadCount] = useState(0);
   const [subAdminUnreadCount, setSubAdminUnreadCount] = useState(0);
@@ -3875,12 +3873,12 @@ export default function App() {
     setShowCertificateModal(true);
   };
 
-  // Auto-close Ask modal if user does not have an activated course or admin session
+  // Auto-exit Ask tab if user does not have an activated course or admin session
   useEffect(() => {
-    if (!isCourseActiveUser && isAskOpen) {
-      setIsAskOpen(false);
+    if (!isCourseActiveUser && currentView === 'ask') {
+      setCurrentView('home');
     }
-  }, [isCourseActiveUser, isAskOpen]);
+  }, [isCourseActiveUser, currentView]);
 
   // 1. Real-time listener for Main Admin: tracks ONLY Sub-Admin messages (zero course-student chats)
   useEffect(() => {
@@ -4894,8 +4892,68 @@ export default function App() {
       {/* Main Container for Course List / Classroom / Account */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28">
 
-        {/* 1. FULL-SCREEN ACCOUNT VIEW - Masterclass Student Dashboard */}
-        {currentView === 'account' ? (
+        {/* 1. EMBEDDED ACCOUNT / ASK / CLASSROOM / HOME VIEWS */}
+        {currentView === 'ask' && isCourseActiveUser ? (
+          <section id="ask-embedded-view" className="w-full pt-1 animate-in fade-in duration-200">
+            <AskChatModal
+              embedded={true}
+              isOpen={true}
+              onClose={() => {
+                setCurrentView('home');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              isRunningInAppMode={true}
+              siteSettings={siteSettings}
+              currentUserId={
+                (() => {
+                  if (isMainAdmin) {
+                    return currentUser?.uid || getOrCreateDeviceId();
+                  }
+                  if (isSubAdmin && subAdminSession?.code) {
+                    return subAdminSession.code;
+                  }
+                  try {
+                    const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
+                    const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+                    if (Array.isArray(allActivationKeys)) {
+                      const match = allActivationKeys.find((k: any) => {
+                        if (activeCodes.includes(k.code || k.id)) return true;
+                        if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                        if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                        return false;
+                      });
+                      if (match?.claimedByUid) {
+                        localStorage.setItem('clipzone_student_uid', match.claimedByUid);
+                        return match.claimedByUid;
+                      }
+                    }
+                  } catch (e) {}
+                  return localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
+                })()
+              }
+              initialStudentName={
+                userActivationKeys.find(k => k.studentName && k.studentName !== 'Student Learner')?.studentName ||
+                (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
+                (authName && authName !== 'Student Learner' ? authName : '') ||
+                (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '') ||
+                ''
+              }
+              userEmail={currentUser?.email || ''}
+              activeCourseName={courses.find(c => activeCourseIds.includes(c.id))?.title || ''}
+              hasActivatedCourse={activeCourseIds.length > 0}
+              onOpenActivationModal={() => setShowCodeInputModal(true)}
+              showToast={showToast}
+              isAdmin={isUserAdminSession}
+              adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+              subAdminSession={isMainAdmin ? null : subAdminSession}
+              subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
+              courses={courses}
+              activeCourseIds={activeCourseIds}
+              allActivationKeys={allActivationKeys}
+              studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
+            />
+          </section>
+        ) : currentView === 'account' ? (
           <section id="account-full-view" className="w-full space-y-6 pb-20 animate-in fade-in duration-300">
             {/* Sleek Breadcrumb Bar */}
             <div className="flex items-center justify-between gap-3 pb-2 pt-1 border-b border-zinc-850">
@@ -5572,7 +5630,13 @@ export default function App() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setIsAskOpen(true)}
+                    onClick={() => {
+                      setCurrentView('ask');
+                      if (!isUserAdminSession) {
+                        setStudentUnreadCount(0);
+                      }
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     className="flex items-center justify-between p-4 rounded-2xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-white transition cursor-pointer shadow-sm group"
                   >
                     <div className="flex items-center gap-3">
@@ -8555,63 +8619,6 @@ export default function App() {
         onRequestPermissionPrompt={() => setShowNotifPromptModal(true)}
       />
 
-      {/* ASK & LIVE SUPPORT CHAT MODAL ("Message to AI CLIPZONE") - ONLY FOR ACTIVATED USERS */}
-      {isCourseActiveUser && (
-        <AskChatModal
-          isOpen={isAskOpen}
-          onClose={() => setIsAskOpen(false)}
-          isRunningInAppMode={true}
-          siteSettings={siteSettings}
-          currentUserId={
-            (() => {
-              if (isMainAdmin) {
-                return currentUser?.uid || getOrCreateDeviceId();
-              }
-              if (isSubAdmin && subAdminSession?.code) {
-                return subAdminSession.code;
-              }
-              try {
-                const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
-                const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
-                if (Array.isArray(allActivationKeys)) {
-                  const match = allActivationKeys.find((k: any) => {
-                    if (activeCodes.includes(k.code || k.id)) return true;
-                    if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
-                    if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
-                    return false;
-                  });
-                  if (match?.claimedByUid) {
-                    localStorage.setItem('clipzone_student_uid', match.claimedByUid);
-                    return match.claimedByUid;
-                  }
-                }
-              } catch (e) {}
-              return localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
-            })()
-          }
-          initialStudentName={
-            userActivationKeys.find(k => k.studentName && k.studentName !== 'Student Learner')?.studentName ||
-            (currentUser?.displayName && currentUser.displayName !== 'Student Learner' ? currentUser.displayName : '') ||
-            (authName && authName !== 'Student Learner' ? authName : '') ||
-            (localStorage.getItem('clipzone_student_name') && localStorage.getItem('clipzone_student_name') !== 'Student Learner' ? localStorage.getItem('clipzone_student_name') : '') ||
-            ''
-          }
-          userEmail={currentUser?.email || ''}
-          activeCourseName={courses.find(c => activeCourseIds.includes(c.id))?.title || ''}
-          hasActivatedCourse={activeCourseIds.length > 0}
-          onOpenActivationModal={() => setShowCodeInputModal(true)}
-          showToast={showToast}
-          isAdmin={isUserAdminSession}
-          adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
-          subAdminSession={isMainAdmin ? null : subAdminSession}
-          subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
-          courses={courses}
-          activeCourseIds={activeCourseIds}
-          allActivationKeys={allActivationKeys}
-          studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
-        />
-      )}
-
       {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA WITH EXPANDED FULL-SCREEN DESKTOP VIEW */}
       <nav 
         id="native-app-bottom-bar"
@@ -8623,18 +8630,17 @@ export default function App() {
           <button
             id="app-nav-home"
             onClick={() => {
-              setIsAskOpen(false);
               setShowProfileModal(false);
               setCurrentView('home');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              currentView === 'home' && !isAskOpen
+              currentView === 'home'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
-            <Home className={`w-5 h-5 mb-0.5 md:mb-0 shrink-0 ${currentView === 'home' && !isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+            <Home className={`w-5 h-5 mb-0.5 md:mb-0 shrink-0 ${currentView === 'home' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Home</span>
           </button>
 
@@ -8642,19 +8648,18 @@ export default function App() {
           <button
             id="app-nav-classroom"
             onClick={() => {
-              setIsAskOpen(false);
               setShowProfileModal(false);
               setCurrentView('classroom');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-              currentView === 'classroom' && !isAskOpen
+              currentView === 'classroom'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
             <div className="relative flex items-center justify-center shrink-0">
-              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' && !isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
@@ -8665,7 +8670,6 @@ export default function App() {
             <button
               id="app-nav-certificate"
               onClick={() => {
-                setIsAskOpen(false);
                 setShowProfileModal(false);
                 handleOpenStudentCertificate();
               }}
@@ -8680,25 +8684,26 @@ export default function App() {
             </button>
           )}
 
-          {/* 4. Ask (Live Support & Help) - Shown only if user has an activated course */}
+          {/* 4. Ask (Embedded Tab attached seamlessly with App Navigation) */}
           {isCourseActiveUser && (
             <button
               id="app-nav-ask"
               onClick={() => {
                 setShowProfileModal(false);
-                setIsAskOpen(prev => !prev);
-                if (!isAskOpen && !isUserAdminSession) {
+                setCurrentView('ask');
+                if (!isUserAdminSession) {
                   setStudentUnreadCount(0);
                 }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
-                isAskOpen 
-                  ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15' 
+                currentView === 'ask'
+                  ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                   : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
               }`}
             >
               <div className="relative flex items-center justify-center shrink-0">
-                <MessageCircle className={`w-5 h-5 mb-0.5 md:mb-0 ${isAskOpen ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+                <MessageCircle className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'ask' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
                 {hasAskUnread && (
                   <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-black absolute -top-2 -right-3 shadow-md animate-pulse" title="New messages">
                     {askBadgeText}
@@ -8713,14 +8718,13 @@ export default function App() {
           <button
             id="app-nav-profile"
             onClick={() => {
-              setIsAskOpen(false);
               setShowProfileModal(false);
               setCurrentView('account');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              currentView === 'account' && !isAskOpen 
-                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15' 
+              currentView === 'account'
+                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-blue-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
