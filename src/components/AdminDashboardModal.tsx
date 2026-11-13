@@ -159,6 +159,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [deleteAllKeysConfirmInput, setDeleteAllKeysConfirmInput] = useState('');
   const [isDeletingAllKeys, setIsDeletingAllKeys] = useState(false);
 
+  // Security Confirmation (typed CONFIRM) for Admin/Sub-Admin Logout, User Session Logout, and Course Expire
+  const [securityConfirmAction, setSecurityConfirmAction] = useState<{
+    type: 'admin_logout' | 'logout_key' | 'expire_key';
+    code?: string;
+    studentName?: string;
+    courseTitle?: string;
+    isActiveSession?: boolean;
+  } | null>(null);
+  const [securityConfirmInput, setSecurityConfirmInput] = useState('');
+  const [isExecutingSecurityAction, setIsExecutingSecurityAction] = useState(false);
+
   // Course Deletion Confirmation state inside Admin Dashboard
   const [courseToDeleteAdmin, setCourseToDeleteAdmin] = useState<Course | null>(null);
   const [adminDeleteConfirmText, setAdminDeleteConfirmText] = useState('');
@@ -868,7 +879,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             {onLogoutAdminSession && (
               <button
                 type="button"
-                onClick={onLogoutAdminSession}
+                onClick={() => {
+                  setSecurityConfirmInput('');
+                  setSecurityConfirmAction({ type: 'admin_logout' });
+                }}
                 className="px-3 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/30 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
                 title={isMainAdmin ? 'Logout Main Admin' : 'Logout Sub-Admin'}
               >
@@ -1278,9 +1292,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             {onExpireKey && key.status === 'used' && !isKeyExpired && (
                               <button
                                 type="button"
-                                onClick={async () => {
+                                onClick={() => {
                                   const code = key.code || key.id;
-                                  await onExpireKey(code);
+                                  setSecurityConfirmInput('');
+                                  setSecurityConfirmAction({
+                                    type: 'expire_key',
+                                    code,
+                                    studentName: key.studentName || key.claimedByEmail || 'Unclaimed',
+                                    courseTitle: key.courseTitle || 'All Courses',
+                                  });
                                 }}
                                 className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition shrink-0 cursor-pointer flex items-center gap-1 border bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
                                 title="Expire this course key immediately"
@@ -1293,11 +1313,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             {/* Logout User Session Button */}
                             <button
                               type="button"
-                              onClick={async () => {
+                              onClick={() => {
                                 const code = key.code || key.id;
-                                if (onLogoutKey) {
-                                  await onLogoutKey(code);
-                                }
+                                setSecurityConfirmInput('');
+                                setSecurityConfirmAction({
+                                  type: 'logout_key',
+                                  code,
+                                  studentName: key.studentName || key.claimedByEmail || 'Unclaimed',
+                                  courseTitle: key.courseTitle || 'All Courses',
+                                  isActiveSession: Boolean(key.activeDeviceId),
+                                });
                               }}
                               className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition shrink-0 cursor-pointer flex items-center gap-1 border ${
                                 key.activeDeviceId 
@@ -3391,6 +3416,155 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
                     {isDeletingAllKeys ? 'Deleting All...' : 'सबै मेटाउनुहोस् (Delete All)'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Mandatory Typed CONFIRM Modal for Admin/Sub-Admin Logout, User Session Logout & Course Expire */}
+        <AnimatePresence>
+          {securityConfirmAction && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl border border-rose-500/40 text-left space-y-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center border shrink-0 ${
+                    securityConfirmAction.type === 'expire_key'
+                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                      : securityConfirmAction.type === 'logout_key'
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                      : 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                  }`}>
+                    {securityConfirmAction.type === 'expire_key' ? (
+                      <Clock className="w-5 h-5" />
+                    ) : (
+                      <LogOut className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">
+                      {securityConfirmAction.type === 'admin_logout'
+                        ? (isMainAdmin ? 'Logout Main Admin Account?' : 'Logout Sub-Admin Account?')
+                        : securityConfirmAction.type === 'expire_key'
+                        ? 'Expire User Course Immediately?'
+                        : securityConfirmAction.isActiveSession
+                        ? 'Logout User Active Session?'
+                        : 'Reset User Session?'}
+                    </h3>
+                    <p className="text-xs font-bold text-rose-300 mt-0.5">
+                      {securityConfirmAction.type === 'admin_logout'
+                        ? 'सुरक्षाको लागि Admin/Sub-Admin लगआउट गर्न CONFIRM टाइप गर्नुहोस्।'
+                        : securityConfirmAction.type === 'expire_key'
+                        ? 'विद्यार्थीको कोर्ष पहुँच तुरुन्तै बन्द (Expire) हुनेछ।'
+                        : 'विद्यार्थीको डिभाइस सेसन तुरुन्तै लगआउट (Logout) हुनेछ।'}
+                    </p>
+                  </div>
+                </div>
+
+                {securityConfirmAction.type !== 'admin_logout' ? (
+                  <div className="bg-black/40 border border-slate-700/80 rounded-xl p-3.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-400 font-bold">Student:</span>
+                      <span className="text-white font-extrabold truncate max-w-[220px]">
+                        {securityConfirmAction.studentName}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-400 font-bold">License Code:</span>
+                      <span className="font-mono font-black text-purple-300">
+                        {securityConfirmAction.code}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-400 font-bold">Course:</span>
+                      <span className="text-slate-200 font-bold truncate max-w-[220px]">
+                        {securityConfirmAction.courseTitle}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-black/40 border border-slate-700/80 rounded-xl p-3.5 text-xs text-slate-300 font-medium leading-relaxed">
+                    {isMainAdmin
+                      ? 'Main Admin Panel बाट लगआउट हुनेछ। पुनः प्रवेश गर्न Admin Secret Code आवश्यक पर्नेछ।'
+                      : `Sub-Admin (${subAdminSession?.name || 'Staff'}) खाता लगआउट हुनेछ। पुनः प्रवेश गर्न Sub-Admin Code आवश्यक पर्नेछ।`}
+                  </div>
+                )}
+
+                <div className="bg-slate-800/70 border border-slate-700 rounded-xl p-3 space-y-2">
+                  <label className="block text-[11px] font-extrabold text-slate-200">
+                    पक्का गर्न तल <span className="text-rose-400 font-mono font-black">CONFIRM</span> टाइप गर्नुहोस्:
+                  </label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={securityConfirmInput}
+                    onChange={(e) => setSecurityConfirmInput(e.target.value)}
+                    placeholder="Type CONFIRM"
+                    className="w-full bg-black/70 border border-rose-500/40 rounded-xl px-3 py-2.5 text-sm text-white font-mono font-bold focus:border-rose-400 outline-hidden tracking-widest text-center uppercase"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    disabled={isExecutingSecurityAction}
+                    onClick={() => {
+                      setSecurityConfirmAction(null);
+                      setSecurityConfirmInput('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
+                  >
+                    रद्द गर्नुहोस् (Cancel)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={securityConfirmInput.trim().toUpperCase() !== 'CONFIRM' || isExecutingSecurityAction}
+                    onClick={async () => {
+                      if (!securityConfirmAction) return;
+                      if (securityConfirmInput.trim().toUpperCase() !== 'CONFIRM') return;
+                      try {
+                        setIsExecutingSecurityAction(true);
+                        if (securityConfirmAction.type === 'admin_logout') {
+                          onLogoutAdminSession?.();
+                        } else if (securityConfirmAction.type === 'expire_key' && securityConfirmAction.code && onExpireKey) {
+                          await onExpireKey(securityConfirmAction.code);
+                        } else if (securityConfirmAction.type === 'logout_key' && securityConfirmAction.code && onLogoutKey) {
+                          await onLogoutKey(securityConfirmAction.code);
+                        }
+                        setSecurityConfirmAction(null);
+                        setSecurityConfirmInput('');
+                      } catch (e) {
+                        console.error('Security action error:', e);
+                      } finally {
+                        setIsExecutingSecurityAction(false);
+                      }
+                    }}
+                    className={`px-5 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
+                      securityConfirmAction.type === 'logout_key'
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-rose-600 hover:bg-rose-700'
+                    }`}
+                  >
+                    {isExecutingSecurityAction ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : securityConfirmAction.type === 'expire_key' ? (
+                      <Clock className="w-3.5 h-3.5" />
+                    ) : (
+                      <LogOut className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {securityConfirmAction.type === 'admin_logout'
+                        ? 'Confirm Logout'
+                        : securityConfirmAction.type === 'expire_key'
+                        ? 'Confirm Expire Now'
+                        : 'Confirm Session Logout'}
+                    </span>
                   </button>
                 </div>
               </motion.div>

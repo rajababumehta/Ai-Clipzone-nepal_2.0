@@ -321,6 +321,7 @@ export default function App() {
   const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
   const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
+  const [logoutAllConfirmWord, setLogoutAllConfirmWord] = useState('');
 
   // Student logout confirmation verification modal (Requires typing "CONFIRM")
   const [showStudentLogoutConfirmModal, setShowStudentLogoutConfirmModal] = useState(false);
@@ -3376,6 +3377,11 @@ export default function App() {
       return;
     }
 
+    if (logoutAllConfirmWord.trim().toUpperCase() !== 'CONFIRM') {
+      showToast('❌ अगाडि बढ्न कृपया CONFIRM टाइप गर्नुहोस्।', 'error');
+      return;
+    }
+
     const inputCode = logoutSecretCodeInput.trim().toUpperCase();
     const isAuthorized = await verifyAdminSecret(inputCode);
     if (!isAuthorized) {
@@ -3425,6 +3431,7 @@ export default function App() {
 
       setShowLogoutConfirmModal(false);
       setLogoutSecretCodeInput('');
+      setLogoutAllConfirmWord('');
 
       // Refresh admin key list
       fetchAdminKeys();
@@ -4959,42 +4966,7 @@ export default function App() {
             />
           </section>
         ) : currentView === 'account' ? (
-          <section id="account-full-view" className="w-full space-y-6 pb-20 animate-in fade-in duration-300">
-            {/* Sleek Breadcrumb Bar */}
-            <div className="flex items-center justify-between gap-3 pb-2 pt-1 border-b border-zinc-850">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentView('home');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                  title="Back to Home"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Home</span>
-                </button>
-                <span className="text-zinc-600">/</span>
-                <span className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
-                  <span>👤</span> Student Account Portal
-                </span>
-              </div>
-
-              {activeCourseIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentView('classroom');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black px-4 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer active:scale-95"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Classroom (कक्षा)</span>
-                </button>
-              )}
-            </div>
+          <section id="account-full-view" className="w-full max-w-3xl mx-auto space-y-5 pb-20 pt-2">
 
             {authLoading && !currentUser && !localStorage.getItem('clipzone_student_name') ? (
               <div className="p-16 text-center text-xs font-bold text-zinc-400 flex flex-col items-center justify-center gap-3 bg-zinc-950 rounded-3xl border border-zinc-800">
@@ -5123,202 +5095,137 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              /* CASE: ENROLLED STUDENT - MODERN HIGH-END PORTAL */
-              <div className="space-y-6">
-                
-                {/* 1. HERO IDENTITY CARD - Sleek Bento Banner */}
-                <div className="bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 border border-zinc-800/90 rounded-3xl p-5 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-xl">
-                  {/* Subtle ambient lighting */}
-                  <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-                  <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-
-                  <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    {/* Left: Avatar + Identity Info */}
-                    <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-                      {/* Avatar with Camera badge - Click to upload/change photo */}
+              /* CASE: ENROLLED STUDENT - SIMPLE & ADVANCED PREMIUM PORTAL */
+              <div className="space-y-5">
+                {/* 1. CLEAN LUXURY PROFILE CARD */}
+                <div className="bg-gradient-to-b from-zinc-900/90 via-zinc-950 to-zinc-950 border border-zinc-800/80 border-t-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+                  <div className="relative z-10 flex items-center justify-between gap-4 flex-wrap">
+                    {/* Left: Avatar + Name + Blue Tick */}
+                    <div className="flex items-center gap-4 min-w-0">
                       <div className="relative group shrink-0">
                         <button
                           type="button"
                           onClick={() => avatarFileInputRef.current?.click()}
-                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-3xl bg-zinc-900 border-2 border-blue-500/40 shadow-xl overflow-hidden flex items-center justify-center relative cursor-pointer group-hover:border-blue-400 transition-all active:scale-95"
-                          title="Click to select photo (फोटो बदल्नुहोस्)"
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-zinc-900 ring-2 ring-zinc-700/80 group-hover:ring-blue-500/80 overflow-hidden flex items-center justify-center relative cursor-pointer transition active:scale-95"
+                          title="फोटो परिवर्तन गर्नुहोस्"
                         >
                           {userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data:')) ? (
-                            <img 
-                              src={userAvatar} 
-                              alt="Student Avatar" 
-                              className="w-full h-full object-cover" 
+                            <img
+                              src={userAvatar}
+                              alt="Profile"
+                              className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-blue-600 via-indigo-600 to-teal-500 text-white flex items-center justify-center text-2xl font-black uppercase tracking-wider">
+                            <div className="w-full h-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xl sm:text-2xl font-black uppercase">
                               {(currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'ST').substring(0, 2)}
                             </div>
                           )}
-
-                          {/* Hover Overlay */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[9px] font-black gap-0.5">
-                            <Camera className="w-4 h-4 text-blue-300" />
-                            <span>Change Photo</span>
+                          <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Camera className="w-4 h-4 text-white" />
                           </div>
                         </button>
 
-                        {/* Floating Camera Button */}
                         <button
                           type="button"
                           onClick={() => avatarFileInputRef.current?.click()}
-                          className="absolute -bottom-1.5 -right-1.5 bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-xl shadow-lg ring-2 ring-zinc-950 cursor-pointer transition-transform hover:scale-110 active:scale-90"
-                          title="Change Photo (फोटो बदल्नुहोस्)"
+                          className="absolute -bottom-0.5 -right-0.5 bg-zinc-900 hover:bg-blue-600 text-zinc-200 hover:text-white p-1.5 rounded-full border border-zinc-700 ring-2 ring-zinc-950 cursor-pointer transition"
+                          title="फोटो अपलोड गर्नुहोस्"
                         >
-                          <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <Camera className="w-3 h-3" />
                         </button>
                       </div>
 
-                      {/* Name & Badges */}
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9.5px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            Verified Student 🇳🇵
-                          </span>
-                          <span className="text-[9.5px] font-mono font-bold text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md">
-                            ID: {activeCourseIds[0] ? `AICLIP-${activeCourseIds[0].substring(0, 6).toUpperCase()}` : 'AICLIP-ACTIVE'}
-                          </span>
-                        </div>
-
-                        {/* Registered Student Name (Fixed / Non-editable) */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
                             {currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
                           </h2>
-                          <VerifiedBadge variant="student" className="w-5 h-5" title="Official Verified Student" />
-                          <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-semibold px-2 py-0.5 rounded-md flex items-center gap-1" title="नाम परिवर्तन गर्न मिल्दैन (Name is permanently registered)">
-                            🔒 Registered
-                          </span>
+                          <VerifiedBadge variant="student" className="w-4.5 h-4.5" title="Verified User" />
                         </div>
-
-                        <p className="text-xs text-zinc-400 font-medium">
-                          {siteSettings.instituteName || 'AI Clipzone Nepal'} • लाइफटाइम डिजिटल लर्निङ पास
+                        <p className="text-xs text-zinc-400 font-medium truncate">
+                          {siteSettings.instituteName || 'AI Clipzone'} • {activeCourseIds.length} Active {activeCourseIds.length === 1 ? 'Course' : 'Courses'}
                         </p>
+                        {userAvatar && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUserAvatar('');
+                              try {
+                                localStorage.removeItem('clipzone_student_avatar');
+                              } catch (e) {}
+                              syncStudentAvatarToFirestore('');
+                              showToast('फोटो हटाइयो', 'info');
+                            }}
+                            className="text-[11px] text-zinc-500 hover:text-rose-400 transition cursor-pointer font-medium"
+                          >
+                            Remove photo
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    {/* Hidden input for device photo upload */}
-                    <input 
-                      type="file" 
-                      ref={avatarFileInputRef} 
-                      accept="image/*" 
-                      onChange={handleCustomAvatarUpload} 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      ref={avatarFileInputRef}
+                      accept="image/*"
+                      onChange={handleCustomAvatarUpload}
+                      className="hidden"
                     />
 
-                    {/* Right: Quick Action Buttons */}
-                    <div className="flex items-center gap-2 flex-wrap self-start md:self-center shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => avatarFileInputRef.current?.click()}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95"
-                        title="Upload photo from device / gallery (ग्यालरीबाट नयाँ फोटो राख्नुहोस्)"
-                      >
-                        <Camera className="w-4 h-4" />
-                        <span>📸 Change Photo</span>
-                      </button>
-
-                      {userAvatar && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUserAvatar('');
-                            try {
-                              localStorage.removeItem('clipzone_student_avatar');
-                            } catch (e) {}
-                            syncStudentAvatarToFirestore('');
-                            showToast('फोटो हटाइयो (Photo removed from database)', 'info');
-                          }}
-                          className="bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 border border-zinc-800 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 active:scale-95"
-                          title="Remove photo (फोटो हटाउनुहोस्)"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Remove</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => setShowNotifCenterModal(true)}
-                        className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 relative active:scale-95"
-                        title="Notifications"
-                      >
-                        <Bell className="w-4 h-4 text-blue-400" />
-                        <span>Notifs</span>
-                        {unreadNotifCount > 0 && (
-                          <span className="bg-rose-500 text-white font-black text-[9px] px-1.5 py-0.2 rounded-full">
-                            {unreadNotifCount}
-                          </span>
-                        )}
-                      </button>
-                    </div>
+                    {/* Right: Clean Single Log Out Action */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStudentLogoutConfirmInput('');
+                        setShowStudentLogoutConfirmModal(true);
+                      }}
+                      className="text-zinc-300 hover:text-rose-400 bg-zinc-900/90 hover:bg-rose-950/40 border border-zinc-800 hover:border-rose-500/40 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Log Out</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* 3. COMPACT STATS STRIP */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-zinc-950 border border-zinc-800/80 p-3.5 rounded-2xl shadow-sm">
-                    <span className="text-[10px] font-bold text-zinc-400 block uppercase tracking-wider">
-                      Active Courses
-                    </span>
-                    <span className="text-sm sm:text-base font-black text-blue-400 mt-0.5 block truncate">
-                      📚 {activeCourseIds.length} Enrolled
-                    </span>
-                  </div>
-                  <div className="bg-zinc-950 border border-zinc-800/80 p-3.5 rounded-2xl shadow-sm">
-                    <span className="text-[10px] font-bold text-zinc-400 block uppercase tracking-wider">
-                      Video Lessons
-                    </span>
-                    <span className="text-sm sm:text-base font-black text-indigo-400 mt-0.5 block truncate">
-                      🎬 {courses.filter(c => activeCourseIds.includes(c.id)).reduce((acc, c) => acc + (c.videos?.length || 0), 0)}+ Lectures
-                    </span>
-                  </div>
-                  <div className="bg-zinc-950 border border-zinc-800/80 p-3.5 rounded-2xl shadow-sm">
-                    <span className="text-[10px] font-bold text-zinc-400 block uppercase tracking-wider">
-                      Certificate Status
-                    </span>
-                    <span className="text-sm sm:text-base font-black text-emerald-400 mt-0.5 block truncate">
-                      📜 Verified 100%
-                    </span>
-                  </div>
-                  <div className="bg-zinc-950 border border-zinc-800/80 p-3.5 rounded-2xl shadow-sm">
-                    <span className="text-[10px] font-bold text-zinc-400 block uppercase tracking-wider">
-                      Access Validity
-                    </span>
-                    <span className="text-sm sm:text-base font-black text-teal-300 mt-0.5 block truncate">
-                      ⚡ 24/7 Unlimited
-                    </span>
-                  </div>
-                </div>
-
-                {/* 4. ACTIVE ENROLLED COURSES PROGRAM CARDS (UNIFIED - ZERO DUPLICATION!) */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-                      <span>तपाईंका सक्रिय कोर्सहरू (Enrolled Masterclasses • {activeCourseIds.length})</span>
+                {/* 2. MY COURSES (CLEAN & COMPACT) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                      My Courses
                     </h3>
-                    <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                      VIP Active
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActivationCodeInput('');
+                        setShowCodeInputModal(true);
+                      }}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Code</span>
+                    </button>
                   </div>
 
                   {activeCourseIds.length === 0 ? (
-                    <div className="bg-zinc-950 p-8 rounded-3xl border border-zinc-800 text-center text-xs text-zinc-400 font-semibold space-y-2">
-                      <p>🚫 No active courses linked yet.</p>
-                      <p className="text-zinc-500">Please enter your Secret Activation Code below to unlock your course.</p>
+                    <div className="bg-zinc-950 p-7 rounded-2xl border border-zinc-800/80 text-center space-y-3">
+                      <p className="text-xs text-zinc-400 font-medium">कुनै सक्रिय कोर्ष छैन।</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivationCodeInput('');
+                          setShowCodeInputModal(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer"
+                      >
+                        Enter Activation Code
+                      </button>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2.5">
                       {courses
                         .filter(course => activeCourseIds.includes(course.id) && !userActivationKeys.some((k: any) => k.courseId === course.id && isCourseKeyExpired(k)))
                         .map((course) => {
-                          const keyInfo = userActivationKeys.find((k: any) => k.courseId === course.id) || 
+                          const keyInfo = userActivationKeys.find((k: any) => k.courseId === course.id) ||
                             (() => {
                               try {
                                 return (JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]')).find((k: any) => k.courseId === course.id);
@@ -5328,168 +5235,84 @@ export default function App() {
                           const enrolledTimestamp = keyInfo?.claimedAt || keyInfo?.createdAt || Date.now();
                           const durationMs = keyInfo?.duration === '1month' ? (30 * 24 * 60 * 60 * 1000) : (365 * 24 * 60 * 60 * 1000);
                           const expiresTimestamp = keyInfo?.expiresAt || (enrolledTimestamp + durationMs);
-
-                          const enrolledDateStr = new Date(enrolledTimestamp).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          });
-                          
-                          const expiredDateStr = new Date(expiresTimestamp).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          });
-
-                          const now = Date.now();
-                          const diffMs = expiresTimestamp - now;
-                          const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                          const daysLeft = Math.ceil((expiresTimestamp - Date.now()) / (1000 * 60 * 60 * 24));
                           const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
                           const keyCode = keyInfo?.code || getCourseActivationCode(course.id);
-                          const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
 
                           return (
                             <div
                               key={course.id}
-                              className="bg-zinc-950 border-2 border-zinc-800/90 hover:border-blue-500/50 rounded-3xl overflow-hidden shadow-2xl transition-all duration-200 group"
+                              className="bg-zinc-950 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition"
                             >
-                              {/* Main Card Body */}
-                              <div className="p-4 sm:p-6 space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                  {/* Left: Thumbnail & Course Info */}
-                                  <div className="flex items-start sm:items-center gap-4 min-w-0">
-                                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 border border-blue-500/30 bg-zinc-900 shadow-md relative">
-                                      {course.image ? (
-                                        <img src={course.image} alt={cleanTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-2xl bg-blue-600/20 text-blue-400">🎓</div>
-                                      )}
-                                      <span className="absolute bottom-0 inset-x-0 bg-blue-600 text-[8px] font-black uppercase text-center text-white py-0.5">
-                                        ENROLLED
-                                      </span>
-                                    </div>
-
-                                    <div className="min-w-0 space-y-1">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                          सक्रिय कोर्ष (ACTIVE ENROLMENT)
-                                        </span>
-                                        <span className="bg-zinc-900 text-zinc-300 text-[9px] font-bold px-2 py-0.5 rounded-full border border-zinc-800">
-                                          🌐 {course.language || 'Nepali'}
-                                        </span>
-                                        <span className="bg-blue-950/60 text-blue-300 text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-blue-800/40">
-                                          🎬 {course.videos?.length || 0} Lectures
-                                        </span>
-                                      </div>
-
-                                      <h4 className="text-base sm:text-xl font-black text-white leading-snug tracking-tight">
-                                        {cleanTitle}
-                                      </h4>
-
-                                      <p className="text-xs text-zinc-400 font-medium flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                          <CheckCircle2 className="w-3.5 h-3.5" /> पूर्ण कक्षा अनलक (Full Access)
-                                        </span>
-                                        <span className="text-zinc-600">•</span>
-                                        <span className="text-blue-300 font-semibold">आधिकारिक प्रमाणपत्र उपलब्ध</span>
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  {/* Right CTA: Direct Classroom & Certificate */}
-                                  <div className="flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto justify-end flex-wrap">
-                                    <button
-                                      onClick={() => {
-                                        setSelectedClassroomCourseId(course.id);
-                                        setCurrentView('classroom');
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                        showToast(`Opening "${cleanTitle}" classroom! 🎬`, 'success');
-                                      }}
-                                      className="flex-1 sm:flex-initial bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs px-4 py-2.5 rounded-2xl shadow-lg shadow-blue-500/25 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
-                                    >
-                                      <Play className="w-3.5 h-3.5 fill-white" />
-                                      <span>कक्षामा जानुहोस् (Classroom)</span>
-                                    </button>
-
-                                    {!secondaryCourseIds.includes(course.id) && (
-                                      <button
-                                        onClick={() => handleOpenStudentCertificate(course.id)}
-                                        className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 border border-blue-500/30 font-black text-xs px-3.5 py-2.5 rounded-2xl transition cursor-pointer flex items-center gap-1.5"
-                                        title="View Course Certificate"
-                                      >
-                                        <Award className="w-3.5 h-3.5 text-blue-400" />
-                                        <span>प्रमाणपत्र 📜</span>
-                                      </button>
-                                    )}
-                                  </div>
+                              <div className="flex items-center gap-3.5 min-w-0">
+                                <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-zinc-900 border border-zinc-800">
+                                  {course.image ? (
+                                    <img src={course.image} alt={cleanTitle} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-lg">🎓</div>
+                                  )}
                                 </div>
 
-                                {/* License Key & Validity Strip */}
-                                <div className="bg-zinc-900/80 border border-zinc-850 p-3 sm:p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                                  {/* License Key with Copy */}
-                                  <div>
-                                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                                      🔑 License Key
+                                <div className="min-w-0 space-y-1">
+                                  <h4 className="text-sm sm:text-base font-bold text-white truncate">
+                                    {cleanTitle}
+                                  </h4>
+                                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 flex-wrap">
+                                    <span className="text-emerald-400 font-semibold">
+                                      {daysLeft > 0 ? `${daysLeft}d left` : 'Active'}
                                     </span>
-                                    {keyCode ? (
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="font-mono text-xs font-black text-blue-300 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                                          {keyCode}
-                                        </span>
+                                    {keyCode && (
+                                      <>
+                                        <span className="text-zinc-700">•</span>
                                         <button
                                           type="button"
                                           onClick={() => {
                                             navigator.clipboard?.writeText(keyCode);
                                             setCopiedKeyId(course.id);
-                                            setTimeout(() => setCopiedKeyId(''), 2000);
-                                            showToast('License Key copied! 📋', 'success');
+                                            setTimeout(() => setCopiedKeyId(''), 1800);
+                                            showToast('Code copied!', 'success');
                                           }}
-                                          className="text-[10px] font-bold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
-                                          title="Copy License Key"
+                                          className="inline-flex items-center gap-1 font-mono text-zinc-400 hover:text-white transition cursor-pointer"
+                                          title="Copy activation code"
                                         >
+                                          <span>{keyCode}</span>
                                           {copiedKeyId === course.id ? (
-                                            <>
-                                              <Check className="w-3 h-3 text-emerald-400" />
-                                              <span className="text-emerald-400 font-black">Copied!</span>
-                                            </>
+                                            <Check className="w-3 h-3 text-emerald-400" />
                                           ) : (
-                                            <>
-                                              <Copy className="w-3 h-3" />
-                                              <span>Copy</span>
-                                            </>
+                                            <Copy className="w-3 h-3" />
                                           )}
                                         </button>
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs text-zinc-500 font-mono">Active Key</span>
-                                    )}
-                                  </div>
-
-                                  {/* Dates */}
-                                  <div>
-                                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                                      📅 भर्ना / म्याद समाप्ति
-                                    </span>
-                                    <span className="text-xs font-extrabold text-zinc-200">
-                                      {enrolledDateStr} - {expiredDateStr}
-                                    </span>
-                                  </div>
-
-                                  {/* Days Remaining Banner */}
-                                  <div className="flex items-center justify-between sm:justify-end gap-2">
-                                    {daysLeft > 0 ? (
-                                      <span className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[10px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                        {daysLeft} दिन बाँकी ({daysLeft}d left)
-                                      </span>
-                                    ) : (
-                                      <span className="bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[10px] font-black px-2.5 py-1 rounded-xl">
-                                        Expired
-                                      </span>
+                                      </>
                                     )}
                                   </div>
                                 </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 justify-end">
+                                {!secondaryCourseIds.includes(course.id) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenStudentCertificate(course.id)}
+                                    className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 font-semibold text-xs px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                                    title="Certificate"
+                                  >
+                                    <Award className="w-3.5 h-3.5 text-blue-400" />
+                                    <span>Certificate</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedClassroomCourseId(course.id);
+                                    setCurrentView('classroom');
+                                    window.scrollTo({ top: 0, behavior: 'auto' });
+                                  }}
+                                  className="bg-white hover:bg-zinc-200 text-black font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-black" />
+                                  <span>Open Class</span>
+                                </button>
                               </div>
                             </div>
                           );
@@ -5498,11 +5321,11 @@ export default function App() {
                   )}
                 </div>
 
-                {/* EXPIRED COURSES LIST (IF ANY COURSE ACCESS HAS EXPIRED) */}
+                {/* 3. EXPIRED COURSES (ONLY SHOWN IF PRESENT) */}
                 {(() => {
-                  const expiredCoursesList = courses.filter(course => 
+                  const expiredCoursesList = courses.filter(course =>
                     !activeCourseIds.includes(course.id) &&
-                    userActivationKeys.some((k: any) => 
+                    userActivationKeys.some((k: any) =>
                       (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase())) &&
                       isCourseKeyExpired(k)
                     )
@@ -5511,94 +5334,38 @@ export default function App() {
                   if (expiredCoursesList.length === 0) return null;
 
                   return (
-                    <div className="space-y-4 pt-4 border-t border-rose-500/20">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm sm:text-base font-black text-rose-400 flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-rose-500" />
-                          <span>म्याद समाप्त भएका कोर्सहरू (Expired Courses • {expiredCoursesList.length})</span>
-                        </h3>
-                        <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                          Expired
-                        </span>
-                      </div>
-
-                      <div className="space-y-4">
+                    <div className="space-y-2.5 pt-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 px-1">
+                        Expired Courses ({expiredCoursesList.length})
+                      </h3>
+                      <div className="space-y-2">
                         {expiredCoursesList.map((course) => {
-                          const keyInfo = userActivationKeys.find((k: any) => 
+                          const keyInfo = userActivationKeys.find((k: any) =>
                             (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase()))
                           );
-                          const enrolledTimestamp = keyInfo?.claimedAt || keyInfo?.createdAt || Date.now();
-                          const expiresTimestamp = keyInfo?.expiresAt || enrolledTimestamp;
-                          const enrolledDateStr = new Date(enrolledTimestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                          const expiresTimestamp = keyInfo?.expiresAt || keyInfo?.claimedAt || Date.now();
                           const expiredDateStr = new Date(expiresTimestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                           const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
-                          const keyCode = keyInfo?.code || keyInfo?.id || '';
 
                           return (
-                            <div key={course.id} className="bg-zinc-950 border-2 border-rose-500/30 rounded-3xl overflow-hidden shadow-2xl p-4 sm:p-6 space-y-4">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-start sm:items-center gap-4 min-w-0">
-                                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 border border-rose-500/30 bg-zinc-900 shadow-md relative opacity-80">
-                                    {course.image ? (
-                                      <img src={course.image} alt={cleanTitle} className="w-full h-full object-cover grayscale" />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center text-2xl bg-rose-600/20 text-rose-400">⏰</div>
-                                    )}
-                                    <span className="absolute bottom-0 inset-x-0 bg-rose-600 text-[8px] font-black uppercase text-center text-white py-0.5">
-                                      EXPIRED
-                                    </span>
-                                  </div>
-                                  <div className="min-w-0 space-y-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="bg-rose-500/15 text-rose-400 border border-rose-500/30 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
-                                        <Clock className="w-3 h-3" /> म्याद समाप्त (ACCESS EXPIRED)
-                                      </span>
-                                      <span className="bg-zinc-900 text-zinc-400 text-[9px] font-bold px-2 py-0.5 rounded-full border border-zinc-800">
-                                        🎬 {course.videos?.length || 0} Lectures
-                                      </span>
-                                    </div>
-                                    <h4 className="text-base sm:text-xl font-black text-zinc-300 leading-snug tracking-tight">
-                                      {cleanTitle}
-                                    </h4>
-                                    <p className="text-xs text-rose-400/80 font-medium">
-                                      यो कोर्षको म्याद समाप्त भइसकेको छ। कृपया पुनः पहुँच पाउन नयाँ कोड सक्रिय गर्नुहोस्।
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2.5 shrink-0 justify-end">
-                                  <button
-                                    onClick={() => {
-                                      setActivationCodeInput('');
-                                      setShowCodeInputModal(true);
-                                      showToast(`Renew access for "${cleanTitle}". Enter your new secret code.`, 'info');
-                                    }}
-                                    className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs px-4 py-2.5 rounded-2xl shadow-lg shadow-rose-600/25 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
-                                  >
-                                    <Zap className="w-3.5 h-3.5 fill-white" />
-                                    <span>Renew Access (म्याद नवीकरण)</span>
-                                  </button>
-                                </div>
+                            <div
+                              key={course.id}
+                              className="bg-zinc-950 border border-rose-500/30 rounded-2xl p-3.5 flex items-center justify-between gap-3"
+                            >
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-zinc-300 truncate">{cleanTitle}</h4>
+                                <p className="text-[11px] text-rose-400/90">Expired on {expiredDateStr}</p>
                               </div>
-
-                              <div className="bg-zinc-900/80 border border-zinc-850 p-3 sm:p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3 items-center text-xs">
-                                <div>
-                                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                                    🔑 Previous Key:
-                                  </span>
-                                  <span className="font-mono font-bold text-zinc-400 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                                    {keyCode || 'EXPIRED-KEY'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                                    📅 अवधि:
-                                  </span>
-                                  <span className="font-bold text-rose-400">
-                                    {enrolledDateStr} - {expiredDateStr} (Expired)
-                                  </span>
-                                </div>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivationCodeInput('');
+                                  setShowCodeInputModal(true);
+                                }}
+                                className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer shrink-0"
+                              >
+                                Renew
+                              </button>
                             </div>
                           );
                         })}
@@ -5607,94 +5374,24 @@ export default function App() {
                   );
                 })()}
 
-                {/* 5. ADD ANOTHER COURSE (Unlock with New Code) */}
-                <div className="bg-zinc-950 border border-zinc-800/80 p-5 sm:p-6 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
-                  <div className="space-y-1 text-center sm:text-left">
-                    <h4 className="text-sm font-black text-white flex items-center gap-2 justify-center sm:justify-start">
-                      <span>🔑</span> नयाँ कोर्ष जोड्नुहोस् (Add Another Course)
-                    </h4>
-                    <p className="text-xs text-zinc-400">
-                      यदि तपाईंसँग अर्को नयाँ कोर्षको Activation Code छ भने यहाँ राखेर तुरुन्तै अनलक गर्नुहोस्।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActivationCodeInput('');
-                      setShowCodeInputModal(true);
-                    }}
-                    className="bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-black px-5 py-2.5 rounded-2xl transition cursor-pointer shrink-0 shadow-sm active:scale-95"
-                  >
-                    + Enter Activation Code
-                  </button>
-                </div>
-
-                {/* 6. QUICK UTILITY / SUPPORT LINKS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentView('ask');
-                      if (!isUserAdminSession) {
-                        setStudentUnreadCount(0);
-                      }
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="flex items-center justify-between p-4 rounded-2xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-white transition cursor-pointer shadow-sm group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-blue-600/15 text-blue-400 flex items-center justify-center border border-blue-500/20">
-                        <MessageCircle className="w-5 h-5" />
-                      </div>
-                      <div className="text-left">
-                        <span className="font-black text-xs block text-white group-hover:text-blue-300 transition">
-                          Direct Support Chat (Ask)
-                        </span>
-                        <span className="text-[10px] text-zinc-500">Live chat with instructor & team</span>
-                      </div>
+                {/* 4. MINIMAL WHATSAPP HELPLINE */}
+                <a
+                  href={`https://wa.me/${getFormattedWhatsappNumber(paymentConfig.whatsappNumber || siteSettings.supportPhone)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between px-4 py-3.5 rounded-2xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800/80 text-white transition cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                      <Send className="w-4 h-4" />
                     </div>
-                    <span className="text-xs text-blue-400 font-extrabold">Open →</span>
-                  </button>
-
-                  <a
-                    href={`https://wa.me/${getFormattedWhatsappNumber(paymentConfig.whatsappNumber || siteSettings.supportPhone)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-4 rounded-2xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-white transition cursor-pointer shadow-sm group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-600/15 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-                        <Send className="w-5 h-5" />
-                      </div>
-                      <div className="text-left">
-                        <span className="font-black text-xs block text-white group-hover:text-emerald-300 transition">
-                          Official WhatsApp Helpline
-                        </span>
-                        <span className="text-[10px] text-zinc-500">Fast assistance & general queries</span>
-                      </div>
+                    <div>
+                      <span className="font-bold text-xs block text-zinc-100">WhatsApp Support</span>
+                      <span className="text-[11px] text-zinc-500">Need help with activation or account?</span>
                     </div>
-                    <span className="text-xs text-emerald-400 font-extrabold">Chat →</span>
-                  </a>
-                </div>
-
-                {/* 7. FOOTER / LOGOUT */}
-                <div className="flex items-center justify-between border-t border-zinc-850 pt-4 text-xs">
-                  <div className="text-zinc-500 font-bold flex items-center gap-1.5">
-                    <span>Institute Region:</span>
-                    <span className="text-zinc-300 font-black">Nepal 🇳🇵</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStudentLogoutConfirmInput('');
-                      setShowStudentLogoutConfirmModal(true);
-                    }}
-                    className="text-rose-400 hover:text-rose-300 font-black uppercase tracking-wider cursor-pointer flex items-center gap-1.5 text-xs bg-rose-950/30 hover:bg-rose-950/60 border border-rose-900/40 px-3 py-1.5 rounded-xl transition"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Log Out</span>
-                  </button>
-                </div>
+                  <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition" />
+                </a>
               </div>
             )}
           </section>
@@ -7401,6 +7098,7 @@ export default function App() {
         onRefreshKeys={fetchAdminKeys}
         onOpenLogoutConfirm={() => {
           setLogoutSecretCodeInput('');
+          setLogoutAllConfirmWord('');
           setShowLogoutConfirmModal(true);
         }}
         paymentConfig={paymentConfig}
@@ -7430,7 +7128,11 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowLogoutConfirmModal(false)}
+              onClick={() => {
+                setShowLogoutConfirmModal(false);
+                setLogoutAllConfirmWord('');
+                setLogoutSecretCodeInput('');
+              }}
               className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
             />
 
@@ -7451,7 +7153,11 @@ export default function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowLogoutConfirmModal(false)}
+                  onClick={() => {
+                    setShowLogoutConfirmModal(false);
+                    setLogoutAllConfirmWord('');
+                    setLogoutSecretCodeInput('');
+                  }}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
@@ -7470,6 +7176,21 @@ export default function App() {
               <form onSubmit={handleExecuteLogoutAllUserSessions} className="space-y-4">
                 <div>
                   <label className="block text-xs font-extrabold text-slate-300 mb-2">
+                    Type <span className="font-mono text-rose-400">CONFIRM</span> to proceed:
+                  </label>
+                  <input
+                    type="text"
+                    autoCapitalize="characters"
+                    value={logoutAllConfirmWord}
+                    onChange={(e) => setLogoutAllConfirmWord(e.target.value)}
+                    placeholder='Type "CONFIRM"'
+                    autoFocus
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-rose-500 rounded-xl px-4 py-2.5 text-sm font-black uppercase tracking-widest text-white placeholder-slate-600 outline-hidden text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-300 mb-2">
                     Enter Admin Secret Code:
                   </label>
                   <input
@@ -7477,7 +7198,6 @@ export default function App() {
                     value={logoutSecretCodeInput}
                     onChange={(e) => setLogoutSecretCodeInput(e.target.value)}
                     placeholder="Enter secret code..."
-                    autoFocus
                     className="w-full bg-slate-950 border border-purple-500/40 focus:border-rose-500 rounded-xl px-4 py-3 text-sm font-mono font-black uppercase tracking-widest text-white placeholder-slate-600 outline-hidden text-center shadow-inner"
                   />
                 </div>
@@ -7485,15 +7205,19 @@ export default function App() {
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowLogoutConfirmModal(false)}
+                    onClick={() => {
+                      setShowLogoutConfirmModal(false);
+                      setLogoutAllConfirmWord('');
+                      setLogoutSecretCodeInput('');
+                    }}
                     className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={!logoutSecretCodeInput.trim()}
-                    className="flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-lg active:scale-98 flex items-center justify-center gap-1.5"
+                    disabled={!logoutSecretCodeInput.trim() || logoutAllConfirmWord.trim().toUpperCase() !== 'CONFIRM'}
+                    className="flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-lg active:scale-98 flex items-center justify-center gap-1.5"
                   >
                     <LogOut className="w-4 h-4" />
                     Confirm Logout
