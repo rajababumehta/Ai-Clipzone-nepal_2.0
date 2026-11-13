@@ -774,43 +774,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 text-zinc-200">
-      {/* Clean Executive Messenger Header Strip */}
-      <div className="bg-zinc-950/90 border border-zinc-800/90 rounded-2xl px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 overflow-hidden flex items-center justify-center shrink-0">
-            <img
-              src={isSubAdmin && subAdminSession?.avatarUrl ? subAdminSession.avatarUrl : officialLogoUrl}
-              alt={isMainAdmin ? brandName : subAdminSession?.name || brandName}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const img = e.currentTarget as HTMLImageElement;
-                if (!img.src.includes('/logo.png')) img.src = '/logo.png';
-              }}
-            />
-          </div>
-          <div>
-            <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
-              {isMainAdmin ? 'Sub-Admin Messenger' : `Ask Messenger — ${subAdminSession?.courseTitle || 'Course'}`}
-            </h4>
-            <p className="text-xs text-zinc-400">
-              {isMainAdmin
-                ? 'सबै Sub-Admin हरूसँग प्रत्यक्ष संवाद'
-                : `${brandName} तथा तपाईंको कोर्षका विद्यार्थीहरूसँग प्रत्यक्ष संवाद`}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-          <span className="text-xs bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl font-semibold text-zinc-300 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            {isMainAdmin ? `${conversations.length} Admins` : `${conversations.length} Chats`}
-          </span>
-        </div>
-      </div>
-
+    <div className="space-y-3 text-zinc-200">
       {/* Main Split Messenger Container */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 h-[620px] max-h-[75vh]">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 h-[660px] max-h-[80vh]">
         {/* LEFT COLUMN: CONTACTS SIDEBAR */}
         <div className="md:col-span-5 lg:col-span-4 bg-zinc-950 border border-zinc-800/90 rounded-2xl flex flex-col overflow-hidden shadow-lg">
           <div className="p-3 border-b border-zinc-800/80 bg-zinc-950">

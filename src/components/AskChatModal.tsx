@@ -1321,101 +1321,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           {/* ================================================================= */}
           {isAdmin ? (
             <div className="flex flex-col h-full w-full overflow-hidden bg-[#111b21]">
-              {/* WhatsApp Web Admin Top Bar */}
-              <div className="bg-[#202c33] border-b border-[#222d34] px-4 py-3 flex items-center justify-between shrink-0 shadow-xs">
-                <div className="flex items-center gap-3">
-                  {selectedAdminConvId && (
-                    <button
-                      onClick={() => setSelectedAdminConvId(null)}
-                      className="md:hidden p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full hover:bg-[#111b21] cursor-pointer"
-                      title="Back to Contact List"
-                    >
-                      <ArrowLeft className="w-5 h-5" />
-                    </button>
-                  )}
-
-                  {selectedAdminConv ? (
-                    renderAdminContactAvatar(selectedAdminConv, 'w-10 h-10', true)
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-[#111b21] border border-white/15 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
-                      <img
-                        src={isSubAdminMode && subAdminSession?.avatarUrl ? subAdminSession.avatarUrl : officialLogoUrl}
-                        alt={isMainAdminMode ? brandName : subAdminSession?.name || brandName}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const img = e.currentTarget as HTMLImageElement;
-                          if (!img.src.includes('/logo.png')) img.src = '/logo.png';
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  <div className="min-w-0">
-                    {selectedAdminConv ? (
-                      isSelectedMainAdminChat ? (
-                        <h4 className="font-bold text-sm text-[#e9edef] truncate">
-                          {brandName}
-                        </h4>
-                      ) : isMainAdminMode ? (
-                        <>
-                          {selectedAdminConv.activeCourse && (
-                            <p className="text-[10.5px] font-semibold text-[#00a884] truncate leading-tight">
-                              {selectedAdminConv.activeCourse}
-                            </p>
-                          )}
-                          <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
-                            {selectedAdminConv.userName}
-                          </h4>
-                        </>
-                      ) : (
-                        <>
-                          <h4 className="font-bold text-sm text-[#e9edef] truncate leading-tight">
-                            {selectedAdminConv.userName}
-                          </h4>
-                          {selectedAdminConv.activeCourse && (
-                            <p className="text-[11px] text-[#00a884] font-medium truncate leading-tight">
-                              {selectedAdminConv.activeCourse}
-                            </p>
-                          )}
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <h4 className="font-bold text-sm text-[#e9edef] truncate">
-                          {isMainAdminMode
-                            ? 'Sub-Admin Messenger'
-                            : `Ask Messenger — ${subAdminSession?.courseTitle || 'Course'}`}
-                        </h4>
-                        <p className="text-[11px] text-[#8696a0] truncate">
-                          {isMainAdminMode
-                            ? 'सबै Sub-Admin हरूसँग प्रत्यक्ष संवाद'
-                            : `${brandName} तथा तपाईंको कोर्षका विद्यार्थीहरूसँग प्रत्यक्ष संवाद`}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={toggleFullScreen}
-                    className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
-                    title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
-                  >
-                    {isFullScreen ? <Minimize2 className="w-5 h-5 text-[#00a884]" /> : <Maximize2 className="w-5 h-5" />}
-                  </button>
-
-                  <button
-                    onClick={onClose}
-                    className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
-                    title="Close"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
               {/* Master-Detail Split Layout (WhatsApp Web Style) */}
               <div className="grow flex overflow-hidden">
                 {/* 1. CONTACTS SIDEBAR */}
@@ -1424,21 +1329,29 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     selectedAdminConvId ? 'hidden md:flex' : 'flex'
                   }`}
                 >
-                  {/* WhatsApp Search Input */}
-                  <div className="p-3 border-b border-[#222d34] bg-[#111b21]">
-                    <div className="relative">
+                  {/* Search Bar Row */}
+                  <div className="p-3 border-b border-[#222d34] bg-[#111b21] flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="md:hidden p-1.5 -ml-1 text-[#aebac1] hover:text-white hover:bg-[#202c33] rounded-full transition cursor-pointer shrink-0"
+                      title="Close"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="relative grow">
                       <Search className="w-4 h-4 text-[#8696a0] absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={adminSearchQuery}
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
                         placeholder={isMainAdminMode ? "Search Sub-Admin..." : "Search student or Main Admin..."}
-                        className="w-full bg-[#202c33] border border-transparent focus:border-[#00a884]/50 rounded-lg pl-9 pr-3 py-2 text-xs text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition"
+                        className="w-full bg-[#202c33] border border-transparent focus:border-[#00a884]/50 rounded-lg pl-9 pr-8 py-2 text-xs text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition"
                       />
                       {adminSearchQuery && (
                         <button
                           onClick={() => setAdminSearchQuery('')}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8696a0] hover:text-[#e9edef] text-xs"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8696a0] hover:text-[#e9edef] text-xs cursor-pointer"
                         >
                           ✕
                         </button>
@@ -1596,6 +1509,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       {/* Active Chat Header */}
                       <div className="bg-[#202c33] border-b border-[#222d34] px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
                         <div className="flex items-center gap-3 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAdminConvId(null)}
+                            className="md:hidden p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full hover:bg-[#111b21] cursor-pointer shrink-0"
+                            title="Back to Contact List"
+                          >
+                            <ArrowLeft className="w-5 h-5" />
+                          </button>
                           {renderAdminContactAvatar(selectedAdminConv, 'w-10 h-10', true)}
                           <div className="min-w-0">
                             {isSelectedMainAdminChat ? (
@@ -1626,8 +1547,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-
+                        <div className="flex items-center gap-1 shrink-0">
                           {/* WhatsApp 3-dots Menu for Admin */}
                           <div className="relative">
                             <button
@@ -1671,6 +1591,24 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               </>
                             )}
                           </div>
+
+                          <button
+                            type="button"
+                            onClick={toggleFullScreen}
+                            className="p-1.5 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
+                            title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
+                          >
+                            {isFullScreen ? <Minimize2 className="w-4 h-4 text-[#00a884]" /> : <Maximize2 className="w-4 h-4" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            className="p-1.5 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
+                            title="Close"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
 
@@ -2040,18 +1978,38 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </form>
                     </>
                   ) : (
-                    <div className="grow flex flex-col items-center justify-center p-6 text-center text-[#8696a0]">
-                      <div className="w-16 h-16 rounded-full bg-[#202c33] border border-[#222d34] flex items-center justify-center mb-3 text-[#00a884]">
-                        <MessageCircle className="w-8 h-8" />
+                    <div className="grow flex flex-col relative p-6 text-center text-[#8696a0]">
+                      <div className="absolute top-3 right-3 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={toggleFullScreen}
+                          className="p-2 text-[#aebac1] hover:text-white hover:bg-[#202c33] rounded-full transition cursor-pointer"
+                          title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
+                        >
+                          {isFullScreen ? <Minimize2 className="w-4 h-4 text-[#00a884]" /> : <Maximize2 className="w-4 h-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className="p-2 text-[#aebac1] hover:text-white hover:bg-[#202c33] rounded-full transition cursor-pointer"
+                          title="Close"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                      <h4 className="font-bold text-sm text-[#e9edef] mb-1">
-                        {isMainAdminMode ? 'Sub-Admin छनोट गर्नुहोस्' : 'सम्पर्क छनोट गर्नुहोस्'}
-                      </h4>
-                      <p className="text-xs text-[#8696a0] max-w-xs">
-                        {isMainAdminMode
-                          ? 'च्याट गर्न बायाँपट्टिको सूचीबाट Sub-Admin छान्नुहोस्।'
-                          : `कुराकानी गर्न बायाँपट्टिको सूचीबाट विद्यार्थी वा ${brandName} छान्नुहोस्।`}
-                      </p>
+                      <div className="my-auto flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-[#202c33] border border-[#222d34] flex items-center justify-center mb-3 text-[#00a884]">
+                          <MessageCircle className="w-8 h-8" />
+                        </div>
+                        <h4 className="font-bold text-sm text-[#e9edef] mb-1">
+                          {isMainAdminMode ? 'Sub-Admin छनोट गर्नुहोस्' : 'सम्पर्क छनोट गर्नुहोस्'}
+                        </h4>
+                        <p className="text-xs text-[#8696a0] max-w-xs">
+                          {isMainAdminMode
+                            ? 'च्याट गर्न बायाँपट्टिको सूचीबाट Sub-Admin छान्नुहोस्।'
+                            : `कुराकानी गर्न बायाँपट्टिको सूचीबाट विद्यार्थी वा ${brandName} छान्नुहोस्।`}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
