@@ -1029,7 +1029,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
 
     if (!activeStudentTarget || !studentConvId) {
-      showToast?.('यो कोर्षको लागि हाल Sub-Admin तोकिएको छैन।', 'error');
+      showToast?.('हाल म्यासेज पठाउन सपोर्ट उपलब्ध छैन।', 'error');
       return;
     }
 
@@ -2062,19 +2062,19 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             /* CASE B: STUDENT VIEW (Authentic WhatsApp Chat Experience)       */
             /* =============================================================== */
             <div className="flex flex-col h-full w-full overflow-hidden bg-[#0b141a]">
-              {/* WhatsApp Header Bar */}
-              <div className="bg-[#202c33] border-b border-[#222d34] px-3.5 py-2.5 flex items-center justify-between shrink-0 shadow-md z-10">
-                <div className="flex items-center gap-2.5">
+              {/* Clean Executive Chat Header Bar */}
+              <div className="bg-[#1a242b] border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 shadow-md z-10">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={onClose}
-                    className="p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full active:bg-[#111b21] transition cursor-pointer flex items-center justify-center"
+                    className="p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full active:bg-[#111b21] transition cursor-pointer flex items-center justify-center shrink-0"
                     aria-label="Back"
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
 
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center overflow-hidden border border-white/15 shrink-0 shadow-xs">
+                  <div className="relative shrink-0">
+                    <div className="w-11 h-11 rounded-full bg-[#128C7E]/25 flex items-center justify-center overflow-hidden ring-2 ring-[#00a884]/35 shadow-sm">
                       <img
                         src={activeStudentTarget?.subAdmin.avatarUrl || officialLogoUrl}
                         alt={activeStudentTarget?.subAdmin.name || brandName}
@@ -2093,31 +2093,19 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         }}
                       />
                     </div>
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-[#202c33]"></span>
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-[#1a242b]"></span>
                   </div>
 
                   <div className="min-w-0">
-                    {activeStudentTarget ? (
-                      <>
-                        <p className="text-[10.5px] font-semibold text-[#00a884] truncate leading-tight">
-                          {activeStudentTarget.courseTitle}
-                        </p>
-                        <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight truncate">
-                          <span className="truncate">{activeStudentTarget.subAdmin.name}</span>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20 shrink-0" />
-                        </h4>
-                      </>
-                    ) : (
-                      <>
-                        <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight">
-                          <span>{brandName} Course Support</span>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20 shrink-0" />
-                        </h4>
-                        <p className="text-[11px] text-[#00a884] font-medium leading-tight">
-                          Course Sub-Admin Support
-                        </p>
-                      </>
-                    )}
+                    <h4 className="font-bold text-[15px] text-white flex items-center gap-1.5 leading-tight truncate">
+                      <span className="truncate">
+                        {activeStudentTarget ? activeStudentTarget.subAdmin.name : brandName}
+                      </span>
+                      <CheckCircle2 className="w-4 h-4 text-[#00a884] fill-[#00a884]/20 shrink-0" />
+                    </h4>
+                    <p className="text-[11px] text-[#00a884] font-medium leading-tight mt-0.5">
+                      Online
+                    </p>
                   </div>
                 </div>
 
@@ -2208,43 +2196,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
               </div>
 
-              {/* Student Verified Identity Bar (Locked, No Name Change) */}
-              <div className="bg-[#111b21] border-b border-[#222d34] px-4 py-2 flex items-center justify-between text-xs text-[#aebac1] shrink-0">
-                <div className="flex items-center gap-2 truncate">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${hasActivatedCourse ? 'bg-[#00a884]' : 'bg-amber-400'}`}></span>
-                  <span className="text-[#8696a0]">Student:</span>
-                  <strong className="text-[#e9edef] font-semibold truncate">{studentName}</strong>
-                  {hasActivatedCourse && (
-                    <span className="bg-[#00a884]/15 text-[#00a884] text-[10px] px-2 py-0.5 rounded-full font-bold border border-[#00a884]/25 inline-flex items-center gap-1 shrink-0">
-                      <ShieldCheck className="w-3 h-3 text-[#00a884]" />
-                      <span>Verified</span>
-                    </span>
-                  )}
-                </div>
-
-                {activeStudentTarget ? (
-                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2.5 py-0.5 rounded-full truncate max-w-[180px] shrink-0">
-                    {activeStudentTarget.subAdmin.name}
-                  </span>
-                ) : activeCourseName ? (
-                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2.5 py-0.5 rounded-full truncate max-w-[160px] shrink-0">
-                    {activeCourseName}
-                  </span>
-                ) : hasActivatedCourse ? (
-                  <span className="text-[10px] font-medium bg-[#00a884]/20 text-[#00a884] px-2 py-0.5 rounded-full shrink-0">
-                    Enrolled
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full shrink-0">
-                    Not Activated
-                  </span>
-                )}
-              </div>
-
-              {/* Multi-course Sub-Admin Switcher (if student activated multiple courses with different sub-admins) */}
+              {/* Clean Contact Switcher (shown only if student chats with multiple assigned contacts, showing ONLY names) */}
               {hasActivatedCourse && studentSubAdminTargets.length > 1 && (
-                <div className="bg-[#182229] border-b border-[#222d34] px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                  <span className="text-[10px] text-[#8696a0] font-bold shrink-0">कोर्ष छान्नुहोस्:</span>
+                <div className="bg-[#141d23] border-b border-white/5 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
                   {studentSubAdminTargets.map((target) => {
                     const isActiveTarget = target.subAdmin.code === activeStudentTarget?.subAdmin.code;
                     return (
@@ -2252,34 +2206,43 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         key={target.subAdmin.code}
                         type="button"
                         onClick={() => setSelectedStudentSubCode(target.subAdmin.code)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap cursor-pointer transition border ${
+                        className={`pl-1.5 pr-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition inline-flex items-center gap-2 border ${
                           isActiveTarget
-                            ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
-                            : 'bg-[#202c33] text-[#e9edef] border-[#222d34] hover:bg-[#2a3942]'
+                            ? 'bg-[#00a884] text-[#0b141a] border-[#00a884] shadow-sm'
+                            : 'bg-[#1f2c34] text-[#e9edef] border-white/10 hover:bg-[#2a3942]'
                         }`}
                       >
-                        {target.courseTitle} — {target.subAdmin.name}
+                        <img
+                          src={target.subAdmin.avatarUrl || officialLogoUrl}
+                          alt={target.subAdmin.name}
+                          className="w-5 h-5 rounded-full object-cover shrink-0 bg-zinc-900"
+                          onError={(e) => {
+                            const img = e.currentTarget as HTMLImageElement;
+                            if (!img.src.includes('/logo.png')) img.src = '/logo.png';
+                          }}
+                        />
+                        <span>{target.subAdmin.name}</span>
                       </button>
                     );
                   })}
                 </div>
               )}
 
-              {/* Messages Scroll Area with WhatsApp Wallpaper */}
+              {/* Messages Scroll Area */}
               <div
-                className="grow overflow-y-auto p-4 space-y-2.5 text-sm scrollbar-thin scrollbar-thumb-[#222d34]"
+                className="grow overflow-y-auto px-4 py-5 space-y-3 text-sm scrollbar-thin scrollbar-thumb-[#222d34]"
                 style={whatsappWallpaperStyle}
               >
                 {!hasActivatedCourse && !isAdmin ? (
                   /* LOCKED FOR UNACTIVATED USERS */
-                  <div className="bg-[#111b21]/95 border border-amber-500/40 rounded-2xl p-6 text-center space-y-4 shadow-xl my-4">
-                    <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 text-2xl">
+                  <div className="bg-[#151f26]/95 border border-amber-500/30 rounded-2xl p-6 text-center space-y-4 shadow-xl my-4 max-w-md mx-auto">
+                    <div className="w-14 h-14 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
                       <Lock className="w-7 h-7 text-amber-400" />
                     </div>
                     <div className="space-y-1.5">
-                      <h4 className="font-bold text-base text-[#e9edef]">कोर्ष एक्टिभेसन आवश्यक छ (Activation Required)</h4>
+                      <h4 className="font-bold text-base text-[#e9edef]">एक्टिभेसन आवश्यक छ</h4>
                       <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                        केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र आफ्नो कोर्ष Sub-Admin लाई सिधै म्यासेज पठाउन सक्नुहुन्छ।
+                        एक्टिभेट गरेका प्रयोगकर्ताहरूले मात्र सिधै म्यासेज पठाउन सक्नुहुन्छ।
                       </p>
                     </div>
                     {onOpenActivationModal && (
@@ -2290,38 +2253,29 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         }}
                         className="inline-flex items-center gap-2 bg-[#00a884] hover:bg-[#02906f] text-[#111b21] font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg cursor-pointer transition active:scale-95"
                       >
-                        <span>🗝️</span>
-                        <span>Enter Activation Code (कोड हाल्नुहोस्)</span>
+                        <span>Enter Activation Code</span>
                       </button>
                     )}
                   </div>
                 ) : !activeStudentTarget ? (
-                  /* ACTIVATED COURSE HAS NO ACTIVE SUB-ADMIN YET — STRICT ISOLATION FROM MAIN ADMIN */
-                  <div className="bg-[#111b21]/95 border border-emerald-500/40 rounded-2xl p-6 text-center space-y-3 shadow-xl my-4">
-                    <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 text-2xl">
-                      🛡️
+                  <div className="bg-[#151f26]/95 border border-white/10 rounded-2xl p-6 text-center space-y-3 shadow-xl my-6 max-w-md mx-auto">
+                    <div className="w-14 h-14 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center mx-auto text-[#00a884]">
+                      <MessageCircle className="w-7 h-7" />
                     </div>
                     <div className="space-y-1.5">
-                      <h4 className="font-bold text-base text-[#e9edef]">Course Sub-Admin Assign भएको छैन</h4>
+                      <h4 className="font-bold text-base text-[#e9edef]">च्याट हाल उपलब्ध छैन</h4>
                       <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                        यो कोर्षको च्याट सपोर्ट केवल सम्बन्धित कोर्षको Sub-Admin लाई मात्र पठाउन मिल्छ। हाल यस कोर्षमा सक्रिय Sub-Admin तोकिएको छैन।
+                        सपोर्ट प्रतिनिधि उपलब्ध भएपछि यहाँबाट सिधै म्यासेज पठाउन मिल्नेछ।
                       </p>
                     </div>
                   </div>
                 ) : (
                   <>
-                    {/* WhatsApp Floating Date Pill */}
-                    <div className="flex justify-center my-2">
-                      <span className="bg-[#182229] text-[#8696a0] text-[10.5px] font-medium px-3 py-1 rounded-lg uppercase tracking-wider border border-[#222d34]/60 shadow-xs">
-                        TODAY
-                      </span>
-                    </div>
-
-                    {/* Security notice like WhatsApp end-to-end encryption pill */}
-                    <div className="flex justify-center my-2">
-                      <div className="bg-[#182229]/80 text-[#ffd279] text-[11px] px-3.5 py-1.5 rounded-lg max-w-xs text-center border border-[#ffd279]/20 flex items-center gap-1.5 leading-snug">
-                        <Lock className="w-3 h-3 text-[#ffd279] shrink-0" />
-                        <span>Messages go directly to your Course Sub-Admin ({activeStudentTarget.subAdmin.name}).</span>
+                    {/* Clean Privacy Pill */}
+                    <div className="flex justify-center my-1">
+                      <div className="bg-[#182229]/90 text-[#8696a0] text-[11px] px-3.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5 shadow-xs">
+                        <Lock className="w-3 h-3 text-[#00a884] shrink-0" />
+                        <span>Direct chat with {activeStudentTarget.subAdmin.name}</span>
                       </div>
                     </div>
 
@@ -2329,7 +2283,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     {studentClearedAt > 0 && studentMessages.length > displayedStudentMessages.length && (
                       <div className="flex justify-center my-1.5">
                         <div className="bg-[#182229] border border-[#222d34] rounded-lg px-3 py-1.5 text-[11px] text-[#8696a0] flex items-center gap-2 shadow-xs">
-                          <span>🗑️ Messages cleared on this device. (Sub-Admin records remain safe)</span>
+                          <span>Messages cleared on this device.</span>
                           <button
                             type="button"
                             onClick={handleStudentRestoreChat}
@@ -2344,25 +2298,32 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                     {/* Messages Render */}
                     {displayedStudentMessages.length === 0 ? (
-                      <div className="py-6 text-center space-y-3">
-                        <div className="w-12 h-12 rounded-full bg-[#202c33] border border-[#222d34] flex items-center justify-center mx-auto text-[#00a884]">
-                          <MessageCircle className="w-6 h-6" />
+                      <div className="py-8 text-center space-y-4 max-w-md mx-auto">
+                        <div className="w-16 h-16 rounded-full bg-[#1a242b] ring-2 ring-[#00a884]/30 overflow-hidden mx-auto shadow-lg">
+                          <img
+                            src={activeStudentTarget.subAdmin.avatarUrl || officialLogoUrl}
+                            alt={activeStudentTarget.subAdmin.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const img = e.currentTarget as HTMLImageElement;
+                              if (!img.src.includes('/logo.png')) img.src = '/logo.png';
+                            }}
+                          />
                         </div>
                         <div className="space-y-1">
-                          <p className="text-[#e9edef] font-semibold text-sm">कुनै म्यासेज छैन (No messages yet)</p>
-                          <p className="text-[#8696a0] text-xs max-w-xs mx-auto">
-                            तलको बक्समा आफ्नो प्रश्न लेखेर {activeStudentTarget.subAdmin.name} लाई पठाउनुहोस्। हेरेपछि डबल नीलो टिक देखिनेछ।
+                          <h4 className="text-[#e9edef] font-bold text-base">{activeStudentTarget.subAdmin.name}</h4>
+                          <p className="text-[#8696a0] text-xs max-w-xs mx-auto leading-relaxed">
+                            आफ्नो प्रश्न लेखेर {activeStudentTarget.subAdmin.name} लाई सिधै पठाउनुहोस्।
                           </p>
                         </div>
 
                         {/* Quick Question Chips */}
-                        <div className="pt-2 flex flex-col gap-1.5 max-w-sm mx-auto text-left">
-                          <span className="text-[10.5px] font-bold text-[#8696a0] px-1">द्रुत प्रश्नहरू (Quick Ask):</span>
+                        <div className="pt-2 flex flex-col gap-2 max-w-sm mx-auto text-left">
                           {QUICK_QUESTION_CHIPS.map((chip, idx) => (
                             <button
                               key={idx}
                               onClick={() => handleStudentSendMessage(chip)}
-                              className="text-left text-xs bg-[#202c33] hover:bg-[#2a3942] border border-[#222d34] text-[#e9edef] px-3.5 py-2.5 rounded-xl cursor-pointer flex items-center justify-between group transition active:scale-[0.99]"
+                              className="text-left text-xs bg-[#1a242b]/90 hover:bg-[#23313a] border border-white/10 text-[#e9edef] px-4 py-2.5 rounded-2xl cursor-pointer flex items-center justify-between group transition active:scale-[0.99] shadow-xs"
                             >
                               <span className="truncate pr-2">{chip}</span>
                               <Send className="w-3.5 h-3.5 text-[#00a884] opacity-70 group-hover:opacity-100 shrink-0" />
@@ -2375,39 +2336,54 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         const isMe = msg.sender === 'user';
                         const isSeen = msg.isSeen || msg.status === 'seen';
                         const isCopied = copiedMessageId === msg.id;
+                        const targetAvatar = activeStudentTarget?.subAdmin.avatarUrl || officialLogoUrl;
+                        const targetName = activeStudentTarget?.subAdmin.name || msg.senderName || brandName;
 
                         return (
                           <div
                             key={msg.id}
                             className={`flex flex-col group/bubble ${isMe ? 'items-end' : 'items-start'}`}
                           >
-                            <div
-                              className={`rounded-xl px-3.5 pt-2 pb-1.5 text-sm shadow-sm break-words max-w-[85%] sm:max-w-[70%] relative ${
-                                isMe
-                                  ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
-                                  : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
-                              }`}
-                            >
+                            <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[70%]">
                               {!isMe && (
-                                <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-1">
-                                    <span>{activeStudentTarget?.subAdmin.name || msg.senderName || 'Course Sub-Admin'}</span>
-                                    <CheckCircle2 className="w-3 h-3 text-[#00a884]" />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopyMessage(msg)}
-                                    className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
-                                    title="Copy message (कपी गर्नुहोस्)"
-                                  >
-                                    {isCopied ? (
-                                      <Check className="w-3 h-3 text-[#00a884]" />
-                                    ) : (
-                                      <Copy className="w-3 h-3" />
-                                    )}
-                                  </button>
-                                </div>
+                                <img
+                                  src={targetAvatar}
+                                  alt={targetName}
+                                  onError={(e) => {
+                                    const img = e.currentTarget as HTMLImageElement;
+                                    if (!img.src.includes('/logo.png')) img.src = '/logo.png';
+                                  }}
+                                  className="w-7 h-7 rounded-full object-cover shrink-0 mb-1 border border-white/15 bg-[#111b21] shadow-xs"
+                                />
                               )}
+
+                              <div
+                                className={`rounded-2xl px-3.5 pt-2 pb-1.5 text-sm shadow-sm break-words relative ${
+                                  isMe
+                                    ? 'bg-gradient-to-br from-[#005c4b] to-[#004d40] text-[#e9edef] rounded-tr-xs'
+                                    : 'bg-[#1f2c34] border border-white/5 text-[#e9edef] rounded-tl-xs'
+                                }`}
+                              >
+                                {!isMe && (
+                                  <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1">
+                                      <span>{targetName}</span>
+                                      <CheckCircle2 className="w-3 h-3 text-[#00a884]" />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyMessage(msg)}
+                                      className="opacity-70 hover:opacity-100 p-0.5 hover:bg-black/20 rounded transition text-[#aebac1] hover:text-white"
+                                      title="Copy message (कपी गर्नुहोस्)"
+                                    >
+                                      {isCopied ? (
+                                        <Check className="w-3 h-3 text-[#00a884]" />
+                                      ) : (
+                                        <Copy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
 
                               {/* IMAGE ATTACHMENT */}
                               {msg.attachmentType === 'image' && msg.attachmentUrl && (
@@ -2506,6 +2482,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     </span>
                                   )
                                 )}
+                              </div>
                               </div>
                             </div>
                           </div>
@@ -2629,10 +2606,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     )}
                   </div>
                 ) : !activeStudentTarget && !isAdmin ? (
-                  <div className="grow flex items-center justify-center bg-[#111b21] border border-emerald-500/30 rounded-full px-4 py-2.5 text-xs text-emerald-300">
+                  <div className="grow flex items-center justify-center bg-[#111b21] border border-white/10 rounded-full px-4 py-2.5 text-xs text-[#aebac1]">
                     <span className="flex items-center gap-2 font-semibold">
-                      <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span>यो कोर्षमा Sub-Admin तोकिएपछि मात्र म्यासेज पठाउन मिल्छ</span>
+                      <Lock className="w-3.5 h-3.5 text-[#00a884] shrink-0" />
+                      <span>सपोर्ट उपलब्ध भएपछि मात्र म्यासेज पठाउन मिल्छ</span>
                     </span>
                   </div>
                 ) : (
@@ -2713,7 +2690,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         placeholder={
                           studentPendingAttachment
                             ? `Add a caption for ${studentPendingAttachment.name}...`
-                            : "Type a message..."
+                            : `Message ${activeStudentTarget?.subAdmin.name || brandName}...`
                         }
                         disabled={isStudentSending || isStudentAttaching}
                         className="grow bg-transparent text-sm text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition disabled:opacity-50 px-1"
@@ -2762,7 +2739,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 <p className="flex items-start gap-2">
                   <span className="text-[#00a884] font-bold">✓</span>
                   <span>
-                    <strong>Safe with Admin:</strong> Conversation records remain intact with official AI CLIPZONE support. (एडमिनसँग सुरक्षित रहनेछ।)
+                    <strong>Safe Record:</strong> Conversation history stays safely stored with {brandName} support.
                   </span>
                 </p>
               </div>
