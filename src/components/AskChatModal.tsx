@@ -1300,11 +1300,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // RENDER COMPONENT
   // ==========================================================================
   const outerWrapperClass = embedded
-    ? 'w-full select-none text-[#e9edef]'
+    ? 'w-full flex-1 min-h-0 flex flex-col select-none text-[#e9edef]'
     : `fixed inset-0 z-[5500] flex ${isFullScreen ? 'p-0' : 'sm:items-center sm:justify-center sm:p-4'} bg-[#0b141a] sm:bg-black/85 sm:backdrop-blur-md select-none text-[#e9edef] overflow-hidden`;
 
   const innerFrameClass = embedded
-    ? 'flex flex-col w-full h-[calc(100dvh-152px)] md:h-[calc(100dvh-176px)] min-h-[460px] max-h-[820px] bg-[#111b21] rounded-2xl border border-[#222d34] shadow-2xl overflow-hidden relative pb-0'
+    ? 'flex flex-col w-full flex-1 min-h-0 bg-[#111b21] rounded-none border-0 shadow-none overflow-hidden relative pb-0'
     : isFullScreen
       ? 'flex flex-col h-full w-full bg-[#111b21] sm:rounded-none sm:border-none shadow-none overflow-hidden relative pb-0'
       : isAdmin
@@ -1326,9 +1326,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           {/* CASE A: ADMIN VIEW (WhatsApp Web style for Admin)                  */}
           {/* ================================================================= */}
           {isAdmin ? (
-            <div className="flex flex-col h-full w-full overflow-hidden bg-[#111b21]">
+            <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-[#111b21]">
               {/* Master-Detail Split Layout (WhatsApp Web Style) */}
-              <div className="grow flex overflow-hidden">
+              <div className="grow min-h-0 flex overflow-hidden">
                 {/* 1. CONTACTS SIDEBAR */}
                 <div
                   className={`flex-col bg-[#111b21] border-r border-[#222d34] shrink-0 w-full md:w-80 lg:w-96 overflow-hidden ${
@@ -1507,7 +1507,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                 {/* 2. CHAT PANE */}
                 <div
-                  className={`grow flex-col overflow-hidden ${
+                  className={`grow min-h-0 flex-col overflow-hidden ${
                     selectedAdminConvId ? 'flex' : 'hidden md:flex'
                   }`}
                   style={whatsappWallpaperStyle}
@@ -2033,7 +2033,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             /* =============================================================== */
             /* CASE B: STUDENT VIEW (Authentic WhatsApp Chat Experience)       */
             /* =============================================================== */
-            <div className="flex flex-col h-full w-full overflow-hidden bg-[#0b141a]">
+            <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-[#0b141a]">
               {/* Clean Executive Chat Header Bar */}
               <div className="bg-[#1a242b] border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 shadow-md z-10">
                 <div className="flex items-center gap-3 min-w-0">
@@ -2210,7 +2210,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
               {/* Messages Scroll Area */}
               <div
-                className="grow overflow-y-auto px-4 py-5 space-y-3 text-sm scrollbar-thin scrollbar-thumb-[#222d34]"
+                className="grow min-h-0 overflow-y-auto px-4 py-5 space-y-3 text-sm scrollbar-thin scrollbar-thumb-[#222d34]"
                 style={whatsappWallpaperStyle}
               >
                 {!hasActivatedCourse && !isAdmin ? (

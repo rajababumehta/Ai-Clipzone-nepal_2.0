@@ -4648,7 +4648,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white overflow-x-hidden flex flex-col justify-between relative pb-20">
+    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
       {/* Sleek Pure Black Ambient Lighting: Situational Blue, Green, Red Accents */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
         <div className="absolute -top-32 -left-32 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
@@ -4679,7 +4679,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Top Header & Navigation Container */}
-      <div className="sticky top-0 z-[100] w-full shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
+      <div className="sticky top-0 z-[100] w-full shrink-0 shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
         {/* Dynamic Global Notice Banner from Admin Settings (Red Urgency Notice) */}
         {siteSettings.showNoticeBanner && siteSettings.noticeBannerText && (
           <div className="w-full bg-gradient-to-r from-black via-rose-950/90 to-black text-rose-200 text-xs font-bold py-1.5 px-4 text-center border-b border-rose-500/30 flex items-center justify-center gap-2 shadow-md">
@@ -4889,12 +4889,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Container for Course List / Classroom / Account */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28">
+      {/* Main Container for Course List / Classroom / Account / Ask */}
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
 
         {/* 1. EMBEDDED ACCOUNT / ASK / CLASSROOM / HOME VIEWS */}
         {currentView === 'ask' && isCourseActiveUser ? (
-          <section id="ask-embedded-view" className="w-full pt-1 animate-in fade-in duration-200">
+          <section id="ask-embedded-view" className="w-full flex-1 min-h-0 flex flex-col animate-in fade-in duration-200">
             <AskChatModal
               embedded={true}
               isOpen={true}
@@ -8623,7 +8623,7 @@ export default function App() {
       <nav 
         id="native-app-bottom-bar"
         aria-label="App Navigation Bar" 
-        className="fixed bottom-0 inset-x-0 z-[4900] bg-zinc-950/95 border-t border-zinc-800/90 shadow-[0_-12px_45px_rgba(0,0,0,0.95)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-2xl"
+        className={`${currentView === 'ask' && isCourseActiveUser ? 'relative shrink-0' : 'fixed bottom-0'} inset-x-0 z-[4900] bg-zinc-950/95 border-t border-zinc-800/90 shadow-[0_-12px_45px_rgba(0,0,0,0.95)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-2xl`}
       >
         <div className="w-full max-w-md md:max-w-5xl lg:max-w-6xl mx-auto px-2 md:px-6 py-1.5 md:py-2.5 flex items-center justify-around md:gap-3 lg:gap-5">
           {/* 1. Home */}
