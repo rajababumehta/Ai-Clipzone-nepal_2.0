@@ -45,13 +45,17 @@ import {
   limit 
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { SupportConversation, SupportMessage } from '../types';
+import { Course, SubAdminAccount, SupportConversation, SupportMessage } from '../types';
 
 interface AdminAskTabProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   instituteName?: string;
   instituteLogoUrl?: string;
   allActivationKeys?: any[];
+  adminRole?: 'main_admin' | 'sub_admin';
+  subAdminSession?: SubAdminAccount | null;
+  subAdmins?: SubAdminAccount[];
+  courses?: Course[];
 }
 
 const ADMIN_QUICK_PRESETS = [
@@ -60,6 +64,12 @@ const ADMIN_QUICK_PRESETS = [
   'तपाईंको Activation Key तयार छ।',
   'कृपया आफ्नो पेमेन्ट स्क्रिनसट वा ट्रान्ज्याक्सन आईडी पठाउनुहोस्।',
   'समस्या समाधान भएको छ, कृपया पुनः भिडियो खोलेर हेर्नुहोस्।'
+];
+
+const SUB_ADMIN_TO_MAIN_PRESETS = [
+  'नमस्ते Main Admin ज्यू! मलाई कोर्ष सम्बन्धी सहयोग चाहिन्छ।',
+  'कोर्ष अपडेट / सेटिङ बारे जानकारी दिनुहोस्।',
+  'धन्यवाद सर!'
 ];
 
 // Helper: Normalize and reject generic placeholder names
@@ -82,54 +92,22 @@ const cleanRealName = (name?: string | null): string => {
   return trimmed;
 };
 
-// Helper: Verify if user has an activated course
-const verifyCourseActivated = (
-  userId: string,
-  userEmail?: string,
-  convData?: { activeCourse?: string; purchasedCourses?: string[]; isCourseActivated?: boolean },
-  keysList?: any[]
-): { isActivated: boolean; keyMatch?: any; courseTitle?: string } => {
-  // 1. Check used/claimed activation keys in database
-  if (Array.isArray(keysList)) {
-    const keyMatch = keysList.find((k: any) => {
-      const isClaimed = k.status === 'used' || Boolean(k.claimedAt) || Boolean(k.activeDeviceId);
-      if (!isClaimed) return false;
-      if (k.claimedByUid && (k.claimedByUid === userId)) return true;
-      if (k.claimedByEmail && userEmail && k.claimedByEmail.toLowerCase() === userEmail.toLowerCase()) return true;
-      if (userEmail && k.claimedByEmail && (userEmail.includes(k.claimedByEmail) || k.claimedByEmail.includes(userEmail))) return true;
-      return false;
-    });
-    if (keyMatch) {
-      return {
-        isActivated: true,
-        keyMatch,
-        courseTitle: keyMatch.courseTitle || 'Ai master class course by ai clipzone'
-      };
-    }
-  }
-
-  // 2. Check conversation's own course activation flags
-  if (convData) {
-    if (convData.activeCourse && convData.activeCourse.trim() !== '') {
-      return { isActivated: true, courseTitle: convData.activeCourse };
-    }
-    if (Array.isArray(convData.purchasedCourses) && convData.purchasedCourses.length > 0) {
-      return { isActivated: true, courseTitle: convData.purchasedCourses[0] };
-    }
-    if (convData.isCourseActivated) {
-      return { isActivated: true, courseTitle: 'Premium Course' };
-    }
-  }
-
-  return { isActivated: false };
-};
+// Normalize string for course title comparison
+const normTitle = (t?: string) => (t || '').trim().toLowerCase();
 
 export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   showToast,
   instituteName = 'AI CLIPZONE',
   instituteLogoUrl = '',
-  allActivationKeys = []
+  allActivationKeys = [],
+  adminRole = 'main_admin',
+  subAdminSession = null,
+  subAdmins = [],
+  courses = []
 }) => {
+  const isMainAdmin = adminRole === 'main_admin';
+  const isSubAdmin = adminRole === 'sub_admin' && Boolean(subAdminSession?.code);
+
   const [conversations, setConversations] = useState<SupportConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -139,7 +117,6 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   const [isLoadingConvs, setIsLoadingConvs] = useState(true);
   const [isLoadingMsgs, setIsLoadingMsgs] = useState(false);
   const [convToDelete, setConvToDelete] = useState<SupportConversation | null>(null);
-  const [isPurgingNonActive, setIsPurgingNonActive] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
@@ -152,7 +129,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
 
-  // 1. Real-time listener: strictly load ONLY course activated student conversations
+  // 1. Real-time role-isolated listener:
+  // - Main Admin sees ONLY All Sub-Admins (1-on-1 channels), NEVER course-activated students.
+  // - Sub-Admin sees Official Main Admin (pinned top) + strictly their assigned course's activated students.
   useEffect(() => {
     setIsLoadingConvs(true);
     const convsRef = collection(db, 'support_conversations');
@@ -161,138 +140,267 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        // Map to ensure strictly ONE conversation per student - never duplicate contacts
-        const studentContactMap = new Map<string, SupportConversation>();
-
-        const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
-          const cName = cleanRealName(name).toLowerCase();
-          if (cName) return `name_${cName}`;
-          if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
-          if (code) return `code_${code.toLowerCase()}`;
-          return `uid_${uid}`;
-        };
-
-        snapshot.forEach((docSnap) => {
-          const d = docSnap.data();
-          const check = verifyCourseActivated(docSnap.id, d.userEmail, d, allActivationKeys);
-
-          // STRICT FILTER: Keep ONLY course activated users, remove/exclude all others!
-          if (!check.isActivated) {
-            return;
-          }
-
-          // Smart real name resolver: prioritize clean real name, then key match, then email
-          let resolvedName = cleanRealName(d.userName);
-          if (!resolvedName && check.keyMatch) {
-            resolvedName = cleanRealName(check.keyMatch.studentName) || cleanRealName(check.keyMatch.claimedByName);
-          }
-          if (!resolvedName && d.userEmail) {
-            const ep = d.userEmail.split('@')[0];
-            resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
-          }
-          if (!resolvedName) {
-            resolvedName = 'Student';
-          }
-
-          const activeCourseTitle = check.courseTitle || d.activeCourse || (d.purchasedCourses?.[0]) || 'Ai master class course by ai clipzone';
-
-          const convObj: SupportConversation = {
-            id: docSnap.id,
-            userId: d.userId || docSnap.id,
-            userName: resolvedName,
-            userEmail: d.userEmail || (check.keyMatch?.claimedByEmail || ''),
-            userPhone: d.userPhone || '',
-            userAvatar: d.userAvatar || (check.keyMatch?.studentAvatar || ''),
-            activeCourse: activeCourseTitle,
-            purchasedCourses: [activeCourseTitle],
-            lastMessage: d.lastMessage || '',
-            lastMessageAt: d.lastMessageAt || Date.now(),
-            lastSender: d.lastSender || 'user',
-            unreadAdminCount: d.unreadAdminCount || 0,
-            unreadUserCount: d.unreadUserCount || 0,
-            createdAt: d.createdAt || Date.now(),
-            updatedAt: d.updatedAt || Date.now(),
-            activationCode: check.keyMatch?.code || ''
-          } as any;
-
-          const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', docSnap.id, check.keyMatch?.code);
-          const existing = studentContactMap.get(dedupKey);
-
-          if (!existing) {
-            studentContactMap.set(dedupKey, convObj);
-          } else {
-            // Merge duplicate into the single contact thread, keeping the one with newest message
-            if ((convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
-              studentContactMap.set(dedupKey, {
-                ...existing,
-                ...convObj,
-                userAvatar: convObj.userAvatar || existing.userAvatar || '',
-                purchasedCourses: Array.from(new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])]))
-              });
-            } else if (convObj.userAvatar && !existing.userAvatar) {
-              existing.userAvatar = convObj.userAvatar;
-            }
-          }
-        });
-
-        // Merge users from activation keys who bought courses so admin sees all buyers like WhatsApp contacts
-        if (Array.isArray(allActivationKeys)) {
-          allActivationKeys.forEach((key: any) => {
-            const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
-            if (!isUsed) return;
-            const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
-            if (!buyerId) return;
-
-            const realName = cleanRealName(key.studentName) || cleanRealName(key.claimedByName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
-            const dedupKey = getStudentKey(realName, key.claimedByEmail || '', buyerId, key.code || key.id);
-            const courseTitle = key.courseTitle || 'Ai master class course by ai clipzone';
-
-            const existing = studentContactMap.get(dedupKey);
-
-            if (!existing) {
-              studentContactMap.set(dedupKey, {
-                id: buyerId,
-                userId: buyerId,
-                userName: realName,
-                userEmail: key.claimedByEmail || '',
-                userPhone: '',
-                activeCourse: courseTitle,
-                purchasedCourses: [courseTitle],
-                lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
-                lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
-                lastSender: 'system',
-                unreadAdminCount: 0,
-                unreadUserCount: 0,
-                createdAt: key.createdAt || Date.now(),
-                updatedAt: key.claimedAt || Date.now(),
-                activationCode: key.code || key.id
-              } as any);
-            } else {
-              // Existing contact found - update metadata, NEVER duplicate
-              if (key.code && !(existing as any).activationCode) {
-                (existing as any).activationCode = key.code;
-              }
-              if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
-                existing.userName = realName;
-              }
-              if (courseTitle && !existing.purchasedCourses?.includes(courseTitle)) {
-                existing.purchasedCourses = [...(existing.purchasedCourses || []), courseTitle];
-              }
+        if (isMainAdmin) {
+          // =================================================================
+          // MAIN ADMIN: Show ALL Sub-Admins (zero course-activated students)
+          // =================================================================
+          const subAdminDocMap = new Map<string, any>();
+          snapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            if (d.channelType === 'subadmin_mainadmin' || docSnap.id.startsWith('subadmin_main__')) {
+              const code = d.subAdminCode || docSnap.id.replace('subadmin_main__', '');
+              subAdminDocMap.set(code, { id: docSnap.id, ...d });
             }
           });
+
+          const mainContacts: SupportConversation[] = [];
+          const seenCodes = new Set<string>();
+
+          // 1. Add every registered Sub-Admin from subAdmins list
+          (subAdmins || []).forEach((sub) => {
+            if (!sub.code) return;
+            seenCodes.add(sub.code);
+            const convId = `subadmin_main__${sub.code}`;
+            const remote = subAdminDocMap.get(sub.code);
+            mainContacts.push({
+              id: convId,
+              userId: sub.code,
+              userName: sub.name || `Sub-Admin (${sub.code})`,
+              userEmail: `Course: ${sub.courseTitle || sub.courseId}`,
+              userAvatar: '',
+              channelType: 'subadmin_mainadmin',
+              subAdminCode: sub.code,
+              subAdminName: sub.name,
+              courseId: sub.courseId,
+              activeCourse: sub.courseTitle,
+              purchasedCourses: sub.courseTitle ? [sub.courseTitle] : [],
+              lastMessage: remote?.lastMessage || `🛡️ Sub-Admin Chat (${sub.status === 'active' ? 'Active' : 'Disabled'})`,
+              lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
+              lastSender: remote?.lastSender || 'system',
+              unreadAdminCount: remote?.unreadAdminCount || 0,
+              unreadUserCount: remote?.unreadUserCount || 0,
+              createdAt: remote?.createdAt || sub.createdAt || Date.now(),
+              updatedAt: remote?.updatedAt || Date.now(),
+              subAdminStatus: sub.status
+            } as any);
+          });
+
+          // 2. Also include any orphaned subadmin_main__ threads present in Firestore
+          subAdminDocMap.forEach((remote, code) => {
+            if (seenCodes.has(code)) return;
+            mainContacts.push({
+              id: remote.id || `subadmin_main__${code}`,
+              userId: code,
+              userName: remote.subAdminName || remote.userName || `Sub-Admin (${code})`,
+              userEmail: remote.activeCourse ? `Course: ${remote.activeCourse}` : '',
+              channelType: 'subadmin_mainadmin',
+              subAdminCode: code,
+              subAdminName: remote.subAdminName || remote.userName,
+              courseId: remote.courseId || '',
+              activeCourse: remote.activeCourse || '',
+              purchasedCourses: remote.activeCourse ? [remote.activeCourse] : [],
+              lastMessage: remote.lastMessage || '🛡️ Sub-Admin Conversation',
+              lastMessageAt: remote.lastMessageAt || remote.updatedAt || Date.now(),
+              lastSender: remote.lastSender || 'user',
+              unreadAdminCount: remote.unreadAdminCount || 0,
+              unreadUserCount: remote.unreadUserCount || 0,
+              createdAt: remote.createdAt || Date.now(),
+              updatedAt: remote.updatedAt || Date.now()
+            } as any);
+          });
+
+          // Sort with unread first, then most recent activity
+          mainContacts.sort((a, b) => {
+            const uDiff = (b.unreadAdminCount > 0 ? 1 : 0) - (a.unreadAdminCount > 0 ? 1 : 0);
+            if (uDiff !== 0) return uDiff;
+            return (b.lastMessageAt || 0) - (a.lastMessageAt || 0);
+          });
+
+          setConversations(mainContacts);
+          setIsLoadingConvs(false);
+          if (!selectedConvId && mainContacts.length > 0) {
+            setSelectedConvId(mainContacts[0].id);
+          }
+          return;
         }
 
-        const loaded = Array.from(studentContactMap.values());
-        // Sort by lastMessageAt descending
-        loaded.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+        if (isSubAdmin && subAdminSession) {
+          // =================================================================
+          // SUB-ADMIN: Pinned Main Official Admin + ONLY Assigned Course Students
+          // =================================================================
+          const officialThreadId = `subadmin_main__${subAdminSession.code}`;
+          let officialRemote: any = null;
+          const studentContactMap = new Map<string, SupportConversation>();
 
-        setConversations(loaded);
+          const assignedCourseObj = courses.find(c => c.id === subAdminSession.courseId);
+          const assignedTitleNorm = normTitle(subAdminSession.courseTitle || assignedCourseObj?.title);
+
+          const isKeyForThisSubCourse = (k: any) => {
+            if (!k) return false;
+            if (k.courseId && k.courseId === subAdminSession.courseId) return true;
+            if (assignedTitleNorm && normTitle(k.courseTitle) === assignedTitleNorm) return true;
+            return false;
+          };
+
+          const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
+            const cName = cleanRealName(name).toLowerCase();
+            if (cName) return `name_${cName}`;
+            if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
+            if (code) return `code_${code.toLowerCase()}`;
+            return `uid_${uid}`;
+          };
+
+          snapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            if (docSnap.id === officialThreadId || (d.channelType === 'subadmin_mainadmin' && d.subAdminCode === subAdminSession.code)) {
+              officialRemote = { id: docSnap.id, ...d };
+              return;
+            }
+
+            // Strictly match ONLY students belonging to this Sub-Admin's course
+            const belongsToSub =
+              (d.channelType === 'student_subadmin' &&
+                (d.subAdminCode === subAdminSession.code ||
+                  d.courseId === subAdminSession.courseId ||
+                  (assignedTitleNorm && normTitle(d.activeCourse) === assignedTitleNorm))) ||
+              (docSnap.id.startsWith(`substudent__${subAdminSession.code}__`));
+
+            if (!belongsToSub) return;
+
+            const rawStudentId = d.userId || docSnap.id.replace(`substudent__${subAdminSession.code}__`, '');
+            const keyMatch = Array.isArray(allActivationKeys)
+              ? allActivationKeys.find((k: any) =>
+                  isKeyForThisSubCourse(k) &&
+                  ((k.claimedByUid && k.claimedByUid === rawStudentId) ||
+                    (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()))
+                )
+              : undefined;
+
+            let resolvedName = cleanRealName(d.userName);
+            if (!resolvedName && keyMatch) {
+              resolvedName = cleanRealName(keyMatch.studentName) || cleanRealName(keyMatch.claimedByName);
+            }
+            if (!resolvedName && d.userEmail) {
+              const ep = d.userEmail.split('@')[0];
+              resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
+            }
+            if (!resolvedName) resolvedName = 'Student';
+
+            const courseTitle = subAdminSession.courseTitle || d.activeCourse || keyMatch?.courseTitle || 'Course';
+            const convObj: SupportConversation = {
+              id: docSnap.id,
+              userId: rawStudentId,
+              userName: resolvedName,
+              userEmail: d.userEmail || keyMatch?.claimedByEmail || '',
+              userPhone: d.userPhone || '',
+              userAvatar: d.userAvatar || keyMatch?.studentAvatar || '',
+              channelType: 'student_subadmin',
+              subAdminCode: subAdminSession.code,
+              subAdminName: subAdminSession.name,
+              courseId: subAdminSession.courseId,
+              activeCourse: courseTitle,
+              purchasedCourses: [courseTitle],
+              lastMessage: d.lastMessage || '',
+              lastMessageAt: d.lastMessageAt || Date.now(),
+              lastSender: d.lastSender || 'user',
+              unreadAdminCount: d.unreadAdminCount || 0,
+              unreadUserCount: d.unreadUserCount || 0,
+              createdAt: d.createdAt || Date.now(),
+              updatedAt: d.updatedAt || Date.now(),
+              activationCode: keyMatch?.code || ''
+            } as any;
+
+            const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', rawStudentId, keyMatch?.code);
+            const existing = studentContactMap.get(dedupKey);
+            if (!existing || (convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
+              studentContactMap.set(dedupKey, existing ? { ...existing, ...convObj } : convObj);
+            }
+          });
+
+          // Merge used activation keys strictly for this Sub-Admin's course
+          if (Array.isArray(allActivationKeys)) {
+            allActivationKeys.forEach((key: any) => {
+              const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
+              if (!isUsed || !isKeyForThisSubCourse(key)) return;
+              const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
+              if (!buyerId) return;
+
+              const realName = cleanRealName(key.studentName) || cleanRealName(key.claimedByName) || 'Student';
+              const dedupKey = getStudentKey(realName, key.claimedByEmail || '', buyerId, key.code || key.id);
+              const courseTitle = subAdminSession.courseTitle || key.courseTitle || 'Course';
+              const canonicalConvId = `substudent__${subAdminSession.code}__${buyerId}`;
+
+              const existing = studentContactMap.get(dedupKey);
+              if (!existing) {
+                studentContactMap.set(dedupKey, {
+                  id: canonicalConvId,
+                  userId: buyerId,
+                  userName: realName,
+                  userEmail: key.claimedByEmail || '',
+                  userPhone: '',
+                  userAvatar: key.studentAvatar || '',
+                  channelType: 'student_subadmin',
+                  subAdminCode: subAdminSession.code,
+                  subAdminName: subAdminSession.name,
+                  courseId: subAdminSession.courseId,
+                  activeCourse: courseTitle,
+                  purchasedCourses: [courseTitle],
+                  lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
+                  lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
+                  lastSender: 'system',
+                  unreadAdminCount: 0,
+                  unreadUserCount: 0,
+                  createdAt: key.createdAt || Date.now(),
+                  updatedAt: key.claimedAt || Date.now(),
+                  activationCode: key.code || key.id
+                } as any);
+              } else {
+                if (key.code && !(existing as any).activationCode) {
+                  (existing as any).activationCode = key.code;
+                }
+                if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
+                  existing.userName = realName;
+                }
+              }
+            });
+          }
+
+          const officialConv: SupportConversation = {
+            id: officialThreadId,
+            userId: 'MAIN_OFFICIAL_ADMIN',
+            userName: `${instituteName} Official Admin`,
+            userEmail: 'Official Main Admin Support',
+            userAvatar: instituteLogoUrl || '',
+            channelType: 'subadmin_mainadmin',
+            subAdminCode: subAdminSession.code,
+            subAdminName: subAdminSession.name,
+            courseId: subAdminSession.courseId,
+            activeCourse: 'Official Main Admin (AI Clipzone)',
+            purchasedCourses: ['Official Admin'],
+            lastMessage: officialRemote?.lastMessage || '👑 Main Official Admin सँग सिधा कुराकानी गर्नुहोस्',
+            lastMessageAt: officialRemote?.lastMessageAt || Date.now(),
+            lastSender: officialRemote?.lastSender || 'system',
+            unreadAdminCount: officialRemote?.unreadAdminCount || 0,
+            unreadUserCount: officialRemote?.unreadUserCount || 0,
+            createdAt: officialRemote?.createdAt || Date.now(),
+            updatedAt: officialRemote?.updatedAt || Date.now()
+          };
+
+          const studentsList = Array.from(studentContactMap.values());
+          studentsList.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
+          const combined = [officialConv, ...studentsList];
+          setConversations(combined);
+          setIsLoadingConvs(false);
+
+          if (!selectedConvId) {
+            setSelectedConvId(officialConv.id);
+          }
+          return;
+        }
+
+        setConversations([]);
         setIsLoadingConvs(false);
-
-        // Auto-select first conversation on initial load if none selected
-        if (!selectedConvId && loaded.length > 0) {
-          setSelectedConvId(loaded[0].id);
-        }
       },
       (err) => {
         console.warn('Could not load support conversations:', err);
@@ -301,7 +409,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     );
 
     return () => unsubscribe();
-  }, [allActivationKeys]);
+  }, [isMainAdmin, isSubAdmin, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, allActivationKeys, courses, instituteName, instituteLogoUrl]);
 
   // 2. Real-time listener for messages in the selected conversation
   useEffect(() => {
@@ -309,6 +417,8 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
       setMessages([]);
       return;
     }
+
+    const isSubViewingMainAdmin = isSubAdmin && selectedConvId.startsWith('subadmin_main__');
 
     setIsLoadingMsgs(true);
     const messagesRef = collection(db, 'support_conversations', selectedConvId, 'messages');
@@ -324,7 +434,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             id: docSnap.id,
             conversationId: selectedConvId,
             sender: d.sender || 'user',
-            senderName: d.senderName || 'Student',
+            senderName: d.senderName || 'User',
             senderAvatar: d.senderAvatar || d.userAvatar || '',
             text: d.text || '',
             timestamp: d.timestamp || Date.now(),
@@ -337,8 +447,14 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             attachmentSize: d.attachmentSize
           });
 
-          // WhatsApp Seen logic: mark user's message as seen when admin opens conversation
-          if (d.sender === 'user' && !d.isSeen) {
+          // Seen logic:
+          // - In Sub-Admin <-> Official Main Admin thread, Sub-Admin marks 'admin' msgs as seen & Main Admin marks 'user' msgs as seen
+          // - In Student <-> Sub-Admin thread, Sub-Admin marks 'user' msgs as seen
+          const shouldMarkSeen = isSubViewingMainAdmin
+            ? (d.sender === 'admin' && !d.isSeen)
+            : (d.sender === 'user' && !d.isSeen);
+
+          if (shouldMarkSeen) {
             try {
               updateDoc(docSnap.ref, {
                 isSeen: true,
@@ -351,12 +467,10 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         setMessages(loadedMsgs);
         setIsLoadingMsgs(false);
 
-        // Mark unread for admin as 0
+        // Reset appropriate unread counter
         try {
           const convRef = doc(db, 'support_conversations', selectedConvId);
-          updateDoc(convRef, {
-            unreadAdminCount: 0
-          }).catch(() => {});
+          updateDoc(convRef, isSubViewingMainAdmin ? { unreadUserCount: 0 } : { unreadAdminCount: 0 }).catch(() => {});
         } catch (e) {}
       },
       (err) => {
@@ -366,7 +480,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     );
 
     return () => unsubscribe();
-  }, [selectedConvId]);
+  }, [selectedConvId, isSubAdmin]);
 
   // Scroll down on new messages
   useEffect(() => {
@@ -442,7 +556,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     }
   };
 
-  // Handle Admin Send Reply
+  // Handle Admin / Sub-Admin Send Reply
   const handleSendReply = async (textToSend?: string) => {
     const text = (textToSend !== undefined ? textToSend : replyText).trim();
     if ((!text && !adminPendingAttachment) || isSending || !selectedConvId) return;
@@ -454,13 +568,26 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     setShowAttachMenu(false);
 
     const now = Date.now();
+    const targetConv = conversations.find(c => c.id === selectedConvId);
+    const isSubViewingMainAdmin = isSubAdmin && selectedConvId.startsWith('subadmin_main__');
+    const isMainViewingSubAdmin = isMainAdmin && (targetConv?.channelType === 'subadmin_mainadmin' || selectedConvId.startsWith('subadmin_main__'));
+
+    // Sender semantics:
+    // - Main Admin replying to Sub-Admin: sender='admin', increments unreadUserCount (Sub-Admin reads)
+    // - Sub-Admin messaging Main Official Admin: sender='user', increments unreadAdminCount (Main Admin reads)
+    // - Sub-Admin replying to Student: sender='admin', increments unreadUserCount (Student reads)
+    const msgSender: 'admin' | 'user' = isSubViewingMainAdmin ? 'user' : 'admin';
+    const senderLabel = isSubAdmin && subAdminSession
+      ? `${subAdminSession.name} (${subAdminSession.courseTitle})`
+      : `${instituteName} Official Admin`;
+
     try {
       // 1. Add to messages subcollection
       const messagesRef = collection(db, 'support_conversations', selectedConvId, 'messages');
       await addDoc(messagesRef, {
         conversationId: selectedConvId,
-        sender: 'admin',
-        senderName: `${instituteName} Support`,
+        sender: msgSender,
+        senderName: senderLabel,
         text,
         timestamp: now,
         isSeen: false,
@@ -473,30 +600,55 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
       const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
-      // 2. Update conversation doc - preserve student real name
-      const targetConv = conversations.find(c => c.id === selectedConvId);
+      // 2. Update conversation doc with strict channel isolation metadata
       const convRef = doc(db, 'support_conversations', selectedConvId);
-      await setDoc(
-        convRef,
-        {
-          id: selectedConvId,
-          userId: targetConv?.userId || selectedConvId,
-          userName: targetConv?.userName && targetConv.userName !== 'Student Learner' ? targetConv.userName : (targetConv?.userEmail ? targetConv.userEmail.split('@')[0] : 'Student'),
-          userEmail: targetConv?.userEmail || '',
-          lastMessage: summaryText,
-          lastMessageAt: now,
-          lastSender: 'admin',
-          unreadAdminCount: 0,
-          unreadUserCount: increment(1),
-          updatedAt: now
-        },
-        { merge: true }
-      );
+      const convPayload: Record<string, any> = {
+        id: selectedConvId,
+        lastMessage: summaryText,
+        lastMessageAt: now,
+        lastSender: msgSender,
+        updatedAt: now
+      };
 
-      showToast('जवाफ पठाइयो! (Reply delivered to student)', 'success');
+      if (isSubViewingMainAdmin && subAdminSession) {
+        convPayload.channelType = 'subadmin_mainadmin';
+        convPayload.subAdminCode = subAdminSession.code;
+        convPayload.subAdminName = subAdminSession.name;
+        convPayload.courseId = subAdminSession.courseId;
+        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.userId = subAdminSession.code;
+        convPayload.userName = subAdminSession.name;
+        convPayload.unreadAdminCount = increment(1);
+        convPayload.unreadUserCount = 0;
+      } else if (isMainViewingSubAdmin) {
+        const code = targetConv?.subAdminCode || selectedConvId.replace('subadmin_main__', '');
+        convPayload.channelType = 'subadmin_mainadmin';
+        convPayload.subAdminCode = code;
+        convPayload.subAdminName = targetConv?.subAdminName || targetConv?.userName || code;
+        convPayload.courseId = targetConv?.courseId || '';
+        convPayload.activeCourse = targetConv?.activeCourse || '';
+        convPayload.userId = code;
+        convPayload.userName = targetConv?.userName || targetConv?.subAdminName || code;
+        convPayload.unreadAdminCount = 0;
+        convPayload.unreadUserCount = increment(1);
+      } else if (isSubAdmin && subAdminSession) {
+        convPayload.channelType = 'student_subadmin';
+        convPayload.subAdminCode = subAdminSession.code;
+        convPayload.subAdminName = subAdminSession.name;
+        convPayload.courseId = subAdminSession.courseId;
+        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.userId = targetConv?.userId || selectedConvId.replace(`substudent__${subAdminSession.code}__`, '');
+        convPayload.userName = targetConv?.userName && targetConv.userName !== 'Student Learner' ? targetConv.userName : (targetConv?.userEmail ? targetConv.userEmail.split('@')[0] : 'Student');
+        convPayload.userEmail = targetConv?.userEmail || '';
+        convPayload.unreadAdminCount = 0;
+        convPayload.unreadUserCount = increment(1);
+      }
+
+      await setDoc(convRef, convPayload, { merge: true });
+      showToast(isSubViewingMainAdmin ? 'Main Admin लाई म्यासेज पठाइयो!' : 'जवाफ पठाइयो!', 'success');
     } catch (err) {
-      console.error('Failed to send admin reply:', err);
-      showToast('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      console.error('Failed to send reply:', err);
+      showToast('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
       setReplyText(text);
       setAdminPendingAttachment(attachmentToSend);
     } finally {
@@ -508,13 +660,11 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   const handleDeleteConversation = async () => {
     if (!convToDelete) return;
     try {
-      // Delete all subcollection messages
       const msgsRef = collection(db, 'support_conversations', convToDelete.id, 'messages');
       const snap = await getDocs(msgsRef);
       const deletePromises = snap.docs.map((d) => deleteDoc(d.ref));
       await Promise.all(deletePromises);
 
-      // Delete parent conversation doc
       await deleteDoc(doc(db, 'support_conversations', convToDelete.id));
 
       if (selectedConvId === convToDelete.id) {
@@ -535,12 +685,14 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     return (
       c.userName.toLowerCase().includes(q) ||
       (c.userEmail && c.userEmail.toLowerCase().includes(q)) ||
+      (c.activeCourse && c.activeCourse.toLowerCase().includes(q)) ||
       (c.lastMessage && c.lastMessage.toLowerCase().includes(q)) ||
       c.userId.toLowerCase().includes(q)
     );
   });
 
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
+  const isSelectedMainAdminChat = Boolean(isSubAdmin && selectedConv?.channelType === 'subadmin_mainadmin');
 
   const formatRelativeTime = (timestamp: number) => {
     if (!timestamp) return '';
@@ -563,16 +715,18 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             💬
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-base font-black text-white tracking-tight">
-                Ask & Live Support Messenger
+                {isMainAdmin ? 'Sub-Admins Direct Support Messenger' : `Course Ask & Official Support (${subAdminSession?.courseTitle || 'Course'})`}
               </h4>
               <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-500/30">
                 LIVE SYNC
               </span>
             </div>
             <p className="text-xs text-zinc-400 font-medium mt-0.5">
-              विद्यार्थीहरूले &quot;Ask&quot; बटनबाट पठाएका सबै प्रश्नहरूको प्रत्यक्ष च्याट र तत्काल जवाफ पठाउने ठाउँ।
+              {isMainAdmin
+                ? 'सबै Sub-Admin हरूसँग प्रत्यक्ष १-अन-१ च्याट (विद्यार्थी च्याटहरू सम्बन्धित Sub-Admin मा मात्र सीमित छन्)।'
+                : 'AI CLIPZONE Official Admin तथा तपाईंको कोर्ष सक्रिय गरेका विद्यार्थीहरूसँग प्रत्यक्ष कुराकानी गर्नुहोस्।'}
             </p>
           </div>
         </div>
@@ -580,7 +734,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
           <span className="text-xs bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl font-bold text-zinc-300 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-            जम्मा च्याट: {conversations.length}
+            {isMainAdmin ? `Sub-Admins: ${conversations.length}` : `जम्मा च्याट: ${conversations.length}`}
           </span>
         </div>
       </div>
@@ -599,7 +753,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="विद्यार्थी वा म्यासेज खोज्नुहोस्..."
+                placeholder={isMainAdmin ? 'Sub-Admin वा कोर्ष खोज्नुहोस्...' : 'Admin, विद्यार्थी वा म्यासेज खोज्नुहोस्...'}
                 className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none transition"
               />
               {searchQuery && (
@@ -625,14 +779,19 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30 text-zinc-400" />
                 <p className="font-semibold text-zinc-400">कुनै च्याट भेटिएन</p>
                 <p className="mt-1 text-[11px] text-zinc-600">
-                  विद्यार्थीले &quot;Ask&quot; सेक्सनबाट म्यासेज पठाउनासाथ यहाँ देखिनेछ।
+                  {isMainAdmin
+                    ? 'Sub-Admins ट्याबबाट Sub-Admin बनाएपछि यहाँ च्याट देखिनेछ।'
+                    : 'कोर्ष सक्रिय गरेका विद्यार्थीले म्यासेज पठाउँदा यहाँ देखिनेछ।'}
                 </p>
               </div>
             ) : (
               filteredConversations.map((conv) => {
                 const isSelected = conv.id === selectedConvId;
-                const hasUnread = conv.unreadAdminCount > 0;
+                const isSubMainThread = isSubAdmin && conv.channelType === 'subadmin_mainadmin';
+                const unreadNum = isSubMainThread ? (conv.unreadUserCount || 0) : (conv.unreadAdminCount || 0);
+                const hasUnread = unreadNum > 0;
                 const firstLetter = (conv.userName || 'S').charAt(0).toUpperCase();
+                const isMeLast = isSubMainThread ? conv.lastSender === 'user' : conv.lastSender === 'admin';
 
                 return (
                   <button
@@ -640,26 +799,36 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                     onClick={() => setSelectedConvId(conv.id)}
                     className={`w-full text-left p-3 transition flex items-start gap-3 cursor-pointer relative group ${
                       isSelected
-                        ? 'bg-blue-600/15 border-l-4 border-blue-500'
-                        : 'hover:bg-zinc-900/70'
+                        ? isSubMainThread
+                          ? 'bg-amber-600/15 border-l-4 border-amber-400'
+                          : 'bg-blue-600/15 border-l-4 border-blue-500'
+                        : isSubMainThread
+                          ? 'bg-amber-950/20 hover:bg-amber-950/35'
+                          : 'hover:bg-zinc-900/70'
                     }`}
                   >
-                    {/* Student Avatar */}
+                    {/* Avatar */}
                     <div className="relative shrink-0">
-                      {conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:')) ? (
-                        <img 
-                          src={conv.userAvatar} 
-                          alt={conv.userName} 
-                          className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-zinc-700/80" 
+                      {conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:') || conv.userAvatar.startsWith('/')) ? (
+                        <img
+                          src={conv.userAvatar}
+                          alt={conv.userName}
+                          className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-zinc-700/80"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-sm">
-                          {firstLetter}
+                        <div className={`w-10 h-10 rounded-2xl text-white font-black text-sm flex items-center justify-center shadow-sm ${
+                          conv.channelType === 'subadmin_mainadmin'
+                            ? isSubAdmin
+                              ? 'bg-gradient-to-tr from-amber-600 to-orange-500'
+                              : 'bg-gradient-to-tr from-purple-700 to-indigo-600'
+                            : 'bg-gradient-to-tr from-blue-700 to-indigo-600'
+                        }`}>
+                          {conv.channelType === 'subadmin_mainadmin' ? (isSubAdmin ? '👑' : '🛡️') : firstLetter}
                         </div>
                       )}
                       {hasUnread && (
                         <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-[10px] font-black text-white flex items-center justify-center shadow-xs ring-1 ring-black animate-pulse">
-                          {conv.unreadAdminCount > 99 ? '99+' : conv.unreadAdminCount}
+                          {unreadNum > 99 ? '99+' : unreadNum}
                         </span>
                       )}
                     </div>
@@ -667,17 +836,26 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                     {/* Conversation Info */}
                     <div className="grow min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <h5 className="font-bold text-xs text-white truncate group-hover:text-blue-300 transition">
-                          {conv.userName}
+                        <h5 className="font-bold text-xs text-white truncate group-hover:text-blue-300 transition flex items-center gap-1">
+                          <span className="truncate">{conv.userName}</span>
+                          {isSubMainThread && (
+                            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black px-1.5 py-0.2 rounded shrink-0">
+                              Official
+                            </span>
+                          )}
                         </h5>
                         <span className="text-[10px] text-zinc-500 shrink-0 font-medium">
                           {formatRelativeTime(conv.lastMessageAt)}
                         </span>
                       </div>
 
-                      {conv.userEmail && (
-                        <p className="text-[10.5px] text-zinc-500 truncate mb-1">
-                          {conv.userEmail}
+                      {conv.activeCourse && (
+                        <p className={`text-[10px] truncate mb-0.5 font-semibold ${
+                          isSubMainThread ? 'text-amber-300/90' : conv.channelType === 'subadmin_mainadmin' ? 'text-purple-300' : 'text-emerald-400/90'
+                        }`}>
+                          {conv.channelType === 'subadmin_mainadmin'
+                            ? isSubAdmin ? '👑 Main Admin Support' : `🛡️ ${conv.activeCourse}`
+                            : `🎓 ${conv.activeCourse}`}
                         </p>
                       )}
 
@@ -688,7 +866,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                             : 'text-zinc-400'
                         }`}
                       >
-                        {conv.lastSender === 'admin' ? (
+                        {isMeLast ? (
                           <span className="text-blue-400 font-bold mr-1">You:</span>
                         ) : null}
                         {conv.lastMessage || 'कुनै म्यासेज छैन'}
@@ -710,29 +888,43 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               {/* Active Chat Header */}
               <div className="p-3.5 border-b border-zinc-850 bg-black/60 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  {selectedConv.userAvatar && (selectedConv.userAvatar.startsWith('http') || selectedConv.userAvatar.startsWith('data:')) ? (
-                    <img 
-                      src={selectedConv.userAvatar} 
-                      alt={selectedConv.userName} 
-                      className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-blue-500/40 shrink-0" 
+                  {selectedConv.userAvatar && (selectedConv.userAvatar.startsWith('http') || selectedConv.userAvatar.startsWith('data:') || selectedConv.userAvatar.startsWith('/')) ? (
+                    <img
+                      src={selectedConv.userAvatar}
+                      alt={selectedConv.userName}
+                      className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-blue-500/40 shrink-0"
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-2xl bg-blue-600/30 border border-blue-500/40 text-blue-300 font-black text-sm flex items-center justify-center shrink-0">
-                      {(selectedConv.userName || 'S').charAt(0).toUpperCase()}
+                      {selectedConv.channelType === 'subadmin_mainadmin' ? (isSubAdmin ? '👑' : '🛡️') : (selectedConv.userName || 'S').charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-bold text-sm text-white tracking-tight truncate">
                         {selectedConv.userName}
                       </h4>
-                      <span className="text-[9.5px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
-                        विद्यार्थी (Student)
-                      </span>
+                      {selectedConv.channelType === 'subadmin_mainadmin' ? (
+                        isSubAdmin ? (
+                          <span className="text-[9.5px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
+                            👑 Official Main Admin
+                          </span>
+                        ) : (
+                          <span className="text-[9.5px] bg-purple-500/15 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-semibold">
+                            🛡️ Course Sub-Admin
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[9.5px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                          विद्यार्थी (Activated Student)
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-0.5 truncate">
-                      {selectedConv.userEmail && <span>📧 {selectedConv.userEmail}</span>}
-                      <span className="text-zinc-500">ID: {selectedConv.userId.substring(0, 10)}...</span>
+                      {selectedConv.activeCourse && <span>🎓 {selectedConv.activeCourse}</span>}
+                      {selectedConv.subAdminCode && isMainAdmin && (
+                        <span className="text-purple-300 font-mono">Code: {selectedConv.subAdminCode}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -759,11 +951,12 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 ) : messages.length === 0 ? (
                   <div className="py-12 text-center text-zinc-500 text-xs">
                     <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    यो च्याटमा हालसम्म कुनै म्यासेज छैन।
+                    यो च्याटमा हालसम्म कुनै म्यासेज छैन। तलबाट सिधै सन्देश पठाउनुहोस्।
                   </div>
                 ) : (
                   messages.map((msg) => {
-                    const isAdminMsg = msg.sender === 'admin';
+                    // For Sub-Admin talking to Official Main Admin: msg.sender === 'user' is Sub-Admin ("Me", right side)
+                    const isMyMsg = isSelectedMainAdminChat ? msg.sender === 'user' : msg.sender === 'admin';
                     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit'
@@ -774,27 +967,27 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                       <div
                         key={msg.id}
                         className={`flex flex-col group/bubble ${
-                          isAdminMsg ? 'items-end' : 'items-start'
+                          isMyMsg ? 'items-end' : 'items-start'
                         }`}
                       >
                         <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[75%]">
-                          {!isAdminMsg && (
+                          {!isMyMsg && (
                             (msg.senderAvatar || selectedConv.userAvatar) ? (
-                              <img 
-                                src={msg.senderAvatar || selectedConv.userAvatar} 
-                                alt={msg.senderName} 
-                                className="w-7 h-7 rounded-xl object-cover shrink-0 mb-1 border border-zinc-700 shadow-xs" 
+                              <img
+                                src={msg.senderAvatar || selectedConv.userAvatar}
+                                alt={msg.senderName}
+                                className="w-7 h-7 rounded-xl object-cover shrink-0 mb-1 border border-zinc-700 shadow-xs"
                               />
                             ) : (
                               <div className="w-7 h-7 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center text-xs font-bold shrink-0 mb-1 border border-zinc-700">
-                                {(selectedConv.userName || 'S').charAt(0).toUpperCase()}
+                                {isSelectedMainAdminChat ? '👑' : (selectedConv.userName || 'S').charAt(0).toUpperCase()}
                               </div>
                             )
                           )}
 
                           <div
                             className={`rounded-2xl px-3.5 py-2.5 shadow-sm break-words relative ${
-                              isAdminMsg
+                              isMyMsg
                                 ? 'bg-blue-600 text-white rounded-br-xs'
                                 : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-bl-xs'
                             }`}
@@ -802,10 +995,12 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                             <div className="flex items-center justify-between gap-4 mb-1">
                               <span
                                 className={`text-[10px] font-black ${
-                                  isAdminMsg ? 'text-blue-200' : 'text-blue-400'
+                                  isMyMsg ? 'text-blue-200' : isSelectedMainAdminChat ? 'text-amber-300' : 'text-blue-400'
                                 }`}
                               >
-                                {isAdminMsg ? `👑 ${instituteName} Admin` : msg.senderName}
+                                {isMyMsg
+                                  ? (isSubAdmin ? `🛡️ ${subAdminSession?.name || 'Sub-Admin'}` : `👑 ${instituteName} Official Admin`)
+                                  : msg.senderName}
                               </span>
                               <button
                                 type="button"
@@ -830,7 +1025,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                                   onClick={() => setLightboxImage({ url: msg.attachmentUrl!, name: msg.attachmentName || 'Photo' })}
                                   className="w-full max-h-[260px] object-cover rounded-xl group-hover/img:scale-[1.02] transition"
                                 />
-                                <div 
+                                <div
                                   onClick={() => setLightboxImage({ url: msg.attachmentUrl!, name: msg.attachmentName || 'Photo' })}
                                   className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center gap-2"
                                 >
@@ -887,7 +1082,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
                             <div
                               className={`text-[9.5px] mt-1.5 flex items-center justify-end gap-1.5 ${
-                                isAdminMsg ? 'text-blue-200' : 'text-zinc-500'
+                                isMyMsg ? 'text-blue-200' : 'text-zinc-500'
                               }`}
                             >
                               <button
@@ -907,9 +1102,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                               </button>
 
                               <span>{timeStr}</span>
-                              {isAdminMsg && (
+                              {isMyMsg && (
                                 (msg.isSeen || msg.status === 'seen') ? (
-                                  <span title="विद्यार्थीले हेरिसक्यो (Seen by student)" className="inline-flex items-center ml-0.5 text-sky-300">
+                                  <span title="हेरिसक्यो (Seen)" className="inline-flex items-center ml-0.5 text-sky-300">
                                     <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
                                   </span>
                                 ) : (
@@ -933,7 +1128,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">
                   Quick:
                 </span>
-                {ADMIN_QUICK_PRESETS.map((preset, idx) => (
+                {(isSelectedMainAdminChat ? SUB_ADMIN_TO_MAIN_PRESETS : ADMIN_QUICK_PRESETS).map((preset, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleSendReply(preset)}

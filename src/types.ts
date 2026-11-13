@@ -193,16 +193,21 @@ export interface SupportMessage {
 }
 
 export interface SupportConversation {
-  id: string; // userId or deviceId
+  id: string; // userId, substudent__<code>__<uid>, or subadmin_main__<code>
   userId: string;
   userName: string;
   userEmail?: string;
   userPhone?: string;
   userAvatar?: string;
   purchasedCourses?: string[];
+  channelType?: 'student_mainadmin' | 'student_subadmin' | 'subadmin_mainadmin';
+  subAdminCode?: string;
+  subAdminName?: string;
+  courseId?: string;
+  activeCourse?: string;
   lastMessage: string;
   lastMessageAt: number;
-  lastSender: 'user' | 'admin';
+  lastSender: 'user' | 'admin' | 'system';
   unreadAdminCount: number;
   unreadUserCount: number;
   createdAt: number;

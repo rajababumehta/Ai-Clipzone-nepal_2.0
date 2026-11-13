@@ -315,6 +315,7 @@ export default function App() {
     } catch {}
     return [];
   });
+  const [activeSubAdmins, setActiveSubAdmins] = useState<SubAdminAccount[]>([]);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
@@ -483,15 +484,27 @@ export default function App() {
       localStorage.setItem('clipzone_student_avatar', croppedDataUrl);
     } catch (err) {}
 
-    // Sync student photo immediately to support_conversations so admin sees it in Ask
+    // Sync student photo to assigned Course Sub-Admin conversation(s) in Firestore
     const targetUid = localStorage.getItem('clipzone_student_uid') || currentUser?.uid || getOrCreateDeviceId();
     if (targetUid) {
-      try {
-        setDoc(doc(db, 'support_conversations', targetUid), {
-          userAvatar: croppedDataUrl,
-          updatedAt: Date.now()
-        }, { merge: true }).catch(() => {});
-      } catch (e) {}
+      const effectiveSubs = Array.from(
+        new Map(
+          [...activeSubAdmins, ...subAdminList]
+            .filter(s => s.status === 'active')
+            .map(s => [s.code, s])
+        ).values()
+      );
+      const targetSubs = effectiveSubs.filter(
+        s => activeCourseIds.includes('course-all') || activeCourseIds.includes(s.courseId)
+      );
+      targetSubs.forEach((sub) => {
+        try {
+          setDoc(doc(db, 'support_conversations', `substudent__${sub.code}__${targetUid}`), {
+            userAvatar: croppedDataUrl,
+            updatedAt: Date.now()
+          }, { merge: true }).catch(() => {});
+        } catch (e) {}
+      });
     }
 
     setShowImageAdjustModal(false);
@@ -1973,6 +1986,30 @@ export default function App() {
     };
   }, [isAdminActivated, currentUser?.email, subAdminSession?.code, subAdminSession?.courseId]);
 
+  // Public active Sub-Admins listener for Student -> Course Sub-Admin Ask routing (never caches codes in localStorage)
+  useEffect(() => {
+    const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    if (mainAdminActive) {
+      setActiveSubAdmins([]);
+      return;
+    }
+    try {
+      const activeSubsQuery = query(collection(db, 'sub_admins'), where('status', '==', 'active'));
+      const unsub = onSnapshot(activeSubsQuery, (snapshot) => {
+        const list: SubAdminAccount[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
+        });
+        setActiveSubAdmins(list);
+      }, (err) => {
+        console.warn('Active sub_admins listener error:', err);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Error setting up active sub_admins listener:', e);
+    }
+  }, [isAdminActivated, currentUser?.email]);
+
   // STUDENT PORTAL HANDLERS (PASSWORD-FREE ANONYMOUS SIGN-IN)
   const handleStudentAnonymousLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -2460,18 +2497,38 @@ export default function App() {
         }
       }
 
-      // Link/ensure canonical single conversation document exists for this student
+      // Link/ensure conversation document exists for assigned Course Sub-Admin ONLY (never Main Admin)
       try {
-        const convDocRef = doc(db, 'support_conversations', permanentStudentUid);
-        setDoc(convDocRef, {
-          id: permanentStudentUid,
-          userId: permanentStudentUid,
-          userName: assignedStudentName,
-          userEmail: assignedStudentName,
-          activeCourse: unlockedCourseTitle,
-          purchasedCourses: [unlockedCourseTitle],
-          updatedAt: Date.now()
-        }, { merge: true }).catch(() => {});
+        let matchedSub = [...activeSubAdmins, ...subAdminList].find(
+          s => s.status === 'active' && (s.courseId === unlockedCourseId || s.courseTitle.trim().toLowerCase() === unlockedCourseTitle.trim().toLowerCase())
+        );
+        if (!matchedSub && unlockedCourseId && unlockedCourseId !== 'course-all') {
+          try {
+            const subSnap = await getDocs(query(collection(db, 'sub_admins'), where('courseId', '==', unlockedCourseId), where('status', '==', 'active')));
+            subSnap.forEach((d) => {
+              if (!matchedSub) {
+                matchedSub = { id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) };
+              }
+            });
+          } catch {}
+        }
+        if (matchedSub) {
+          const subConvId = `substudent__${matchedSub.code}__${permanentStudentUid}`;
+          const convDocRef = doc(db, 'support_conversations', subConvId);
+          setDoc(convDocRef, {
+            id: subConvId,
+            userId: permanentStudentUid,
+            userName: assignedStudentName,
+            userEmail: assignedStudentName,
+            channelType: 'student_subadmin',
+            subAdminCode: matchedSub.code,
+            subAdminName: matchedSub.name,
+            courseId: unlockedCourseId,
+            activeCourse: unlockedCourseTitle,
+            purchasedCourses: [unlockedCourseTitle],
+            updatedAt: Date.now()
+          }, { merge: true }).catch(() => {});
+        }
       } catch (e) {}
 
       // Save locally to make it 100% stable offline-first
@@ -3531,6 +3588,7 @@ export default function App() {
   const [isAskOpen, setIsAskOpen] = useState(false);
   const [studentUnreadCount, setStudentUnreadCount] = useState(0);
   const [adminUnreadCount, setAdminUnreadCount] = useState(0);
+  const [subAdminUnreadCount, setSubAdminUnreadCount] = useState(0);
 
   // Role-based admin checks (Main Admin vs Course Sub-Admin) & course activation checks
   const isMainAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
@@ -3541,8 +3599,8 @@ export default function App() {
     [isMainAdmin, isSubAdmin, subAdminSession?.courseId]
   );
   const hasCourseActivated = activeCourseIds.length > 0;
-  const isCourseActiveUser = Boolean(hasCourseActivated || isMainAdmin);
-  const askUnreadCount = isMainAdmin ? adminUnreadCount : studentUnreadCount;
+  const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
+  const askUnreadCount = isMainAdmin ? adminUnreadCount : isSubAdmin ? subAdminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
 
@@ -3597,14 +3655,14 @@ export default function App() {
     setShowCertificateModal(true);
   };
 
-  // Auto-close Ask modal if user does not have an activated course
+  // Auto-close Ask modal if user does not have an activated course or admin session
   useEffect(() => {
     if (!isCourseActiveUser && isAskOpen) {
       setIsAskOpen(false);
     }
   }, [isCourseActiveUser, isAskOpen]);
 
-  // 1. Real-time listener for Main Admin: tracks unread messages sent by users/students
+  // 1. Real-time listener for Main Admin: tracks ONLY Sub-Admin messages (zero course-student chats)
   useEffect(() => {
     if (!isMainAdmin) {
       setAdminUnreadCount(0);
@@ -3612,8 +3670,11 @@ export default function App() {
     }
 
     try {
-      const convsRef = collection(db, 'support_conversations');
-      const unsub = onSnapshot(convsRef, (snapshot) => {
+      const subConvsQuery = query(
+        collection(db, 'support_conversations'),
+        where('channelType', '==', 'subadmin_mainadmin')
+      );
+      const unsub = onSnapshot(subConvsQuery, (snapshot) => {
         let totalUnread = 0;
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -3623,17 +3684,82 @@ export default function App() {
         });
         setAdminUnreadCount(totalUnread);
       }, (err) => {
-        console.warn('Admin support conversation listener error:', err);
+        console.warn('Main admin subadmin conversation listener error:', err);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Error setting up admin support conversation listener:', e);
+      console.warn('Error setting up main admin conversation listener:', e);
     }
   }, [isMainAdmin]);
 
-  // 2. Real-time listener for Student: tracks unread replies sent by Admin
+  // 2. Real-time listener for Sub-Admin: tracks unread from Main Admin + unread from own course students
+  useEffect(() => {
+    if (!isSubAdmin || !subAdminSession?.code) {
+      setSubAdminUnreadCount(0);
+      return;
+    }
+
+    let mainUnread = 0;
+    let studentsUnread = 0;
+
+    const mainDocRef = doc(db, 'support_conversations', `subadmin_main__${subAdminSession.code}`);
+    const unsubMain = onSnapshot(mainDocRef, (snap) => {
+      mainUnread = snap.exists() ? (snap.data()?.unreadUserCount || 0) : 0;
+      setSubAdminUnreadCount(mainUnread + studentsUnread);
+    }, (err) => {
+      console.warn('Sub-admin main chat listener error:', err);
+    });
+
+    const studentConvsQuery = query(
+      collection(db, 'support_conversations'),
+      where('channelType', '==', 'student_subadmin'),
+      where('subAdminCode', '==', subAdminSession.code)
+    );
+    const unsubStudents = onSnapshot(studentConvsQuery, (snapshot) => {
+      let sum = 0;
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (d && typeof d.unreadAdminCount === 'number' && d.unreadAdminCount > 0) {
+          sum += d.unreadAdminCount;
+        }
+      });
+      studentsUnread = sum;
+      setSubAdminUnreadCount(mainUnread + studentsUnread);
+    }, (err) => {
+      console.warn('Sub-admin student chats listener error:', err);
+    });
+
+    return () => {
+      unsubMain();
+      unsubStudents();
+    };
+  }, [isSubAdmin, subAdminSession?.code]);
+
+  // 3. Real-time listener for Student: tracks unread replies sent by assigned Course Sub-Admin ONLY
   useEffect(() => {
     if (isUserAdminSession) {
+      setStudentUnreadCount(0);
+      return;
+    }
+
+    const activeSubs = activeSubAdmins.filter(s => s.status === 'active');
+    if (activeSubs.length === 0 || activeCourseIds.length === 0) {
+      setStudentUnreadCount(0);
+      return;
+    }
+
+    const targetSubCodes = Array.from(new Set(
+      activeSubs
+        .filter(s => {
+          if (activeCourseIds.includes('course-all')) return true;
+          if (activeCourseIds.includes(s.courseId)) return true;
+          const matchingCourse = courses.find(c => activeCourseIds.includes(c.id) && c.title.trim().toLowerCase() === s.courseTitle.trim().toLowerCase());
+          return Boolean(matchingCourse);
+        })
+        .map(s => s.code)
+    ));
+
+    if (targetSubCodes.length === 0) {
       setStudentUnreadCount(0);
       return;
     }
@@ -3670,24 +3796,27 @@ export default function App() {
       const unsubs: (() => void)[] = [];
       const countsMap = new Map<string, number>();
 
-      candidateUids.forEach((cUid) => {
-        const convRef = doc(db, 'support_conversations', cUid);
-        const unsub = onSnapshot(convRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            countsMap.set(cUid, data?.unreadUserCount || 0);
-          } else {
-            countsMap.set(cUid, 0);
-          }
-          let maxUnread = 0;
-          countsMap.forEach((cnt) => {
-            if (cnt > maxUnread) maxUnread = cnt;
+      targetSubCodes.forEach((subCode) => {
+        candidateUids.forEach((cUid) => {
+          const convDocId = `substudent__${subCode}__${cUid}`;
+          const convRef = doc(db, 'support_conversations', convDocId);
+          const unsub = onSnapshot(convRef, (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              countsMap.set(convDocId, data?.unreadUserCount || 0);
+            } else {
+              countsMap.set(convDocId, 0);
+            }
+            let totalUnread = 0;
+            countsMap.forEach((cnt) => {
+              totalUnread += cnt;
+            });
+            setStudentUnreadCount(totalUnread);
+          }, (err) => {
+            console.warn('Student subadmin conversation listener error:', err);
           });
-          setStudentUnreadCount(maxUnread);
-        }, (err) => {
-          console.warn('Student support conversation listener error:', err);
+          unsubs.push(unsub);
         });
-        unsubs.push(unsub);
       });
 
       return () => {
@@ -3696,7 +3825,7 @@ export default function App() {
     } catch (e) {
       console.warn('Error setting up student support conversation listener:', e);
     }
-  }, [currentUser, isUserAdminSession, allActivationKeys, authName]);
+  }, [currentUser, isUserAdminSession, allActivationKeys, authName, activeSubAdmins, activeCourseIds, courses]);
 
   // PWA Installation states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -6105,296 +6234,9 @@ export default function App() {
           )}
         </section>
 
-            {/* Testimonials, FAQs, and contact form sequential flows */}
+            {/* Contact form section */}
             {currentView === 'home' && (
               <div className="space-y-20 animate-in fade-in duration-300">
-
-        {/* Testimonial slider / carousel - ADVANCED BENTO FEEDBOARD */}
-        <section className="mt-20">
-          <div className="text-center mb-12">
-            <span className="bg-blue-500/20 text-blue-300 font-extrabold text-xs tracking-wider uppercase px-4 py-1.5 rounded-full border border-blue-500/30 shadow-2xs">
-              ❤️ Student Feedback
-            </span>
-            <h3 className="text-3xl md:text-4xl font-extrabold text-white mt-3 tracking-tight">
-              What Our Students Say ❤️
-            </h3>
-            <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-emerald-500 mx-auto rounded-full mt-3 shadow-xs shadow-blue-500/50"></div>
-            <p className="text-zinc-400 mt-3 text-sm md:text-base max-w-xl mx-auto">
-              हाम्रा विद्यार्थीहरूले कोर्ष लिएर आफ्नो करियर र कामलाई धेरै सजिलो बनाएका छन्।
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-12">
-            
-            {/* Bento Part 1: Overall Rating Score Card */}
-            <div className="lg:col-span-4 flex flex-col justify-between bg-zinc-900/90 p-6 md:p-8 rounded-3xl border border-zinc-800 shadow-xl">
-              <div>
-                <strong className="text-xs text-blue-400 font-extrabold uppercase tracking-widest block mb-1">Overall Satisfaction</strong>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-6xl font-black text-white tracking-tight">4.92</span>
-                  <span className="text-lg text-zinc-500 font-extrabold">/5.0</span>
-                </div>
-                
-                <div className="flex gap-1 text-emerald-400 mt-3">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-emerald-400 text-emerald-400" />
-                  ))}
-                </div>
-                <p className="text-zinc-400 text-xs mt-3 font-semibold">Based on 1000+ verified Nepal & India student feedback.</p>
-
-                {/* Rating bars */}
-                <div className="mt-8 space-y-4">
-                  {/* 5 Stars */}
-                  <div>
-                    <div className="flex justify-between text-xs text-zinc-300 font-bold mb-1">
-                      <span>5 Stars (उत्कृष्ट)</span>
-                      <span>92%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full" style={{ width: '92%' }}></div>
-                    </div>
-                  </div>
-
-                  {/* 4 Stars */}
-                  <div>
-                    <div className="flex justify-between text-xs text-zinc-400 font-bold mb-1">
-                      <span>4 Stars (राम्रो)</span>
-                      <span>8%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500/70 rounded-full" style={{ width: '8%' }}></div>
-                    </div>
-                  </div>
-
-                  {/* 3 Stars */}
-                  <div>
-                    <div className="flex justify-between text-xs text-zinc-500 font-bold mb-1">
-                      <span>3 Stars (साधारण)</span>
-                      <span>0%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-zinc-700 rounded-full" style={{ width: '0%' }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bento Part 2: Interactive Testimonials Slider & Filters */}
-            <div className="lg:col-span-8 flex flex-col gap-6">
-              
-              {/* Filter Chips & Search Bar */}
-              <div className="bg-zinc-900/90 p-4 rounded-3xl border border-zinc-800/80 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
-                
-                {/* Dynamic Chips Container */}
-                <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
-                  {['All', 'AI Master Class', 'AI Video & Image', 'AI Song Creation', 'AI Presentation', 'YouTube Blueprint'].map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => {
-                        setSelectedCourseFilter(category);
-                        setCurrentSlide(0);
-                      }}
-                      className={`whitespace-nowrap text-xs font-extrabold py-2 px-3.5 rounded-full transition cursor-pointer border ${
-                        selectedCourseFilter === category
-                          ? 'bg-blue-600 text-white font-black border-blue-500 shadow-xs'
-                          : 'bg-zinc-950 text-zinc-400 hover:bg-zinc-800 hover:text-white border-zinc-800'
-                      }`}
-                    >
-                      {category === 'All' ? 'सबै (All)' : category}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Instant Search Bar */}
-                <div className="relative w-full md:w-64 shrink-0">
-                  <input
-                    type="text"
-                    value={testimonialSearchQuery}
-                    onChange={(e) => {
-                      setTestimonialSearchQuery(e.target.value);
-                      setCurrentSlide(0);
-                    }}
-                    placeholder="समीक्षा खोज्नुहोस्..."
-                    className="w-full bg-zinc-950 text-zinc-100 placeholder-zinc-500 font-medium text-xs rounded-full pl-9 pr-4 py-2.5 border border-zinc-800 focus:outline-hidden focus:border-blue-500 transition"
-                  />
-                  <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                </div>
-              </div>
-
-              {/* Testimonials Slides Container */}
-              <div 
-                className="bg-zinc-900/90 p-6 md:p-8 rounded-3xl border border-zinc-800 shadow-xl min-h-[310px] md:min-h-[250px] flex flex-col justify-between relative overflow-hidden"
-                onMouseEnter={() => setIsHoveredCarousel(true)}
-                onMouseLeave={() => setIsHoveredCarousel(false)}
-              >
-                {filteredTestimonials.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-center py-10 grow">
-                    <div className="w-12 h-12 bg-zinc-950 text-zinc-500 rounded-full flex items-center justify-center mb-3 border border-zinc-800">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <strong className="text-sm text-zinc-300 block font-bold">कुनै समीक्षा भेटिएन (No reviews found)</strong>
-                    <span className="text-xs text-zinc-500 mt-1 block">यो फिल्टर अनुसारको प्रतिक्रिया छैन। समीक्षा लेख्ने पहिलो विद्यार्थी बन्नुहोस्!</span>
-                  </div>
-                ) : (
-                  <>
-                    {/* Active Testimonial Item */}
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={`${selectedCourseFilter}-${testimonialSearchQuery}-${currentSlide}`}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="flex flex-col grow justify-between"
-                      >
-                        <div>
-                          {/* User Header */}
-                          <div className="flex items-center gap-4">
-                            <div className="text-3xl w-12 h-12 bg-blue-500/15 border border-blue-500/30 rounded-full flex items-center justify-center shrink-0">
-                              {filteredTestimonials[currentSlide].avatar || '🧔'}
-                            </div>
-                            <div>
-                              <strong className="text-base text-white block font-black leading-tight">
-                                {filteredTestimonials[currentSlide].name}
-                              </strong>
-                              <span className="text-xs text-blue-400 font-extrabold block mt-0.5">
-                                {filteredTestimonials[currentSlide].location} • {filteredTestimonials[currentSlide].course}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Interactive stars */}
-                          <div className="flex gap-1 text-emerald-400 mt-3.5">
-                            {[...Array(filteredTestimonials[currentSlide].rating || 5)].map((_, i) => (
-                              <Star key={i} className="w-4 h-4 fill-emerald-400 text-emerald-400" />
-                            ))}
-                          </div>
-
-                          {/* Review Text */}
-                          <p className="text-zinc-300 text-xs md:text-sm italic leading-relaxed mt-4 font-medium">
-                            "{filteredTestimonials[currentSlide].text}"
-                          </p>
-                        </div>
-
-                        {/* Card bottom metrics */}
-                        <div className="flex items-center justify-between pt-4 border-t border-zinc-800/80 mt-6">
-                          <span className="bg-emerald-950/80 text-emerald-300 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider border border-emerald-500/40">
-                            <Check className="w-3 h-3" />
-                            {filteredTestimonials[currentSlide].isUserAdded ? 'Newly Added Community Review' : 'Verified Student'}
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-bold">
-                            Review {currentSlide + 1} of {filteredTestimonials.length}
-                          </span>
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-
-                    {/* Controls Row */}
-                    <div className="absolute right-6 top-6 flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 p-1 rounded-full shadow-2xs">
-                      {/* Left button */}
-                      <button
-                        onClick={() => {
-                          setCurrentSlide((prev) => (prev - 1 + filteredTestimonials.length) % filteredTestimonials.length);
-                        }}
-                        className="w-7 h-7 hover:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 hover:text-blue-400 transition cursor-pointer"
-                        aria-label="Previous Review"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-
-                      {/* Autoplay Pause/Play button */}
-                      <button
-                        onClick={() => setIsSliderAutoPlaying(!isSliderAutoPlaying)}
-                        className={`w-7 h-7 rounded-full flex items-center justify-center transition cursor-pointer ${
-                          isSliderAutoPlaying 
-                            ? 'hover:bg-zinc-800 text-zinc-400 hover:text-blue-400' 
-                            : 'bg-blue-600 text-white shadow-xs'
-                        }`}
-                        title={isSliderAutoPlaying ? "Pause Autoplay" : "Resume Autoplay"}
-                      >
-                        {isSliderAutoPlaying ? (
-                          <Pause className="w-3 h-3" />
-                        ) : (
-                          <Play className="w-3 h-3 fill-white text-white" />
-                        )}
-                      </button>
-
-                      {/* Right button */}
-                      <button
-                        onClick={() => {
-                          setCurrentSlide((prev) => (prev + 1) % filteredTestimonials.length);
-                        }}
-                        className="w-7 h-7 hover:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 hover:text-blue-400 transition cursor-pointer"
-                        aria-label="Next Review"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-              
-            </div>
-
-          </div>
-        </section>
-
-        {/* FAQs Accordion */}
-        <section className="mt-20">
-          <div className="text-center mb-12">
-            <span className="bg-blue-500/20 text-blue-300 font-extrabold text-xs tracking-wider uppercase px-4 py-1.5 rounded-full border border-blue-500/30">
-              Common Questions
-            </span>
-            <h3 className="text-2xl md:text-4xl font-extrabold text-white mt-3 tracking-tight">
-              Frequently Asked Questions
-            </h3>
-            <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-emerald-500 mx-auto rounded-full mt-3 shadow-xs shadow-blue-500/50"></div>
-            <p className="text-zinc-400 mt-3 text-sm md:text-base">
-              कोर्ष र भुक्तानी सम्बन्धी आम जिज्ञासाहरूको समाधान यहाँ पाउन सक्नुहुन्छ।
-            </p>
-          </div>
-
-          <div className="max-w-3xl mx-auto space-y-4">
-            {(faqs && faqs.length > 0 ? faqs : FAQS).map((faq, index) => {
-              const isOpen = !!openFaqs[index];
-              return (
-                <div 
-                  key={index}
-                  className="bg-zinc-900/90 rounded-2xl border border-zinc-800/80 shadow-md overflow-hidden transition-all duration-200 hover:border-blue-500/40 hover:shadow-lg"
-                >
-                  <button
-                    onClick={() => toggleFaq(index)}
-                    className="w-full text-left p-5 md:p-6 font-bold text-white hover:text-blue-300 transition-colors flex items-center justify-between gap-4 text-base md:text-lg focus:outline-hidden cursor-pointer"
-                  >
-                    <span>{faq.question}</span>
-                    <ChevronDown 
-                      className={`w-5 h-5 text-blue-400 shrink-0 transition-transform duration-300 ${
-                        isOpen ? 'rotate-180 text-blue-300' : ''
-                      }`}
-                    />
-                  </button>
-                  
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: 'auto' }}
-                        exit={{ height: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="p-5 md:p-6 pt-0 text-zinc-300 border-t border-zinc-800/80 text-sm md:text-base leading-relaxed bg-zinc-950/60">
-                          {faq.answer}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
-          </div>
-        </section>
 
         {/* Contact Us Section - Enhanced Modern Design */}
         <section className="mt-20 scroll-mt-24">
@@ -7509,7 +7351,7 @@ export default function App() {
         adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
         subAdminSession={isMainAdmin ? null : subAdminSession}
         onLogoutAdminSession={handleLogoutAdminSession}
-        subAdmins={subAdminList}
+        subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
         onCreateSubAdmin={handleCreateSubAdmin}
         onToggleSubAdminStatus={handleToggleSubAdminStatus}
         onUpdateSubAdminCourse={handleUpdateSubAdminCourse}
@@ -7542,7 +7384,7 @@ export default function App() {
         onDeleteNotification={handleDeleteNotification}
         showToast={showToast}
         initialTab={adminInitialTab}
-        adminUnreadAskCount={adminUnreadCount}
+        adminUnreadAskCount={isMainAdmin ? adminUnreadCount : subAdminUnreadCount}
       />
 
       {/* CONFIRM LOGOUT ALL USER DEVICES MODAL */}
@@ -8757,6 +8599,9 @@ export default function App() {
               if (isMainAdmin) {
                 return currentUser?.uid || getOrCreateDeviceId();
               }
+              if (isSubAdmin && subAdminSession?.code) {
+                return subAdminSession.code;
+              }
               try {
                 const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
                 const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
@@ -8788,7 +8633,12 @@ export default function App() {
           hasActivatedCourse={activeCourseIds.length > 0}
           onOpenActivationModal={() => setShowCodeInputModal(true)}
           showToast={showToast}
-          isAdmin={isMainAdmin}
+          isAdmin={isUserAdminSession}
+          adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+          subAdminSession={isMainAdmin ? null : subAdminSession}
+          subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
+          courses={courses}
+          activeCourseIds={activeCourseIds}
           allActivationKeys={allActivationKeys}
           studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
         />
@@ -8842,8 +8692,8 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Certificate - Shown only if user has activated course */}
-          {isCourseActiveUser && (
+          {/* 3. Certificate - Shown only if user has activated course or Main Admin */}
+          {Boolean(hasCourseActivated || isMainAdmin) && (
             <button
               id="app-nav-certificate"
               onClick={() => {

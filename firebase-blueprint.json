@@ -251,12 +251,17 @@
     },
     "SupportConversation": {
       "title": "SupportConversation",
-      "description": "Represents a support conversation between student and admin",
+      "description": "Represents a role-isolated support conversation (Sub-Admin <-> Student or Main Admin <-> Sub-Admin)",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "userName": { "type": "string" },
         "userEmail": { "type": "string" },
+        "channelType": { "type": "string", "enum": ["student_mainadmin", "student_subadmin", "subadmin_mainadmin"] },
+        "subAdminCode": { "type": "string" },
+        "subAdminName": { "type": "string" },
+        "courseId": { "type": "string" },
+        "activeCourse": { "type": "string" },
         "lastMessage": { "type": "string" },
         "lastMessageAt": { "type": "number" },
         "lastSender": { "type": "string" },

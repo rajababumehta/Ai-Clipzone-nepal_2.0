@@ -48,7 +48,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
+import { Course, SubAdminAccount, SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
 
 interface AskChatModalProps {
   isOpen: boolean;
@@ -61,6 +61,11 @@ interface AskChatModalProps {
   activeCourseName?: string;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   isAdmin?: boolean;
+  adminRole?: 'main_admin' | 'sub_admin';
+  subAdminSession?: SubAdminAccount | null;
+  subAdmins?: SubAdminAccount[];
+  courses?: Course[];
+  activeCourseIds?: string[];
   allActivationKeys?: any[];
   hasActivatedCourse?: boolean;
   onOpenActivationModal?: () => void;
@@ -82,6 +87,12 @@ const ADMIN_QUICK_PRESETS = [
   'समस्या समाधान भएको छ, कृपया पुनः भिडियो खोलेर हेर्नुहोस्।'
 ];
 
+const SUB_ADMIN_TO_MAIN_PRESETS = [
+  'नमस्ते Main Admin ज्यू! मलाई कोर्ष सम्बन्धी सहयोग चाहिन्छ।',
+  'कोर्ष अपडेट / सेटिङ बारे जानकारी दिनुहोस्।',
+  'धन्यवाद सर!'
+];
+
 const WHATSAPP_QUICK_EMOJIS = ['😊', '👍', '🙏', '🚀', '💡', '❤️', '❓', '🔥', '🎓', '👏', '💯', '✅'];
 
 export const AskChatModal: React.FC<AskChatModalProps> = ({
@@ -95,11 +106,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   activeCourseName = '',
   showToast,
   isAdmin = false,
+  adminRole = 'main_admin',
+  subAdminSession = null,
+  subAdmins = [],
+  courses = [],
+  activeCourseIds = [],
   allActivationKeys = [],
   hasActivatedCourse = false,
   onOpenActivationModal,
   studentAvatar = ''
 }) => {
+  const isMainAdminMode = Boolean(isAdmin && adminRole === 'main_admin');
+  const isSubAdminMode = Boolean(isAdmin && adminRole === 'sub_admin' && subAdminSession?.code);
   // Helper to ensure name is a real student name - strictly never "Student Learner" or generic placeholder
   const cleanRealName = (name: string | undefined | null): string => {
     if (!name) return '';
@@ -209,14 +227,82 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   }, [isAdmin, currentUserId, studentName, initialStudentName, userEmail, allActivationKeys]);
 
   // --------------------------------------------------------------------------
+  // STUDENT ROUTING TO ASSIGNED COURSE SUB-ADMIN (NEVER TO MAIN ADMIN)
+  // --------------------------------------------------------------------------
+  const studentSubAdminTargets = useMemo(() => {
+    if (isAdmin) return [];
+    const activeSubs = (subAdmins || []).filter(s => s.status === 'active');
+    if (activeSubs.length === 0) return [];
+
+    const targets: { courseId: string; courseTitle: string; courseWhatsapp?: string; subAdmin: SubAdminAccount }[] = [];
+    const seenSubCodes = new Set<string>();
+
+    const checkCourseList = activeCourseIds.includes('course-all')
+      ? courses
+      : courses.filter(c => activeCourseIds.includes(c.id));
+
+    checkCourseList.forEach((crs) => {
+      const matchedSub = activeSubs.find(
+        s => s.courseId === crs.id || s.courseTitle.trim().toLowerCase() === crs.title.trim().toLowerCase()
+      );
+      if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
+        seenSubCodes.add(matchedSub.code);
+        targets.push({
+          courseId: crs.id,
+          courseTitle: crs.title,
+          courseWhatsapp: crs.paymentConfig?.whatsappNumber,
+          subAdmin: matchedSub
+        });
+      }
+    });
+
+    // Fallback check against activeCourseIds directly if course object wasn't in prop
+    activeCourseIds.forEach((cid) => {
+      if (cid === 'course-all') return;
+      const matchedSub = activeSubs.find(s => s.courseId === cid);
+      if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
+        seenSubCodes.add(matchedSub.code);
+        targets.push({
+          courseId: cid,
+          courseTitle: matchedSub.courseTitle,
+          subAdmin: matchedSub
+        });
+      }
+    });
+
+    return targets;
+  }, [isAdmin, subAdmins, activeCourseIds, courses]);
+
+  const [selectedStudentSubCode, setSelectedStudentSubCode] = useState<string>('');
+
+  useEffect(() => {
+    if (!isAdmin && studentSubAdminTargets.length > 0) {
+      const stillValid = studentSubAdminTargets.some(t => t.subAdmin.code === selectedStudentSubCode);
+      if (!stillValid) {
+        setSelectedStudentSubCode(studentSubAdminTargets[0].subAdmin.code);
+      }
+    } else {
+      setSelectedStudentSubCode('');
+    }
+  }, [isAdmin, studentSubAdminTargets, selectedStudentSubCode]);
+
+  const activeStudentTarget = useMemo(() => {
+    if (studentSubAdminTargets.length === 0) return null;
+    return studentSubAdminTargets.find(t => t.subAdmin.code === selectedStudentSubCode) || studentSubAdminTargets[0];
+  }, [studentSubAdminTargets, selectedStudentSubCode]);
+
+  const studentConvId = useMemo(() => {
+    const uid = effectiveUserId || currentUserId;
+    if (!uid || !activeStudentTarget) return '';
+    return `substudent__${activeStudentTarget.subAdmin.code}__${uid}`;
+  }, [effectiveUserId, currentUserId, activeStudentTarget]);
+
+  // --------------------------------------------------------------------------
   // WHATSAPP "CLEAR CHAT FROM OWN ONLY" STATES
-  // WhatsApp Rule: Conversation records are NEVER permanently deleted from database.
-  // Each user (student or admin) can clear chat from their OWN view only.
   // --------------------------------------------------------------------------
   const [studentClearedAt, setStudentClearedAt] = useState<number>(() => {
-    const targetUid = effectiveUserId || currentUserId;
-    if (typeof window === 'undefined' || !targetUid) return 0;
-    return Number(localStorage.getItem(`clipzone_chat_cleared_user_${targetUid}`) || 0);
+    if (typeof window === 'undefined' || !studentConvId) return 0;
+    return Number(localStorage.getItem(`clipzone_chat_cleared_user_${studentConvId}`) || 0);
   });
   const [studentMenuOpen, setStudentMenuOpen] = useState(false);
   const [showStudentClearConfirm, setShowStudentClearConfirm] = useState(false);
@@ -234,34 +320,33 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
   }, [initialStudentName]);
 
-  // Sync student clearedAt timestamp whenever effectiveUserId changes
+  // Sync student clearedAt timestamp whenever studentConvId changes
   useEffect(() => {
-    const targetUid = effectiveUserId || currentUserId;
-    if (targetUid) {
-      const local = Number(localStorage.getItem(`clipzone_chat_cleared_user_${targetUid}`) || 0);
+    if (studentConvId) {
+      const local = Number(localStorage.getItem(`clipzone_chat_cleared_user_${studentConvId}`) || 0);
       setStudentClearedAt(local);
+    } else {
+      setStudentClearedAt(0);
     }
-  }, [effectiveUserId, currentUserId]);
+  }, [studentConvId]);
 
-  // Sync student avatar to conversation in Firestore so admin sees it in Ask
+  // Sync student avatar to Sub-Admin conversation in Firestore
   useEffect(() => {
-    const targetUid = effectiveUserId || currentUserId;
     const effectivePhoto = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
-    if (!isAdmin && targetUid && effectivePhoto) {
+    if (!isAdmin && studentConvId && effectivePhoto) {
       try {
-        setDoc(doc(db, 'support_conversations', targetUid), {
+        setDoc(doc(db, 'support_conversations', studentConvId), {
           userAvatar: effectivePhoto,
           updatedAt: Date.now()
         }, { merge: true }).catch(() => {});
       } catch (e) {}
     }
-  }, [isOpen, isAdmin, effectiveUserId, currentUserId, studentAvatar]);
+  }, [isOpen, isAdmin, studentConvId, studentAvatar]);
 
   // Listen to student conversation doc for remote cleared timestamp
   useEffect(() => {
-    const targetUid = effectiveUserId || currentUserId;
-    if (!isOpen || isAdmin || !targetUid) return;
-    const convRef = doc(db, 'support_conversations', targetUid);
+    if (!isOpen || isAdmin || !studentConvId) return;
+    const convRef = doc(db, 'support_conversations', studentConvId);
     const unsub = onSnapshot(convRef, (docSnap) => {
       if (docSnap.exists()) {
         const d = docSnap.data();
@@ -271,7 +356,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       }
     });
     return () => unsub();
-  }, [isOpen, isAdmin, effectiveUserId, currentUserId]);
+  }, [isOpen, isAdmin, studentConvId]);
 
   // Sync admin clearedAt timestamp whenever selected conversation changes
   useEffect(() => {
@@ -288,13 +373,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   }, [selectedAdminConvId, adminConversations]);
 
   // ==========================================================================
-  // 1. STUDENT MODE: Listener for student's direct messages with AI CLIPZONE
+  // 1. STUDENT MODE: Listener strictly for student's assigned Sub-Admin thread
   // ==========================================================================
   useEffect(() => {
-    const targetUid = effectiveUserId || currentUserId;
-    if (!isOpen || isAdmin || !targetUid) return;
+    if (!isOpen || isAdmin || !studentConvId) {
+      if (!isAdmin) setStudentMessages([]);
+      return;
+    }
 
-    const messagesRef = collection(db, 'support_conversations', targetUid, 'messages');
+    const messagesRef = collection(db, 'support_conversations', studentConvId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(100));
 
     const unsubscribe = onSnapshot(
@@ -305,7 +392,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           const data = docSnap.data();
           loadedMsgs.push({
             id: docSnap.id,
-            conversationId: targetUid,
+            conversationId: studentConvId,
             sender: data.sender || 'user',
             senderName: data.senderName || 'Student',
             text: data.text || '',
@@ -319,7 +406,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             attachmentSize: data.attachmentSize
           });
 
-          // WHATSAPP DOUBLE TICK LOGIC: When student opens the chat, mark all admin messages as SEEN!
           if (data.sender === 'admin' && !data.isSeen) {
             try {
               updateDoc(docSnap.ref, {
@@ -333,9 +419,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
         setStudentMessages(loadedMsgs);
 
-        // Reset student's unread counter on the conversation document
         try {
-          const convRef = doc(db, 'support_conversations', targetUid);
+          const convRef = doc(db, 'support_conversations', studentConvId);
           updateDoc(convRef, {
             unreadUserCount: 0
           }).catch(() => {});
@@ -347,9 +432,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, effectiveUserId, currentUserId]);
+  }, [isOpen, isAdmin, studentConvId]);
 
-  // Filter messages based on WhatsApp-style local cleared timestamp (never deleted from DB)
+  // Filter messages based on WhatsApp-style local cleared timestamp
   const displayedStudentMessages = studentMessages.filter(
     (msg) => !studentClearedAt || msg.timestamp > studentClearedAt
   );
@@ -362,7 +447,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   }, [displayedStudentMessages, isOpen, isAdmin]);
 
   // ==========================================================================
-  // 2. ADMIN MODE: Listener for all student conversations & course buyers
+  // 2. ADMIN / SUB-ADMIN MODE: Role-isolated Messenger Listener
+  //    - Main Admin: All Sub-Admins ONLY (never student chats)
+  //    - Sub-Admin: Official Main Admin (pinned top) + ONLY course students
   // ==========================================================================
   useEffect(() => {
     if (!isOpen || !isAdmin) return;
@@ -370,137 +457,260 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     setIsLoadingAdminConvs(true);
     const convsRef = collection(db, 'support_conversations');
     const q = query(convsRef, orderBy('lastMessageAt', 'desc'), limit(300));
+    const normTitle = (t?: string) => (t || '').trim().toLowerCase();
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        // Map to ensure strictly ONE conversation per student - never duplicate contacts
-        const studentContactMap = new Map<string, SupportConversation>();
+        if (isMainAdminMode) {
+          const subDocMap = new Map<string, any>();
+          snapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            if (d.channelType === 'subadmin_mainadmin' || docSnap.id.startsWith('subadmin_main__')) {
+              const code = d.subAdminCode || docSnap.id.replace('subadmin_main__', '');
+              subDocMap.set(code, { id: docSnap.id, ...d });
+            }
+          });
 
-        const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
-          const cName = cleanRealName(name).toLowerCase();
-          if (cName) return `name_${cName}`;
-          if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
-          if (code) return `code_${code.toLowerCase()}`;
-          return `uid_${uid}`;
-        };
+          const list: SupportConversation[] = [];
+          const seen = new Set<string>();
+          (subAdmins || []).forEach((sub) => {
+            if (!sub.code) return;
+            seen.add(sub.code);
+            const remote = subDocMap.get(sub.code);
+            list.push({
+              id: `subadmin_main__${sub.code}`,
+              userId: sub.code,
+              userName: sub.name || `Sub-Admin (${sub.code})`,
+              userEmail: `Course: ${sub.courseTitle || sub.courseId}`,
+              userAvatar: '',
+              channelType: 'subadmin_mainadmin',
+              subAdminCode: sub.code,
+              subAdminName: sub.name,
+              courseId: sub.courseId,
+              activeCourse: sub.courseTitle,
+              purchasedCourses: sub.courseTitle ? [sub.courseTitle] : [],
+              lastMessage: remote?.lastMessage || `🛡️ Sub-Admin Chat (${sub.status === 'active' ? 'Active' : 'Disabled'})`,
+              lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
+              lastSender: remote?.lastSender || 'system',
+              unreadAdminCount: remote?.unreadAdminCount || 0,
+              unreadUserCount: remote?.unreadUserCount || 0,
+              createdAt: remote?.createdAt || sub.createdAt || Date.now(),
+              updatedAt: remote?.updatedAt || Date.now(),
+              clearedByUserAt: remote?.clearedByUserAt || 0,
+              clearedByAdminAt: remote?.clearedByAdminAt || 0
+            });
+          });
 
-        snapshot.forEach((docSnap) => {
-          const d = docSnap.data();
-          // Smart real name resolver: prioritize clean real name, then activation key match, then email
-          let resolvedName = cleanRealName(d.userName);
-          let matchedKey: any = null;
-          if (Array.isArray(allActivationKeys)) {
-            matchedKey = allActivationKeys.find((k: any) =>
-              (k.claimedByUid && (k.claimedByUid === docSnap.id || k.claimedByUid === d.userId)) ||
-              (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()) ||
-              (k.claimedByEmail && docSnap.id.includes(k.claimedByEmail))
-            );
+          subDocMap.forEach((remote, code) => {
+            if (seen.has(code)) return;
+            list.push({
+              id: remote.id || `subadmin_main__${code}`,
+              userId: code,
+              userName: remote.subAdminName || remote.userName || `Sub-Admin (${code})`,
+              userEmail: remote.activeCourse ? `Course: ${remote.activeCourse}` : '',
+              channelType: 'subadmin_mainadmin',
+              subAdminCode: code,
+              subAdminName: remote.subAdminName || remote.userName,
+              courseId: remote.courseId || '',
+              activeCourse: remote.activeCourse || '',
+              purchasedCourses: remote.activeCourse ? [remote.activeCourse] : [],
+              lastMessage: remote.lastMessage || '🛡️ Sub-Admin Conversation',
+              lastMessageAt: remote.lastMessageAt || remote.updatedAt || Date.now(),
+              lastSender: remote.lastSender || 'user',
+              unreadAdminCount: remote.unreadAdminCount || 0,
+              unreadUserCount: remote.unreadUserCount || 0,
+              createdAt: remote.createdAt || Date.now(),
+              updatedAt: remote.updatedAt || Date.now(),
+              clearedByUserAt: remote.clearedByUserAt || 0,
+              clearedByAdminAt: remote.clearedByAdminAt || 0
+            });
+          });
+
+          list.sort((a, b) => {
+            const uDiff = (b.unreadAdminCount > 0 ? 1 : 0) - (a.unreadAdminCount > 0 ? 1 : 0);
+            if (uDiff !== 0) return uDiff;
+            return (b.lastMessageAt || 0) - (a.lastMessageAt || 0);
+          });
+
+          setAdminConversations(list);
+          setIsLoadingAdminConvs(false);
+          if (!selectedAdminConvId && list.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+            setSelectedAdminConvId(list[0].id);
+          }
+          return;
+        }
+
+        if (isSubAdminMode && subAdminSession) {
+          const officialThreadId = `subadmin_main__${subAdminSession.code}`;
+          let officialRemote: any = null;
+          const studentContactMap = new Map<string, SupportConversation>();
+
+          const assignedCourseObj = courses.find(c => c.id === subAdminSession.courseId);
+          const assignedTitleNorm = normTitle(subAdminSession.courseTitle || assignedCourseObj?.title);
+
+          const isKeyForThisSubCourse = (k: any) => {
+            if (!k) return false;
+            if (k.courseId && k.courseId === subAdminSession.courseId) return true;
+            if (assignedTitleNorm && normTitle(k.courseTitle) === assignedTitleNorm) return true;
+            return false;
+          };
+
+          const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
+            const cName = cleanRealName(name).toLowerCase();
+            if (cName) return `name_${cName}`;
+            if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
+            if (code) return `code_${code.toLowerCase()}`;
+            return `uid_${uid}`;
+          };
+
+          snapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            if (docSnap.id === officialThreadId || (d.channelType === 'subadmin_mainadmin' && d.subAdminCode === subAdminSession.code)) {
+              officialRemote = { id: docSnap.id, ...d };
+              return;
+            }
+
+            const belongsToSub =
+              (d.channelType === 'student_subadmin' &&
+                (d.subAdminCode === subAdminSession.code ||
+                  d.courseId === subAdminSession.courseId ||
+                  (assignedTitleNorm && normTitle(d.activeCourse) === assignedTitleNorm))) ||
+              docSnap.id.startsWith(`substudent__${subAdminSession.code}__`);
+
+            if (!belongsToSub) return;
+
+            const rawStudentId = d.userId || docSnap.id.replace(`substudent__${subAdminSession.code}__`, '');
+            const matchedKey = Array.isArray(allActivationKeys)
+              ? allActivationKeys.find((k: any) =>
+                  isKeyForThisSubCourse(k) &&
+                  ((k.claimedByUid && k.claimedByUid === rawStudentId) ||
+                    (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()))
+                )
+              : undefined;
+
+            let resolvedName = cleanRealName(d.userName);
             if (!resolvedName && matchedKey) {
               resolvedName = cleanRealName(matchedKey.claimedByName) || cleanRealName(matchedKey.studentName);
             }
-          }
-          if (!resolvedName && d.userEmail) {
-            const ep = d.userEmail.split('@')[0];
-            resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
-          }
-          if (!resolvedName) {
-            resolvedName = 'Student';
-          }
-
-          const convObj: SupportConversation = {
-            id: docSnap.id,
-            userId: d.userId || docSnap.id,
-            userName: resolvedName,
-            userEmail: d.userEmail || (matchedKey?.claimedByEmail || ''),
-            userPhone: d.userPhone || '',
-            userAvatar: d.userAvatar || (matchedKey?.studentAvatar || ''),
-            purchasedCourses: d.purchasedCourses || (d.activeCourse ? [d.activeCourse] : []),
-            lastMessage: d.lastMessage || '',
-            lastMessageAt: d.lastMessageAt || Date.now(),
-            lastSender: d.lastSender || 'user',
-            unreadAdminCount: d.unreadAdminCount || 0,
-            unreadUserCount: d.unreadUserCount || 0,
-            createdAt: d.createdAt || Date.now(),
-            updatedAt: d.updatedAt || Date.now(),
-            clearedByUserAt: d.clearedByUserAt || 0,
-            clearedByAdminAt: d.clearedByAdminAt || 0
-          };
-
-          const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', docSnap.id, matchedKey?.code);
-          const existing = studentContactMap.get(dedupKey);
-
-          if (!existing) {
-            studentContactMap.set(dedupKey, convObj);
-          } else {
-            // Merge duplicate into the single contact thread, keeping the one with newest message
-            if ((convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
-              studentContactMap.set(dedupKey, {
-                ...existing,
-                ...convObj,
-                userAvatar: convObj.userAvatar || existing.userAvatar || '',
-                purchasedCourses: Array.from(new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])]))
-              });
-            } else if (convObj.userAvatar && !existing.userAvatar) {
-              existing.userAvatar = convObj.userAvatar;
+            if (!resolvedName && d.userEmail) {
+              const ep = d.userEmail.split('@')[0];
+              resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
             }
-          }
-        });
+            if (!resolvedName) resolvedName = 'Student';
 
-        // Merge users from activation keys who bought courses so admin sees all buyers like WhatsApp contacts
-        if (Array.isArray(allActivationKeys)) {
-          allActivationKeys.forEach((key: any) => {
-            const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
-            if (!isUsed) return;
-            const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
-            if (!buyerId) return;
+            const courseTitle = subAdminSession.courseTitle || d.activeCourse || matchedKey?.courseTitle || 'Course';
+            const convObj: SupportConversation = {
+              id: docSnap.id,
+              userId: rawStudentId,
+              userName: resolvedName,
+              userEmail: d.userEmail || matchedKey?.claimedByEmail || '',
+              userPhone: d.userPhone || '',
+              userAvatar: d.userAvatar || matchedKey?.studentAvatar || '',
+              channelType: 'student_subadmin',
+              subAdminCode: subAdminSession.code,
+              subAdminName: subAdminSession.name,
+              courseId: subAdminSession.courseId,
+              activeCourse: courseTitle,
+              purchasedCourses: [courseTitle],
+              lastMessage: d.lastMessage || '',
+              lastMessageAt: d.lastMessageAt || Date.now(),
+              lastSender: d.lastSender || 'user',
+              unreadAdminCount: d.unreadAdminCount || 0,
+              unreadUserCount: d.unreadUserCount || 0,
+              createdAt: d.createdAt || Date.now(),
+              updatedAt: d.updatedAt || Date.now(),
+              clearedByUserAt: d.clearedByUserAt || 0,
+              clearedByAdminAt: d.clearedByAdminAt || 0
+            };
 
-            const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || (key.claimedByEmail ? (key.claimedByEmail.split('@')[0].charAt(0).toUpperCase() + key.claimedByEmail.split('@')[0].slice(1)) : 'Student');
-            const dedupKey = getStudentKey(keyRealName, key.claimedByEmail || '', buyerId, key.code || key.id);
-            const courseTitle = key.courseTitle || 'Ai master class course by ai clipzone';
-
+            const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', rawStudentId, matchedKey?.code);
             const existing = studentContactMap.get(dedupKey);
-
-            if (!existing) {
-              studentContactMap.set(dedupKey, {
-                id: buyerId,
-                userId: buyerId,
-                userName: keyRealName,
-                userEmail: key.claimedByEmail || '',
-                userPhone: '',
-                purchasedCourses: [courseTitle],
-                lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
-                lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
-                lastSender: 'user',
-                unreadAdminCount: 0,
-                unreadUserCount: 0,
-                createdAt: key.createdAt || Date.now(),
-                updatedAt: key.claimedAt || Date.now(),
-                clearedByUserAt: 0,
-                clearedByAdminAt: 0
-              } as any);
-            } else {
-              // Existing contact found - update metadata, NEVER duplicate
-              if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
-                existing.userName = keyRealName;
-              }
-              if (courseTitle && !existing.purchasedCourses?.includes(courseTitle)) {
-                existing.purchasedCourses = [...(existing.purchasedCourses || []), courseTitle];
-              }
+            if (!existing || (convObj.lastMessageAt || 0) > (existing.lastMessageAt || 0)) {
+              studentContactMap.set(dedupKey, existing ? { ...existing, ...convObj } : convObj);
             }
           });
+
+          if (Array.isArray(allActivationKeys)) {
+            allActivationKeys.forEach((key: any) => {
+              const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
+              if (!isUsed || !isKeyForThisSubCourse(key)) return;
+              const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
+              if (!buyerId) return;
+
+              const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || 'Student';
+              const dedupKey = getStudentKey(keyRealName, key.claimedByEmail || '', buyerId, key.code || key.id);
+              const courseTitle = subAdminSession.courseTitle || key.courseTitle || 'Course';
+              const canonicalConvId = `substudent__${subAdminSession.code}__${buyerId}`;
+
+              const existing = studentContactMap.get(dedupKey);
+              if (!existing) {
+                studentContactMap.set(dedupKey, {
+                  id: canonicalConvId,
+                  userId: buyerId,
+                  userName: keyRealName,
+                  userEmail: key.claimedByEmail || '',
+                  userPhone: '',
+                  userAvatar: key.studentAvatar || '',
+                  channelType: 'student_subadmin',
+                  subAdminCode: subAdminSession.code,
+                  subAdminName: subAdminSession.name,
+                  courseId: subAdminSession.courseId,
+                  activeCourse: courseTitle,
+                  purchasedCourses: [courseTitle],
+                  lastMessage: `🔑 Activated Code: ${key.code || key.id}`,
+                  lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
+                  lastSender: 'system',
+                  unreadAdminCount: 0,
+                  unreadUserCount: 0,
+                  createdAt: key.createdAt || Date.now(),
+                  updatedAt: key.claimedAt || Date.now(),
+                  clearedByUserAt: 0,
+                  clearedByAdminAt: 0
+                });
+              } else if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
+                existing.userName = keyRealName;
+              }
+            });
+          }
+
+          const officialConv: SupportConversation = {
+            id: officialThreadId,
+            userId: 'MAIN_OFFICIAL_ADMIN',
+            userName: `${siteSettings.instituteName || 'AI CLIPZONE'} Official Admin`,
+            userEmail: 'Official Main Admin Support',
+            userAvatar: siteSettings.instituteLogoUrl || '',
+            channelType: 'subadmin_mainadmin',
+            subAdminCode: subAdminSession.code,
+            subAdminName: subAdminSession.name,
+            courseId: subAdminSession.courseId,
+            activeCourse: 'Official Main Admin',
+            purchasedCourses: ['Official Admin'],
+            lastMessage: officialRemote?.lastMessage || '👑 Main Official Admin सँग सिधा कुराकानी गर्नुहोस्',
+            lastMessageAt: officialRemote?.lastMessageAt || Date.now(),
+            lastSender: officialRemote?.lastSender || 'system',
+            unreadAdminCount: officialRemote?.unreadAdminCount || 0,
+            unreadUserCount: officialRemote?.unreadUserCount || 0,
+            createdAt: officialRemote?.createdAt || Date.now(),
+            updatedAt: officialRemote?.updatedAt || Date.now(),
+            clearedByUserAt: officialRemote?.clearedByUserAt || 0,
+            clearedByAdminAt: officialRemote?.clearedByAdminAt || 0
+          };
+
+          const studentsList = Array.from(studentContactMap.values());
+          studentsList.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
+          const combined = [officialConv, ...studentsList];
+          setAdminConversations(combined);
+          setIsLoadingAdminConvs(false);
+          if (!selectedAdminConvId && combined.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+            setSelectedAdminConvId(combined[0].id);
+          }
+          return;
         }
 
-        const loaded = Array.from(studentContactMap.values());
-        loaded.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
-
-        setAdminConversations(loaded);
+        setAdminConversations([]);
         setIsLoadingAdminConvs(false);
-
-        // Auto select first conversation on desktop if none selected
-        if (!selectedAdminConvId && loaded.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-          setSelectedAdminConvId(loaded[0].id);
-        }
       },
       (err) => {
         console.warn('Could not load admin support conversations:', err);
@@ -509,10 +719,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, allActivationKeys, selectedAdminConvId]);
+  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, selectedAdminConvId, siteSettings.instituteName, siteSettings.instituteLogoUrl]);
 
   // ==========================================================================
-  // 3. ADMIN MODE: Listener for messages in the selected student conversation
+  // 3. ADMIN / SUB-ADMIN MODE: Listener for messages in selected conversation
   // ==========================================================================
   useEffect(() => {
     if (!isOpen || !isAdmin || !selectedAdminConvId) {
@@ -520,6 +730,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       return;
     }
 
+    const isSubViewingMainAdmin = isSubAdminMode && selectedAdminConvId.startsWith('subadmin_main__');
     const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(100));
 
@@ -533,7 +744,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             id: docSnap.id,
             conversationId: selectedAdminConvId,
             sender: d.sender || 'user',
-            senderName: d.senderName || 'Student',
+            senderName: d.senderName || 'User',
             senderAvatar: d.senderAvatar || d.userAvatar || '',
             text: d.text || '',
             timestamp: d.timestamp || Date.now(),
@@ -546,8 +757,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             attachmentSize: d.attachmentSize
           });
 
-          // WHATSAPP DOUBLE TICK LOGIC: When admin opens student conversation, mark user messages as SEEN!
-          if (d.sender === 'user' && !d.isSeen) {
+          const shouldMarkSeen = isSubViewingMainAdmin
+            ? (d.sender === 'admin' && !d.isSeen)
+            : (d.sender === 'user' && !d.isSeen);
+
+          if (shouldMarkSeen) {
             try {
               updateDoc(docSnap.ref, {
                 isSeen: true,
@@ -560,12 +774,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
         setAdminMessages(loadedMsgs);
 
-        // Reset admin unread count on conversation
         try {
           const convRef = doc(db, 'support_conversations', selectedAdminConvId);
-          updateDoc(convRef, {
-            unreadAdminCount: 0
-          }).catch(() => {});
+          updateDoc(convRef, isSubViewingMainAdmin ? { unreadUserCount: 0 } : { unreadAdminCount: 0 }).catch(() => {});
         } catch (e) {}
       },
       (err) => {
@@ -574,9 +785,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, selectedAdminConvId]);
+  }, [isOpen, isAdmin, isSubAdminMode, selectedAdminConvId]);
 
-  // Filter admin messages based on WhatsApp-style local cleared timestamp (never deleted from DB)
+  // Filter admin messages based on WhatsApp-style local cleared timestamp
   const displayedAdminMessages = adminMessages.filter(
     (msg) => !adminClearedAt || msg.timestamp > adminClearedAt
   );
@@ -592,13 +803,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // WHATSAPP "CLEAR CHAT FROM OWN ONLY" HANDLERS
   // --------------------------------------------------------------------------
   const handleStudentClearChat = async () => {
-    const targetUid = effectiveUserId || currentUserId;
     const now = Date.now();
     setStudentClearedAt(now);
-    if (targetUid) {
-      localStorage.setItem(`clipzone_chat_cleared_user_${targetUid}`, String(now));
+    if (studentConvId) {
+      localStorage.setItem(`clipzone_chat_cleared_user_${studentConvId}`, String(now));
       try {
-        const convRef = doc(db, 'support_conversations', targetUid);
+        const convRef = doc(db, 'support_conversations', studentConvId);
         await updateDoc(convRef, {
           clearedByUserAt: now
         });
@@ -610,12 +820,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   };
 
   const handleStudentRestoreChat = async () => {
-    const targetUid = effectiveUserId || currentUserId;
     setStudentClearedAt(0);
-    if (targetUid) {
-      localStorage.removeItem(`clipzone_chat_cleared_user_${targetUid}`);
+    if (studentConvId) {
+      localStorage.removeItem(`clipzone_chat_cleared_user_${studentConvId}`);
       try {
-        const convRef = doc(db, 'support_conversations', targetUid);
+        const convRef = doc(db, 'support_conversations', studentConvId);
         await updateDoc(convRef, {
           clearedByUserAt: 0
         });
@@ -756,16 +965,20 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   };
 
   // --------------------------------------------------------------------------
-  // HANDLERS: STUDENT
+  // HANDLERS: STUDENT (Strictly messages assigned Course Sub-Admin ONLY)
   // --------------------------------------------------------------------------
   const handleStudentSendMessage = async (textToSend?: string) => {
-    // Strict requirement: Only course activated user (or admin) can send messages to admin
     if (!isAdmin && !hasActivatedCourse) {
-      showToast?.('🔒 केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र एडमिनलाई म्यासेज पठाउन सक्नुहुन्छ।', 'error');
+      showToast?.('🔒 केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र म्यासेज पठाउन सक्नुहुन्छ।', 'error');
       if (onOpenActivationModal) {
         onClose();
         onOpenActivationModal();
       }
+      return;
+    }
+
+    if (!activeStudentTarget || !studentConvId) {
+      showToast?.('यो कोर्षको लागि हाल Sub-Admin तोकिएको छैन।', 'error');
       return;
     }
 
@@ -788,10 +1001,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
     try {
       const effectiveAvatar = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
-      // 1. Add message with status 'sent' and isSeen: false (single/double grey tick initially)
-      const messagesRef = collection(db, 'support_conversations', targetUid, 'messages');
+      const messagesRef = collection(db, 'support_conversations', studentConvId, 'messages');
       await addDoc(messagesRef, {
-        conversationId: targetUid,
+        conversationId: studentConvId,
         sender: 'user',
         senderName: finalStudentName,
         senderAvatar: effectiveAvatar || undefined,
@@ -807,17 +1019,20 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
       const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
-      // 2. Set/update conversation doc with strictly the same single conversation ID
-      const convRef = doc(db, 'support_conversations', targetUid);
+      const convRef = doc(db, 'support_conversations', studentConvId);
       await setDoc(
         convRef,
         {
-          id: targetUid,
+          id: studentConvId,
           userId: targetUid,
           userName: finalStudentName,
           userEmail: userEmail || '',
           userAvatar: effectiveAvatar || undefined,
-          activeCourse: activeCourseName || '',
+          channelType: 'student_subadmin',
+          subAdminCode: activeStudentTarget.subAdmin.code,
+          subAdminName: activeStudentTarget.subAdmin.name,
+          courseId: activeStudentTarget.courseId,
+          activeCourse: activeStudentTarget.courseTitle || activeCourseName || '',
           lastMessage: summaryText,
           lastMessageAt: now,
           lastSender: 'user',
@@ -838,7 +1053,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   };
 
   // --------------------------------------------------------------------------
-  // HANDLERS: ADMIN
+  // HANDLERS: ADMIN / SUB-ADMIN
   // --------------------------------------------------------------------------
   const handleAdminSendReply = async (textToSend?: string) => {
     const text = (textToSend !== undefined ? textToSend : adminReplyText).trim();
@@ -851,13 +1066,21 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     setShowAdminAttachMenu(false);
 
     const now = Date.now();
+    const targetConv = adminConversations.find(c => c.id === selectedAdminConvId);
+    const isSubViewingMainAdmin = isSubAdminMode && selectedAdminConvId.startsWith('subadmin_main__');
+    const isMainViewingSubAdmin = isMainAdminMode && (targetConv?.channelType === 'subadmin_mainadmin' || selectedAdminConvId.startsWith('subadmin_main__'));
+
+    const msgSender: 'admin' | 'user' = isSubViewingMainAdmin ? 'user' : 'admin';
+    const senderLabel = isSubAdminMode && subAdminSession
+      ? `${subAdminSession.name} (${subAdminSession.courseTitle})`
+      : `${siteSettings.instituteName || 'AI CLIPZONE'} Official Admin`;
+
     try {
-      // 1. Add admin message with status 'sent' and isSeen: false
       const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
       await addDoc(messagesRef, {
         conversationId: selectedAdminConvId,
-        sender: 'admin',
-        senderName: `${siteSettings.instituteName || 'AI CLIPZONE'} Support`,
+        sender: msgSender,
+        senderName: senderLabel,
         text,
         timestamp: now,
         isSeen: false,
@@ -870,18 +1093,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
       const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
-      // 2. Update conversation doc - strictly preserve real student name so it never resets to Student Learner
-      const targetConv = adminConversations.find(c => c.id === selectedAdminConvId);
       let realUserName = cleanRealName(targetConv?.userName);
-      if (!realUserName && Array.isArray(allActivationKeys)) {
-        const keyMatch = allActivationKeys.find((k: any) => 
-          (k.claimedByUid && (k.claimedByUid === selectedAdminConvId || k.claimedByUid === targetConv?.userId)) ||
-          (k.claimedByEmail && targetConv?.userEmail && k.claimedByEmail.toLowerCase() === targetConv.userEmail.toLowerCase())
-        );
-        if (keyMatch) {
-          realUserName = cleanRealName(keyMatch.claimedByName) || cleanRealName(keyMatch.studentName);
-        }
-      }
       if (!realUserName && targetConv?.userEmail) {
         const ep = targetConv.userEmail.split('@')[0];
         realUserName = ep.charAt(0).toUpperCase() + ep.slice(1);
@@ -889,26 +1101,52 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       if (!realUserName) realUserName = 'Student';
 
       const convRef = doc(db, 'support_conversations', selectedAdminConvId);
-      await setDoc(
-        convRef,
-        {
-          id: selectedAdminConvId,
-          userId: targetConv?.userId || selectedAdminConvId,
-          userName: realUserName,
-          userEmail: targetConv?.userEmail || '',
-          userPhone: targetConv?.userPhone || '',
-          purchasedCourses: targetConv?.purchasedCourses || [],
-          lastMessage: summaryText,
-          lastMessageAt: now,
-          lastSender: 'admin',
-          unreadAdminCount: 0,
-          unreadUserCount: increment(1),
-          updatedAt: now
-        },
-        { merge: true }
-      );
+      const convPayload: Record<string, any> = {
+        id: selectedAdminConvId,
+        lastMessage: summaryText,
+        lastMessageAt: now,
+        lastSender: msgSender,
+        updatedAt: now
+      };
+
+      if (isSubViewingMainAdmin && subAdminSession) {
+        convPayload.channelType = 'subadmin_mainadmin';
+        convPayload.subAdminCode = subAdminSession.code;
+        convPayload.subAdminName = subAdminSession.name;
+        convPayload.courseId = subAdminSession.courseId;
+        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.userId = subAdminSession.code;
+        convPayload.userName = subAdminSession.name;
+        convPayload.unreadAdminCount = increment(1);
+        convPayload.unreadUserCount = 0;
+      } else if (isMainViewingSubAdmin) {
+        const code = targetConv?.subAdminCode || selectedAdminConvId.replace('subadmin_main__', '');
+        convPayload.channelType = 'subadmin_mainadmin';
+        convPayload.subAdminCode = code;
+        convPayload.subAdminName = targetConv?.subAdminName || targetConv?.userName || code;
+        convPayload.courseId = targetConv?.courseId || '';
+        convPayload.activeCourse = targetConv?.activeCourse || '';
+        convPayload.userId = code;
+        convPayload.userName = targetConv?.userName || targetConv?.subAdminName || code;
+        convPayload.unreadAdminCount = 0;
+        convPayload.unreadUserCount = increment(1);
+      } else if (isSubAdminMode && subAdminSession) {
+        convPayload.channelType = 'student_subadmin';
+        convPayload.subAdminCode = subAdminSession.code;
+        convPayload.subAdminName = subAdminSession.name;
+        convPayload.courseId = subAdminSession.courseId;
+        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.userId = targetConv?.userId || selectedAdminConvId.replace(`substudent__${subAdminSession.code}__`, '');
+        convPayload.userName = realUserName;
+        convPayload.userEmail = targetConv?.userEmail || '';
+        convPayload.purchasedCourses = targetConv?.purchasedCourses || [subAdminSession.courseTitle];
+        convPayload.unreadAdminCount = 0;
+        convPayload.unreadUserCount = increment(1);
+      }
+
+      await setDoc(convRef, convPayload, { merge: true });
     } catch (error) {
-      console.error('Failed to send admin reply:', error);
+      console.error('Failed to send reply:', error);
       showToast?.('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
       setAdminReplyText(text);
       setAdminPendingAttachment(attachmentToSend);
@@ -944,12 +1182,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     return (
       c.userName.toLowerCase().includes(q) ||
       (c.userEmail && c.userEmail.toLowerCase().includes(q)) ||
+      (c.activeCourse && c.activeCourse.toLowerCase().includes(q)) ||
       (c.lastMessage && c.lastMessage.toLowerCase().includes(q)) ||
       coursesStr.includes(q)
     );
   });
 
   const selectedAdminConv = adminConversations.find(c => c.id === selectedAdminConvId);
+  const isSelectedMainAdminChat = Boolean(isSubAdminMode && selectedAdminConv?.channelType === 'subadmin_mainadmin');
 
   // WhatsApp Dark Wallpaper pattern inline style
   const whatsappWallpaperStyle: React.CSSProperties = {
@@ -998,26 +1238,48 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     </button>
                   )}
 
-                  <div className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white font-black shrink-0 shadow-sm">
-                    <MessageCircle className="w-5 h-5 text-[#111b21]" />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black shrink-0 shadow-sm ${
+                    isSubAdminMode
+                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                      : 'bg-[#00a884] text-[#111b21]'
+                  }`}>
+                    {isSubAdminMode ? (
+                      <span className="text-lg">🛡️</span>
+                    ) : (
+                      <MessageCircle className="w-5 h-5 text-[#111b21]" />
+                    )}
                   </div>
 
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5">
-                        {selectedAdminConv ? selectedAdminConv.userName : 'Student Contacts & Messenger'}
+                        {selectedAdminConv
+                          ? selectedAdminConv.userName
+                          : isMainAdminMode
+                            ? 'Sub-Admin Contacts & Messenger'
+                            : 'Students & Official Admin'}
                       </h4>
                       <span className="bg-[#00a884]/20 text-[#00a884] text-[10px] px-2 py-0.5 rounded-full font-bold border border-[#00a884]/30">
-                        Admin Mode
+                        {isMainAdminMode ? 'Main Admin • Sub-Admins Only' : `Sub-Admin • ${subAdminSession?.courseTitle || 'Course'}`}
                       </span>
                     </div>
                     <p className="text-[11px] text-[#8696a0]">
                       {selectedAdminConv ? (
                         <span className="text-[#00a884] font-medium">
-                          {selectedAdminConv.purchasedCourses?.length ? `🎓 ${selectedAdminConv.purchasedCourses.join(', ')}` : 'Active conversation'}
+                          {isSelectedMainAdminChat
+                            ? '👑 AI CLIPZONE Official Main Admin'
+                            : isMainAdminMode
+                              ? `🛡️ Course Sub-Admin${selectedAdminConv.activeCourse ? ` • ${selectedAdminConv.activeCourse}` : ''}`
+                              : selectedAdminConv.purchasedCourses?.length
+                                ? `🎓 ${selectedAdminConv.purchasedCourses.join(', ')}`
+                                : 'Active conversation'}
                         </span>
                       ) : (
-                        <span>कोर्ष खरिद गरेका विद्यार्थीहरू र प्रत्यक्ष म्यासेजहरू</span>
+                        <span>
+                          {isMainAdminMode
+                            ? 'सबै Course Sub-Admin हरू सँग मात्र च्याट (कोर्ष विद्यार्थी च्याट यहाँ आउँदैन)'
+                            : 'तपाईंको कोर्षका विद्यार्थीहरू र Official Main Admin सँगको म्यासेज'}
+                        </span>
                       )}
                     </p>
                   </div>
@@ -1059,7 +1321,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         type="text"
                         value={adminSearchQuery}
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
-                        placeholder="Search or start new chat..."
+                        placeholder={isMainAdminMode ? "Search Sub-Admin..." : "Search student or Main Admin..."}
                         className="w-full bg-[#202c33] border border-transparent focus:border-[#00a884]/50 rounded-lg pl-9 pr-3 py-2 text-xs text-[#e9edef] placeholder-[#8696a0] focus:outline-none transition"
                       />
                       {adminSearchQuery && (
@@ -1083,17 +1345,26 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     ) : filteredAdminConversations.length === 0 ? (
                       <div className="py-16 text-center text-[#8696a0] text-xs px-4 space-y-2">
                         <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
-                        <p className="font-semibold text-[#e9edef]">कुनै च्याट भेटिएन</p>
+                        <p className="font-semibold text-[#e9edef]">
+                          {isMainAdminMode ? 'कुनै Sub-Admin भेटिएन' : 'कुनै च्याट भेटिएन'}
+                        </p>
                         <p className="text-[11px] text-[#8696a0]">
-                          विद्यार्थीहरूले म्यासेज पठाउँदा वा कोर्ष एक्टिभेट गर्दा यहाँ देखिनेछ।
+                          {isMainAdminMode
+                            ? 'Sub-Admin बनाउँदा वा Sub-Admin ले म्यासेज पठाउँदा यहाँ देखिनेछ।'
+                            : 'तपाईंको कोर्षका विद्यार्थीहरूले म्यासेज पठाउँदा वा कोर्ष एक्टिभेट गर्दा यहाँ देखिनेछ।'}
                         </p>
                       </div>
                     ) : (
                       filteredAdminConversations.map((conv) => {
                         const isSelected = conv.id === selectedAdminConvId;
-                        const hasUnread = conv.unreadAdminCount > 0;
+                        const isSubMainThread = Boolean(isSubAdminMode && conv.channelType === 'subadmin_mainadmin');
+                        const isMainViewingSub = Boolean(isMainAdminMode && conv.channelType === 'subadmin_mainadmin');
+                        const unreadCount = isSubMainThread ? (conv.unreadUserCount || 0) : (conv.unreadAdminCount || 0);
+                        const hasUnread = unreadCount > 0;
                         const initialLetter = (conv.userName || 'S').charAt(0).toUpperCase();
-                        const primaryCourse = conv.purchasedCourses?.[0];
+                        const primaryCourse = conv.activeCourse || conv.purchasedCourses?.[0];
+                        const isLastFromMe = isSubMainThread ? conv.lastSender === 'user' : conv.lastSender === 'admin';
+                        const isOtherReadLast = isSubMainThread ? conv.unreadAdminCount === 0 : conv.unreadUserCount === 0;
 
                         return (
                           <button
@@ -1106,7 +1377,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             }`}
                           >
                             <div className="relative shrink-0">
-                              {conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:')) ? (
+                              {isSubMainThread ? (
+                                <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-lg flex items-center justify-center shadow-xs">
+                                  👑
+                                </div>
+                              ) : isMainViewingSub ? (
+                                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-lg flex items-center justify-center shadow-xs">
+                                  🛡️
+                                </div>
+                              ) : conv.userAvatar && (conv.userAvatar.startsWith('http') || conv.userAvatar.startsWith('data:')) ? (
                                 <img
                                   src={conv.userAvatar}
                                   alt={conv.userName}
@@ -1119,7 +1398,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               )}
                               {hasUnread && (
                                 <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-red-600 text-[11px] font-black text-white flex items-center justify-center px-1 shadow-md ring-2 ring-[#111b21] animate-pulse">
-                                  {conv.unreadAdminCount > 99 ? '99+' : conv.unreadAdminCount}
+                                  {unreadCount > 99 ? '99+' : unreadCount}
                                 </span>
                               )}
                             </div>
@@ -1134,19 +1413,25 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 </span>
                               </div>
 
-                              {primaryCourse && (
+                              {(isSubMainThread || primaryCourse) && (
                                 <div className="mb-1">
-                                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-1.5 py-0.5 rounded truncate inline-block max-w-[190px]">
-                                    🎓 {primaryCourse}
+                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate inline-block max-w-[200px] border ${
+                                    isSubMainThread
+                                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                      : isMainViewingSub
+                                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                        : 'bg-[#202c33] text-[#00a884] border-[#00a884]/30'
+                                  }`}>
+                                    {isSubMainThread ? '👑 Official Main Admin' : `${isMainViewingSub ? '🛡️' : '🎓'} ${primaryCourse}`}
                                   </span>
                                 </div>
                               )}
 
                               {/* WhatsApp style snippet with tick */}
                               <p className={`text-xs truncate flex items-center gap-1 ${hasUnread ? 'text-[#e9edef] font-semibold' : 'text-[#8696a0]'}`}>
-                                {conv.lastSender === 'admin' && (
+                                {isLastFromMe && (
                                   <span className="shrink-0 inline-flex items-center">
-                                    {conv.unreadUserCount === 0 ? (
+                                    {isOtherReadLast ? (
                                       <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] stroke-[2.5]" />
                                     ) : (
                                       <CheckCheck className="w-3.5 h-3.5 text-[#8696a0] stroke-[2]" />
@@ -1175,7 +1460,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       {/* Active Chat Header */}
                       <div className="bg-[#202c33] border-b border-[#222d34] px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xs">
                         <div className="flex items-center gap-3">
-                          {selectedAdminConv.userAvatar && (selectedAdminConv.userAvatar.startsWith('http') || selectedAdminConv.userAvatar.startsWith('data:')) ? (
+                          {isSelectedMainAdminChat ? (
+                            <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-base flex items-center justify-center shrink-0">
+                              👑
+                            </div>
+                          ) : isMainAdminMode ? (
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-base flex items-center justify-center shrink-0">
+                              🛡️
+                            </div>
+                          ) : selectedAdminConv.userAvatar && (selectedAdminConv.userAvatar.startsWith('http') || selectedAdminConv.userAvatar.startsWith('data:')) ? (
                             <img
                               src={selectedAdminConv.userAvatar}
                               alt={selectedAdminConv.userName}
@@ -1191,7 +1484,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               {selectedAdminConv.userName}
                             </h4>
                             <p className="text-[11px] text-[#00a884]">
-                              {selectedAdminConv.purchasedCourses?.[0] || 'Verified Student'}
+                              {isSelectedMainAdminChat
+                                ? 'AI CLIPZONE Official Main Admin'
+                                : isMainAdminMode
+                                  ? `Course Sub-Admin${selectedAdminConv.activeCourse ? ` • ${selectedAdminConv.activeCourse}` : ''}`
+                                  : selectedAdminConv.purchasedCourses?.[0] || 'Verified Student'}
                             </p>
                           </div>
                         </div>
@@ -1280,28 +1577,32 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
                             <p className="font-semibold text-[#e9edef]">{selectedAdminConv.userName} सँग कुराकानी सुरु गर्नुहोस्</p>
                             <p className="text-[11px] text-[#8696a0]">
-                              तलको बक्सबाट सिधै विद्यार्थीलाई जवाफ पठाउनुहोस् वा फोटो/कागजात पठाउनुहोस्।
+                              {isSelectedMainAdminChat
+                                ? 'तलको बक्सबाट AI CLIPZONE Official Admin लाई सिधै म्यासेज वा फोटो/कागजात पठाउनुहोस्।'
+                                : isMainAdminMode
+                                  ? 'तलको बक्सबाट Sub-Admin लाई सिधै जवाफ वा फोटो/कागजात पठाउनुहोस्।'
+                                  : 'तलको बक्सबाट सिधै विद्यार्थीलाई जवाफ पठाउनुहोस् वा फोटो/कागजात पठाउनुहोस्।'}
                             </p>
                           </div>
                         ) : (
                           displayedAdminMessages.map((msg) => {
-                            const isAdminMsg = msg.sender === 'admin';
+                            const isMyMsg = isSelectedMainAdminChat ? msg.sender === 'user' : msg.sender === 'admin';
                             const isSeen = msg.isSeen || msg.status === 'seen';
                             const isCopied = copiedMessageId === msg.id;
 
                             return (
                               <div
                                 key={msg.id}
-                                className={`flex flex-col group/bubble ${isAdminMsg ? 'items-end' : 'items-start'}`}
+                                className={`flex flex-col group/bubble ${isMyMsg ? 'items-end' : 'items-start'}`}
                               >
                                 <div
                                   className={`rounded-xl px-3.5 pt-2 pb-1.5 shadow-sm break-words max-w-[85%] sm:max-w-[70%] relative ${
-                                    isAdminMsg
+                                    isMyMsg
                                       ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-xs'
                                       : 'bg-[#202c33] text-[#e9edef] rounded-tl-xs'
                                   }`}
                                 >
-                                  {!isAdminMsg && (
+                                  {!isMyMsg && (
                                     <div className="text-[11px] font-bold text-[#53bdeb] mb-1 flex items-center justify-between gap-2">
                                       <span>{msg.senderName}</span>
                                       <button
@@ -1401,9 +1702,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                                     <span>{formatMessageTime(msg.timestamp)}</span>
 
-                                    {isAdminMsg && (
+                                    {isMyMsg && (
                                       isSeen ? (
-                                        <span title="विद्यार्थीले हेरिसक्यो (Seen)" className="inline-flex items-center text-[#53bdeb]">
+                                        <span title="हेरिसकियो (Seen)" className="inline-flex items-center text-[#53bdeb]">
                                           <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
                                         </span>
                                       ) : (
@@ -1421,10 +1722,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         <div ref={adminEndRef} />
                       </div>
 
-                      {/* Admin Quick Replies */}
+                      {/* Admin / Sub-Admin Quick Replies */}
                       <div className="px-3 py-2 bg-[#202c33] border-t border-[#222d34] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
                         <span className="text-[10px] text-[#8696a0] uppercase font-bold shrink-0">द्रुत जवाफ:</span>
-                        {ADMIN_QUICK_PRESETS.map((preset, idx) => (
+                        {(isSelectedMainAdminChat ? SUB_ADMIN_TO_MAIN_PRESETS : ADMIN_QUICK_PRESETS).map((preset, idx) => (
                           <button
                             key={idx}
                             onClick={() => handleAdminSendReply(preset)}
@@ -1583,9 +1884,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       <div className="w-16 h-16 rounded-full bg-[#202c33] border border-[#222d34] flex items-center justify-center mb-3 text-[#00a884]">
                         <MessageCircle className="w-8 h-8" />
                       </div>
-                      <h4 className="font-bold text-sm text-[#e9edef] mb-1">विद्यार्थी छनोट गर्नुहोस्</h4>
+                      <h4 className="font-bold text-sm text-[#e9edef] mb-1">
+                        {isMainAdminMode ? 'Sub-Admin छनोट गर्नुहोस्' : 'सम्पर्क छनोट गर्नुहोस्'}
+                      </h4>
                       <p className="text-xs text-[#8696a0] max-w-xs">
-                        च्याट गर्न र जवाफ पठाउन बाँयापट्टिको सम्पर्क सूचीबाट विद्यार्थी छान्नुहोस्।
+                        {isMainAdminMode
+                          ? 'च्याट गर्न र निर्देशन पठाउन बाँयापट्टिको सूचीबाट Course Sub-Admin छान्नुहोस्।'
+                          : 'कुराकानी गर्न बाँयापट्टिको सूचीबाट विद्यार्थी वा AI CLIPZONE Official Admin छान्नुहोस्।'}
                       </p>
                     </div>
                   )}
@@ -1627,21 +1932,29 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                   <div>
                     <h4 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 leading-tight">
-                      <span>{siteSettings.instituteName || 'AI CLIPZONE'} Support</span>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20" />
+                      <span>
+                        {activeStudentTarget
+                          ? `${activeStudentTarget.subAdmin.name} • ${activeStudentTarget.courseTitle}`
+                          : `${siteSettings.instituteName || 'AI CLIPZONE'} Course Support`}
+                      </span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] fill-[#00a884]/20 shrink-0" />
                     </h4>
                     <div className="flex items-center gap-1.5 text-[11px] text-[#00a884] font-medium leading-tight">
-                      <span>online • official admin</span>
+                      <span>
+                        {activeStudentTarget
+                          ? 'online • Course Sub-Admin'
+                          : 'Course Sub-Admin Support'}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {(siteSettings.supportPhone || siteSettings.contactPhone) && (
+                  {activeStudentTarget?.courseWhatsapp && (
                     <a
-                      href={`tel:${siteSettings.supportPhone || siteSettings.contactPhone}`}
+                      href={`tel:${activeStudentTarget.courseWhatsapp}`}
                       className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition"
-                      title={`Call ${siteSettings.supportPhone || siteSettings.contactPhone}`}
+                      title={`Call ${activeStudentTarget.courseWhatsapp}`}
                     >
                       <Phone className="w-4 h-4" />
                     </a>
@@ -1737,7 +2050,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   )}
                 </div>
 
-                {activeCourseName ? (
+                {activeStudentTarget ? (
+                  <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2 py-0.5 rounded-full truncate max-w-[180px] shrink-0">
+                    🛡️ {activeStudentTarget.subAdmin.name}
+                  </span>
+                ) : activeCourseName ? (
                   <span className="text-[10px] font-medium bg-[#202c33] text-[#00a884] border border-[#00a884]/30 px-2 py-0.5 rounded-full truncate max-w-[160px] shrink-0">
                     🎓 {activeCourseName}
                   </span>
@@ -1751,6 +2068,30 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   </span>
                 )}
               </div>
+
+              {/* Multi-course Sub-Admin Switcher (if student activated multiple courses with different sub-admins) */}
+              {hasActivatedCourse && studentSubAdminTargets.length > 1 && (
+                <div className="bg-[#182229] border-b border-[#222d34] px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+                  <span className="text-[10px] text-[#8696a0] font-bold shrink-0">कोर्ष छान्नुहोस्:</span>
+                  {studentSubAdminTargets.map((target) => {
+                    const isActiveTarget = target.subAdmin.code === activeStudentTarget?.subAdmin.code;
+                    return (
+                      <button
+                        key={target.subAdmin.code}
+                        type="button"
+                        onClick={() => setSelectedStudentSubCode(target.subAdmin.code)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap cursor-pointer transition border ${
+                          isActiveTarget
+                            ? 'bg-[#00a884] text-[#111b21] border-[#00a884]'
+                            : 'bg-[#202c33] text-[#e9edef] border-[#222d34] hover:bg-[#2a3942]'
+                        }`}
+                      >
+                        🎓 {target.courseTitle} — 🛡️ {target.subAdmin.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Messages Scroll Area with WhatsApp Wallpaper */}
               <div
@@ -1766,7 +2107,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     <div className="space-y-1.5">
                       <h4 className="font-bold text-base text-[#e9edef]">कोर्ष एक्टिभेसन आवश्यक छ (Activation Required)</h4>
                       <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                        केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र आफ्नो वास्तविक नामसहित एडमिनलाई सिधै म्यासेज पठाउन सक्नुहुन्छ।
+                        केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र आफ्नो कोर्ष Sub-Admin लाई सिधै म्यासेज पठाउन सक्नुहुन्छ।
                       </p>
                     </div>
                     {onOpenActivationModal && (
@@ -1782,6 +2123,19 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </button>
                     )}
                   </div>
+                ) : !activeStudentTarget ? (
+                  /* ACTIVATED COURSE HAS NO ACTIVE SUB-ADMIN YET — STRICT ISOLATION FROM MAIN ADMIN */
+                  <div className="bg-[#111b21]/95 border border-emerald-500/40 rounded-2xl p-6 text-center space-y-3 shadow-xl my-4">
+                    <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 text-2xl">
+                      🛡️
+                    </div>
+                    <div className="space-y-1.5">
+                      <h4 className="font-bold text-base text-[#e9edef]">Course Sub-Admin Assign भएको छैन</h4>
+                      <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
+                        यो कोर्षको च्याट सपोर्ट केवल सम्बन्धित कोर्षको Sub-Admin लाई मात्र पठाउन मिल्छ। हाल यस कोर्षमा सक्रिय Sub-Admin तोकिएको छैन।
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <>
                     {/* WhatsApp Floating Date Pill */}
@@ -1795,7 +2149,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     <div className="flex justify-center my-2">
                       <div className="bg-[#182229]/80 text-[#ffd279] text-[11px] px-3.5 py-1.5 rounded-lg max-w-xs text-center border border-[#ffd279]/20 flex items-center gap-1.5 leading-snug">
                         <Lock className="w-3 h-3 text-[#ffd279] shrink-0" />
-                        <span>Messages are sent directly to AI CLIPZONE Official Support.</span>
+                        <span>Messages go directly to your Course Sub-Admin ({activeStudentTarget.subAdmin.name}).</span>
                       </div>
                     </div>
 
@@ -1803,7 +2157,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     {studentClearedAt > 0 && studentMessages.length > displayedStudentMessages.length && (
                       <div className="flex justify-center my-1.5">
                         <div className="bg-[#182229] border border-[#222d34] rounded-lg px-3 py-1.5 text-[11px] text-[#8696a0] flex items-center gap-2 shadow-xs">
-                          <span>🗑️ Messages cleared on this device. (Admin records remain safe)</span>
+                          <span>🗑️ Messages cleared on this device. (Sub-Admin records remain safe)</span>
                           <button
                             type="button"
                             onClick={handleStudentRestoreChat}
@@ -1825,7 +2179,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         <div className="space-y-1">
                           <p className="text-[#e9edef] font-semibold text-sm">कुनै म्यासेज छैन (No messages yet)</p>
                           <p className="text-[#8696a0] text-xs max-w-xs mx-auto">
-                            तलको बक्समा आफ्नो प्रश्न लेखेर पठाउनुहोस्। एडमिनले हेरेपछि डबल नीलो टिक देखिनेछ।
+                            तलको बक्समा आफ्नो प्रश्न लेखेर {activeStudentTarget.subAdmin.name} लाई पठाउनुहोस्। हेरेपछि डबल नीलो टिक देखिनेछ।
                           </p>
                         </div>
 
@@ -1865,7 +2219,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               {!isMe && (
                                 <div className="text-[11px] font-bold text-[#00a884] mb-1 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-1">
-                                    <span>{siteSettings.instituteName || 'AI CLIPZONE'} Support</span>
+                                    <span>{activeStudentTarget?.subAdmin.name || msg.senderName || 'Course Sub-Admin'}</span>
                                     <CheckCircle2 className="w-3 h-3 text-[#00a884]" />
                                   </div>
                                   <button
@@ -1993,7 +2347,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               </div>
 
               {/* Quick Suggestion Strip (WhatsApp Style) */}
-              {(hasActivatedCourse || isAdmin) && studentMessages.length > 0 && (
+              {(isAdmin || (hasActivatedCourse && Boolean(activeStudentTarget))) && studentMessages.length > 0 && (
                 <div className="px-3 py-1.5 bg-[#202c33] border-t border-[#222d34] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
                   <span className="text-[10px] text-[#8696a0] uppercase font-bold shrink-0">सुझाव:</span>
                   {['धन्यवाद!', 'हजुर, बुझेँ।', 'पेमेन्ट स्क्रिनसट पठाएँ', 'प्रमाणपत्र कहाँ हेर्ने?'].map((sug, i) => (
@@ -2101,6 +2455,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         कोड हाल्नुहोस्
                       </button>
                     )}
+                  </div>
+                ) : !activeStudentTarget && !isAdmin ? (
+                  <div className="grow flex items-center justify-center bg-[#111b21] border border-emerald-500/30 rounded-full px-4 py-2.5 text-xs text-emerald-300">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>यो कोर्षमा Sub-Admin तोकिएपछि मात्र म्यासेज पठाउन मिल्छ</span>
+                    </span>
                   </div>
                 ) : (
                   <>

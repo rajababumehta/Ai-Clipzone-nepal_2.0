@@ -217,7 +217,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Enforce role-based activeTab and assigned course lock
   useEffect(() => {
     if (isSubAdmin) {
-      if (!['keys', 'courses', 'qr'].includes(activeTab)) {
+      if (initialTab && ['keys', 'courses', 'qr', 'ask'].includes(initialTab)) {
+        setActiveTab(initialTab);
+      } else if (!['keys', 'courses', 'qr', 'ask'].includes(activeTab)) {
         setActiveTab('keys');
       }
       if (assignedCourseId) {
@@ -941,24 +943,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </button>
           )}
 
-          {isMainAdmin && (
-            <button
-              onClick={() => setActiveTab('ask')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
-                activeTab === 'ask'
-                  ? 'bg-blue-600 text-white shadow-md font-bold'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-              💬 Ask (User Messages)
-              {adminUnreadAskCount > 0 && (
-                <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-zinc-900 absolute -top-1.5 -right-1.5 shadow-sm animate-pulse" title="New unread student messages">
-                  {adminUnreadAskCount > 99 ? '99+' : adminUnreadAskCount}
-                </span>
-              )}
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('ask')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer relative ${
+              activeTab === 'ask'
+                ? 'bg-blue-600 text-white shadow-md font-bold'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+            {isMainAdmin ? '💬 Ask (Sub-Admin Chats)' : '💬 Ask (Students & Admin)'}
+            {adminUnreadAskCount > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-zinc-900 absolute -top-1.5 -right-1.5 shadow-sm animate-pulse" title="New unread messages">
+                {adminUnreadAskCount > 99 ? '99+' : adminUnreadAskCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Tab Body Scrollable Container */}
@@ -2961,14 +2961,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 8: ASK & STUDENT LIVE SUPPORT (MAIN ADMIN ONLY) */}
+          {/* TAB 8: ASK & LIVE SUPPORT (MAIN ADMIN: SUB-ADMINS | SUB-ADMIN: STUDENTS + OFFICIAL ADMIN) */}
           {/* ========================================================================= */}
-          {isMainAdmin && activeTab === 'ask' && (
+          {activeTab === 'ask' && (
             <AdminAskTab
               showToast={showToast}
               instituteName={siteSettings.instituteName || 'AI CLIPZONE'}
               instituteLogoUrl={siteSettings.instituteLogoUrl}
               allActivationKeys={allActivationKeys}
+              adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+              subAdminSession={isMainAdmin ? null : subAdminSession}
+              subAdmins={subAdmins}
+              courses={courses}
             />
           )}
 
