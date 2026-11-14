@@ -113,7 +113,23 @@ interface FirestoreErrorInfo {
   };
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+function openExternalLink(url: string) {
+  if (typeof document === 'undefined' || !url) return;
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null,
+  rethrow = true
+) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -131,7 +147,9 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   };
   console.error('Firestore Error Details:', JSON.stringify(errInfo, null, 2));
-  throw new Error(JSON.stringify(errInfo));
+  if (rethrow) {
+    throw new Error(JSON.stringify(errInfo));
+  }
 }
 
 function cleanUndefined<T extends object>(obj: T): T {
@@ -3475,7 +3493,7 @@ export default function App() {
       console.error('Failed to update course order in Firestore:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       showToast(`Sequence updated locally but failed to sync online: ${errorMessage}`, 'error');
-      handleFirestoreError(err, OperationType.UPDATE, 'courses');
+      handleFirestoreError(err, OperationType.UPDATE, 'courses', false);
     }
   };
 
@@ -4270,7 +4288,7 @@ export default function App() {
 
     const isInIframe = typeof window !== 'undefined' && window.top !== window.self;
     if (isInIframe) {
-      window.open(window.location.href, '_blank');
+      openExternalLink(window.location.href);
       showToast('📲 Full Tab मा खुल्यो! Chrome Menu (⋮) -> "Add to Home Screen" थिच्नुहोस्!', 'info');
       setShowPwaInstallModal(false);
       return;
@@ -4415,7 +4433,7 @@ export default function App() {
       console.error('Failed to save course:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       showToast(`Error saving course to Firestore: ${errorMessage}`, 'error');
-      handleFirestoreError(err, editingCourse ? OperationType.UPDATE : OperationType.CREATE, `courses/${finalId}`);
+      handleFirestoreError(err, editingCourse ? OperationType.UPDATE : OperationType.CREATE, `courses/${finalId}`, false);
     }
   };
 
@@ -4497,7 +4515,7 @@ export default function App() {
       console.error('Failed to delete course:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       showToast(`Error deleting course from Firestore: ${errorMessage}`, 'error');
-      handleFirestoreError(err, OperationType.DELETE, `courses/${courseId}`);
+      handleFirestoreError(err, OperationType.DELETE, `courses/${courseId}`, false);
     }
   };
 
@@ -4738,7 +4756,7 @@ export default function App() {
     }
     const fullMessage = `Name: ${contactName}\nPhone: ${contactPhone || 'N/A'}\nSelected Course: ${contactCourse}\nMessage: ${contactMsg}`;
     const whatsappUrl = `https://wa.me/9779763323268?text=${encodeURIComponent(fullMessage)}`;
-    window.open(whatsappUrl, '_blank');
+    openExternalLink(whatsappUrl);
     
     // Clear Inputs
     setContactName('');
@@ -4775,7 +4793,7 @@ export default function App() {
     const accountName = effPayment.accountName || 'Ayush Chaurasiya';
     const customMsg = selectedCourse.message?.trim() ? `\n\n${selectedCourse.message.trim()}` : '';
     const message = `Hello! I have completed payment for "${selectedCourse.title}" (${selectedCourse.price}) via eSewa/QR (${accountName}). Please provide my secret course activation key!${customMsg}`;
-    window.open(`https://wa.me/${fullNumber}?text=${encodeURIComponent(message)}`, '_blank');
+    openExternalLink(`https://wa.me/${fullNumber}?text=${encodeURIComponent(message)}`);
     setShowQrModal(false);
     setSelectedCourse(null);
     showToast('Payment confirmation message sent on WhatsApp!', 'success');

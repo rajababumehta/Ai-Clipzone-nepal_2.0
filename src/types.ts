@@ -256,9 +256,11 @@ export interface LiveClassJoinResponse {
 export interface LiveClassHealthStatus {
   zoomConfigured: boolean;
   firebaseAdminConfigured: boolean;
+  restFallbackActive?: boolean;
   fcmConfigured: boolean;
   cronConfigured: boolean;
   databaseId: string;
+  initError?: string | null;
 }
 
 export interface SupportMessage {

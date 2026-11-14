@@ -299,9 +299,10 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       msg.includes('Missing or insufficient permissions') ||
       err?.code === 7
     ) {
+      const initReason = getFirebaseAdminInitError();
+      const detail = initReason ? ` (${initReason})` : '';
       return res.status(403).json({
-        error:
-          'Firestore permission denied in REST mode. Sign in with your Admin Email/Google account or set FIREBASE_SERVICE_ACCOUNT_JSON on the server.',
+        error: `Firestore permission denied in REST mode. Update FIREBASE_SERVICE_ACCOUNT_JSON to match the configured Firebase project or sign in with your Admin Email account.${detail}`,
         code: 'FIRESTORE_PERMISSION_DENIED',
       });
     }
@@ -522,26 +523,30 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     try {
       // 1. Prevent duplicate Zoom meeting creation on retry using idempotencyKey
       if (idempotencyKey) {
-        const dupSnap = await db
-          .collection('liveClasses')
-          .where('idempotencyKey', '==', idempotencyKey)
-          .limit(1)
-          .get();
-        if (!dupSnap.empty) {
-          const existingDoc = dupSnap.docs[0];
-          const existingData = existingDoc.data();
-          const secSnap = await db.collection('liveClassSecrets').doc(existingDoc.id).get();
-          const sec = secSnap.exists ? secSnap.data() : {};
-          return res.status(200).json({
-            deduplicated: true,
-            liveClass: {
-              id: existingDoc.id,
-              ...existingData,
-              zoomMeetingId: sec?.zoomMeetingId || '',
-              zoomPasscode: sec?.zoomPasscode || '',
-              zoomStartUrl: sec?.zoomStartUrl || '',
-            },
-          });
+        try {
+          const dupSnap = await db
+            .collection('liveClasses')
+            .where('idempotencyKey', '==', idempotencyKey)
+            .limit(1)
+            .get();
+          if (!dupSnap.empty) {
+            const existingDoc = dupSnap.docs[0];
+            const existingData = existingDoc.data();
+            const secSnap = await db.collection('liveClassSecrets').doc(existingDoc.id).get().catch(() => null);
+            const sec = secSnap?.exists ? secSnap.data() : {};
+            return res.status(200).json({
+              deduplicated: true,
+              liveClass: {
+                id: existingDoc.id,
+                ...existingData,
+                zoomMeetingId: sec?.zoomMeetingId || '',
+                zoomPasscode: sec?.zoomPasscode || '',
+                zoomStartUrl: sec?.zoomStartUrl || '',
+              },
+            });
+          }
+        } catch {
+          // Skip idempotency pre-check if running in REST mode without Admin JWT
         }
       }
 

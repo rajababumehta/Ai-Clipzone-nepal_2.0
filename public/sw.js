@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v29';
+const CACHE_NAME = 'aiclipzone-pwa-v30';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -66,9 +66,16 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Ignore non-http, browser extensions, API calls, or Service Worker scripts
+  // Ignore non-http, browser extensions, API calls, dev Vite modules, or Service Worker scripts
   if (!url.protocol.startsWith('http')) return;
   if (url.pathname.startsWith('/api/')) return;
+  if (
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/')
+  ) {
+    return;
+  }
   if (url.pathname.endsWith('sw.js') || url.pathname.endsWith('firebase-messaging-sw.js')) return;
 
   // A. HTML Page Navigation requests (Network-first with offline index.html fallback)
@@ -87,10 +94,12 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          return caches.match(event.request).then((cachedResponse) => {
-            return cachedResponse || caches.match('/') || caches.match('/index.html');
-          });
+        .catch(async () => {
+          const cached =
+            (await caches.match(event.request)) ||
+            (await caches.match('/')) ||
+            (await caches.match('/index.html'));
+          return cached || Response.error();
         })
     );
     return;
@@ -114,8 +123,9 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          return caches.match(event.request);
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || Response.error();
         })
     );
     return;
@@ -142,6 +152,7 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch((err) => {
         console.warn('[SW] Fetch failed offline:', event.request.url, err);
+        return Response.error();
       });
     })
   );

@@ -427,37 +427,49 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
 
         {/* Readiness Pills */}
         {health && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/80 text-[11px] font-bold">
-            <span
-              className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                health.firebaseAdminConfigured
-                  ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
-                  : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Firebase Admin: {health.firebaseAdminConfigured ? 'Connected' : 'Needs Service Account Env'}
-            </span>
-            <span
-              className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                health.zoomConfigured
-                  ? 'bg-blue-950/50 border-blue-500/30 text-blue-300'
-                  : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
-              }`}
-            >
-              <Video className="w-3.5 h-3.5" />
-              Zoom S2S OAuth: {health.zoomConfigured ? 'Configured' : 'Needs ZOOM_* Env Vars'}
-            </span>
-            <span
-              className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                health.fcmConfigured
-                  ? 'bg-purple-950/50 border-purple-500/30 text-purple-300'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              FCM Server Push: {health.fcmConfigured ? 'Ready' : 'Pending Admin SDK'}
-            </span>
+          <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+              <span
+                className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                  health.firebaseAdminConfigured
+                    ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
+                    : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Firebase Admin: {health.firebaseAdminConfigured ? 'Connected' : 'REST Mode (Check Service Account)'}
+              </span>
+              <span
+                className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                  health.zoomConfigured
+                    ? 'bg-blue-950/50 border-blue-500/30 text-blue-300'
+                    : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                Zoom S2S OAuth: {health.zoomConfigured ? 'Configured' : 'Needs ZOOM_* Env Vars'}
+              </span>
+              <span
+                className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                  health.fcmConfigured
+                    ? 'bg-purple-950/50 border-purple-500/30 text-purple-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                FCM Server Push: {health.fcmConfigured ? 'Ready' : 'Pending Admin SDK'}
+              </span>
+            </div>
+            {!health.firebaseAdminConfigured && health.initError && (
+              <div className="bg-amber-950/35 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-[11px] text-amber-200 flex items-start gap-2 leading-relaxed">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Backend Notice:</span> {health.initError} Update{' '}
+                  <code className="px-1 py-0.5 rounded bg-black/40 text-amber-300">FIREBASE_SERVICE_ACCOUNT_JSON</code>{' '}
+                  in Secrets for full Student Seat Registration, Secret-Code Admin writes, and FCM Push delivery.
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
