@@ -139,11 +139,22 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
     [activeCourseIds, isAdminSession]
   );
 
+  const eligibleLiveCourses = useMemo(() => {
+    if (isAdminSession) return courses;
+    return courses.filter((c) => isEnrolledInCourse(c.id) && Boolean(c.hasLiveSessions));
+  }, [courses, isAdminSession, isEnrolledInCourse]);
+
   const visibleClasses = useMemo(() => {
-    const filtered = classes.filter((c) => c.status !== 'draft');
+    const filtered = classes.filter((c) => {
+      if (c.status === 'draft') return false;
+      if (isAdminSession) return true;
+      const courseObj = courses.find((course) => course.id === c.courseId);
+      const courseHasLive = courseObj ? Boolean(courseObj.hasLiveSessions) : false;
+      return isEnrolledInCourse(c.courseId) && courseHasLive;
+    });
     if (courseFilter === 'all') return filtered;
     return filtered.filter((c) => c.courseId === courseFilter);
-  }, [classes, courseFilter]);
+  }, [classes, courseFilter, courses, isAdminSession, isEnrolledInCourse]);
 
   const liveNowClasses = useMemo(() => {
     return visibleClasses.filter((cls) => {
@@ -493,8 +504,8 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
             onChange={(e) => setCourseFilter(e.target.value)}
             className="px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 outline-none focus:border-blue-500"
           >
-            <option value="all">All Courses</option>
-            {courses.map((c) => (
+            <option value="all">{isAdminSession ? 'All Courses' : 'My Live Courses'}</option>
+            {eligibleLiveCourses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
               </option>

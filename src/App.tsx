@@ -778,6 +778,7 @@ export default function App() {
   const [formImage, setFormImage] = useState('');
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
+  const [formHasLiveSessions, setFormHasLiveSessions] = useState(false);
   const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string; chapterTitle?: string }[]>([]);
@@ -3836,6 +3837,20 @@ export default function App() {
   );
   const hasCourseActivated = activeCourseIds.length > 0;
   const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
+  const hasLiveIncludedCourseActivated = useMemo(() => {
+    if (activeCourseIds.length === 0) return false;
+    const liveCourses = courses.filter((c) => Boolean(c.hasLiveSessions));
+    if (liveCourses.length === 0) return false;
+    if (activeCourseIds.includes('all') || activeCourseIds.includes('course-all')) {
+      return true;
+    }
+    return liveCourses.some((c) => activeCourseIds.includes(c.id));
+  }, [activeCourseIds, courses]);
+  const canAccessLiveClasses = Boolean(
+    hasLiveIncludedCourseActivated ||
+    isMainAdmin ||
+    (isSubAdmin && Boolean(subAdminSession?.courseId) && courses.some((c) => c.id === subAdminSession?.courseId && Boolean(c.hasLiveSessions)))
+  );
   const hasStudentProfile = Boolean(
     !isUserAdminSession
       ? (currentUser || localStorage.getItem('clipzone_student_name'))
@@ -3844,6 +3859,13 @@ export default function App() {
   const askUnreadCount = isMainAdmin ? adminUnreadCount : isSubAdmin ? subAdminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
+
+  // Redirect away from Live view if user has no activated course with Live Sessions included
+  useEffect(() => {
+    if (!authLoading && courses.length > 0 && currentView === 'live' && !canAccessLiveClasses) {
+      setCurrentView('home');
+    }
+  }, [authLoading, courses.length, currentView, canAccessLiveClasses]);
 
   // Video playback security guard: terminate fullscreen playback if access expired
   useEffect(() => {
@@ -4278,6 +4300,7 @@ export default function App() {
     setFormImage(course.image);
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
+    setFormHasLiveSessions(Boolean(course.hasLiveSessions));
     setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
@@ -4300,6 +4323,7 @@ export default function App() {
     setFormImage('');
     setFormIsPopular(false);
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
+    setFormHasLiveSessions(false);
     setFormLanguage('Hindi & Nepali');
     setFormLearnText('');
     setFormVideos([]);
@@ -4352,6 +4376,7 @@ export default function App() {
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
+      hasLiveSessions: formHasLiveSessions,
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos,
@@ -5615,18 +5640,20 @@ export default function App() {
                               </button>
                             )}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCurrentView('live');
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                              className="bg-gradient-to-r from-rose-600/90 to-purple-600/90 hover:from-rose-500 hover:to-purple-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-rose-900/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
-                              title="View scheduled Zoom Live Classes"
-                            >
-                              <Video className="w-3.5 h-3.5" />
-                              🔴 Live Classes
-                            </button>
+                            {Boolean(currentClassroomCourse.hasLiveSessions || isMainAdmin) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCurrentView('live');
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className="bg-gradient-to-r from-rose-600/90 to-purple-600/90 hover:from-rose-500 hover:to-purple-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-rose-900/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
+                                title="View scheduled Zoom Live Classes"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                🔴 Live Classes
+                              </button>
+                            )}
 
                             <button
                               type="button"
@@ -6224,6 +6251,11 @@ export default function App() {
                           <span className="bg-blue-950/50 text-blue-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-blue-500/30">
                             📜 Certificate
                           </span>
+                          {course.hasLiveSessions && (
+                            <span className="bg-rose-950/60 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/30 flex items-center gap-1">
+                              🔴 Live Sessions Included
+                            </span>
+                          )}
                         </div>
 
                         {/* Highlights checklist */}
@@ -7755,6 +7787,26 @@ export default function App() {
                   )}
                 </div>
 
+                {/* Live Session Included Toggle */}
+                <div className="bg-zinc-900 p-3.5 rounded-xl border border-zinc-800">
+                  <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-200 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formHasLiveSessions}
+                      onChange={(e) => setFormHasLiveSessions(e.target.checked)}
+                      className="rounded border-zinc-700 text-rose-600 focus:ring-rose-500 w-4 h-4 bg-black mt-0.5 shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-white font-extrabold">
+                        <span>🔴 Live Session Included (Zoom Live Classes)</span>
+                      </div>
+                      <p className="text-[11px] font-medium text-zinc-400 leading-relaxed">
+                        Enable this if this course includes Live Zoom Classes. The Live tab and Live Class sessions will only be shown to students who activate a course with Live Sessions included.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
                 {/* What You Learn (Newline separated) */}
                 <div>
                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">What Students Learn (One point per line) *</label>
@@ -8539,26 +8591,28 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Live Classes (Zoom) */}
-          <button
-            id="app-nav-live"
-            onClick={() => {
-              setShowProfileModal(false);
-              setCurrentView('live');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-              currentView === 'live'
-                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
-                : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
-            }`}
-          >
-            <div className="relative flex items-center justify-center shrink-0">
-              <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'live' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
-              <span className="w-2 h-2 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
-            </div>
-            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Live</span>
-          </button>
+          {/* 3. Live Classes (Zoom) - Shown ONLY to users who activated a Live-Session-Included course (or Main Admin / Live Sub-Admin) */}
+          {canAccessLiveClasses && (
+            <button
+              id="app-nav-live"
+              onClick={() => {
+                setShowProfileModal(false);
+                setCurrentView('live');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
+                currentView === 'live'
+                  ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
+                  : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
+              }`}
+            >
+              <div className="relative flex items-center justify-center shrink-0">
+                <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'live' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+                <span className="w-2 h-2 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
+              </div>
+              <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Live</span>
+            </button>
+          )}
 
           {/* 3. Certificate - Shown only if user has activated course or Main Admin */}
           {Boolean(hasCourseActivated || isMainAdmin) && (

@@ -146,13 +146,15 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
 
   useEffect(() => {
     if (!formCourseId && availableCourses.length > 0) {
-      setFormCourseId(assignedCourseId || availableCourses[0].id);
+      const firstLiveCourse = availableCourses.find((c) => Boolean(c.hasLiveSessions));
+      setFormCourseId(assignedCourseId || firstLiveCourse?.id || availableCourses[0].id);
     }
   }, [availableCourses, assignedCourseId, formCourseId]);
 
   const openCreateForm = () => {
+    const firstLiveCourse = availableCourses.find((c) => Boolean(c.hasLiveSessions));
     setEditingClass(null);
-    setFormCourseId(assignedCourseId || availableCourses[0]?.id || '');
+    setFormCourseId(assignedCourseId || firstLiveCourse?.id || availableCourses[0]?.id || '');
     setFormTitle('');
     setFormDescription('');
     setFormInstructor('AI Clipzone Mentor');
@@ -497,10 +499,21 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                 >
                   {availableCourses.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.title}
+                      {c.title} {c.hasLiveSessions ? '🔴 (Live Included)' : '(Live Not Enabled)'}
                     </option>
                   ))}
                 </select>
+                {(() => {
+                  const chosen = availableCourses.find((c) => c.id === formCourseId);
+                  if (chosen && !chosen.hasLiveSessions) {
+                    return (
+                      <p className="mt-1.5 text-[11px] text-amber-400 font-semibold">
+                        Note: &ldquo;Live Session Included&rdquo; is OFF for this course. Enable it in Edit Course so activated students can see the Live button.
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               <div>

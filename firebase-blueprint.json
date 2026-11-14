@@ -171,6 +171,10 @@
           "type": "string",
           "description": "Display banner text for popular courses"
         },
+        "hasLiveSessions": {
+          "type": "boolean",
+          "description": "Whether Zoom live classes are included in this course"
+        },
         "videos": {
           "type": "array",
           "items": {

@@ -2991,6 +2991,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span className="text-rose-600 bg-rose-50 text-[10px] font-bold px-1.5 py-0.5 rounded border border-rose-200">
                             📕 {course.pdfs?.length || 0} PDFs
                           </span>
+                          {course.hasLiveSessions && (
+                            <span className="text-red-700 bg-red-50 text-[10px] font-black px-1.5 py-0.5 rounded border border-red-200">
+                              🔴 Live Included
+                            </span>
+                          )}
                         </div>
                         <h5 className="text-xs font-black text-slate-900 truncate">
                           {course.title}
