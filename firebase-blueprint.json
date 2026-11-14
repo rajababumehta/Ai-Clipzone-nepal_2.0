@@ -296,6 +296,153 @@
         "timestamp": { "type": "number" }
       },
       "required": ["conversationId", "sender", "senderName", "text", "timestamp"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Registered AI Clipzone student or admin profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["student", "sub_admin", "main_admin"] },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "role", "createdAt"]
+    },
+    "Enrollment": {
+      "title": "Enrollment",
+      "description": "Verified student course enrollment record linked to payment/activation",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentEmail": { "type": "string", "format": "email" },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "activationCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "expired", "revoked"] },
+        "enrolledAt": { "type": "number" },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["userId", "courseId", "status", "enrolledAt"]
+    },
+    "LiveClass": {
+      "title": "LiveClass",
+      "description": "Publicly visible live class schedule metadata without Zoom secrets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "scheduledStartAt": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "scheduledEndAt": { "type": "number" },
+        "maxCapacity": { "type": "number" },
+        "registeredCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "published", "live", "completed", "cancelled"] },
+        "joinWindowMinutesBefore": { "type": "number" },
+        "zoomCreated": { "type": "boolean" },
+        "zoomMeetingStatus": { "type": "string", "enum": ["created", "failed", "pending"] },
+        "zoomMeetingIdMasked": { "type": "string" },
+        "zoomError": { "type": "string" },
+        "idempotencyKey": { "type": "string" },
+        "sendReminder30m": { "type": "boolean" },
+        "sendReminder5m": { "type": "boolean" },
+        "reminder30mSent": { "type": "boolean" },
+        "reminder5mSent": { "type": "boolean" },
+        "publishedAt": { "type": "number" },
+        "createdBy": { "type": "string" },
+        "createdByRole": { "type": "string", "enum": ["main_admin", "sub_admin"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "courseId", "courseTitle", "title", "scheduledStartAt", "durationMinutes", "maxCapacity", "registeredCount", "status", "createdAt"]
+    },
+    "LiveClassRegistration": {
+      "title": "LiveClassRegistration",
+      "description": "Atomic seat reservation / attendance entry for an enrolled student",
+      "type": "object",
+      "properties": {
+        "liveClassId": { "type": "string" },
+        "userId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentEmail": { "type": "string", "format": "email" },
+        "activationCode": { "type": "string" },
+        "courseId": { "type": "string" },
+        "status": { "type": "string", "enum": ["registered", "joined"] },
+        "registeredAt": { "type": "number" },
+        "joinedAt": { "type": "number" }
+      },
+      "required": ["liveClassId", "userId", "courseId", "status", "registeredAt"]
+    },
+    "LiveClassSecret": {
+      "title": "LiveClassSecret",
+      "description": "Server-only Zoom meeting ID, passcode, join URL, and host start URL",
+      "type": "object",
+      "properties": {
+        "liveClassId": { "type": "string" },
+        "zoomMeetingId": { "type": "string" },
+        "zoomPasscode": { "type": "string" },
+        "zoomJoinUrl": { "type": "string" },
+        "zoomStartUrl": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["liveClassId", "zoomMeetingId", "zoomPasscode", "zoomJoinUrl"]
+    },
+    "PushNotification": {
+      "title": "PushNotification",
+      "description": "In-app and PWA push notification item for students",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string", "enum": ["discount", "welcome", "announcement", "course", "general", "live_class", "live_reminder"] },
+        "badge": { "type": "string" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "author": { "type": "string" },
+        "target": { "type": "string", "enum": ["all", "students", "course_enrolled"] },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "liveClassId": { "type": "string" },
+        "deliveryKey": { "type": "string" },
+        "reminderType": { "type": "string", "enum": ["published", "30m", "5m", "manual"] }
+      },
+      "required": ["title", "body", "type", "createdAt"]
+    },
+    "FcmToken": {
+      "title": "FcmToken",
+      "description": "Server-verified FCM device push registration bound to verified course enrollments",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "enrolledCourseIds": { "type": "array", "items": { "type": "string" } },
+        "platform": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["token", "userId", "enrolledCourseIds", "updatedAt"]
+    },
+    "NotificationDelivery": {
+      "title": "NotificationDelivery",
+      "description": "Idempotency lock document preventing duplicate live class notifications and reminders",
+      "type": "object",
+      "properties": {
+        "deliveryKey": { "type": "string" },
+        "liveClassId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "reminderType": { "type": "string", "enum": ["published", "30m", "5m"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["deliveryKey", "liveClassId", "reminderType", "createdAt"]
     }
   },
   "firestore": {
@@ -334,6 +481,38 @@
     "sub_admins/{code}": {
       "schema": "SubAdminAccount",
       "description": "Collection of course-scoped sub-admin accounts managed by the Main Admin"
+    },
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Registered student or admin user profile"
+    },
+    "enrollments/{enrollmentId}": {
+      "schema": "Enrollment",
+      "description": "Verified student course enrollment records"
+    },
+    "liveClasses/{classId}": {
+      "schema": "LiveClass",
+      "description": "Live class schedule metadata (public-safe, no Zoom credentials)"
+    },
+    "liveClasses/{classId}/registrations/{registrationId}": {
+      "schema": "LiveClassRegistration",
+      "description": "Capacity-controlled student seat reservations for live classes"
+    },
+    "liveClassSecrets/{classId}": {
+      "schema": "LiveClassSecret",
+      "description": "Backend-only Zoom meeting IDs, passcodes, and URLs (blocked from all clients)"
+    },
+    "notifications/{notificationId}": {
+      "schema": "PushNotification",
+      "description": "Notification history for announcements and course-scoped live class alerts"
+    },
+    "fcmTokens/{tokenId}": {
+      "schema": "FcmToken",
+      "description": "Registered FCM Web Push / PWA device tokens"
+    },
+    "notificationDeliveries/{deliveryKey}": {
+      "schema": "NotificationDelivery",
+      "description": "Server-side deduplication locks for live class publish & reminder notifications"
     }
   }
 }

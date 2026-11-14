@@ -1,6 +1,7 @@
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { createLiveClassRouter } from "../server/liveClassRoutes.js";
 
 dotenv.config();
 
@@ -8,6 +9,12 @@ const app = express();
 
 // Body parser
 app.use(express.json());
+
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: Date.now() });
+});
+
+app.use("/api/live-classes", createLiveClassRouter());
 
 // Initialize server-side Gemini client
 let ai: GoogleGenAI | null = null;

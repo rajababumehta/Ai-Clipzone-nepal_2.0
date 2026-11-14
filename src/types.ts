@@ -171,13 +171,93 @@ export interface PushNotificationItem {
   id: string;
   title: string;
   body: string;
-  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'general';
+  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'general' | 'live_class' | 'live_reminder';
   badge?: string;
   url?: string;
   createdAt: number;
   author?: string;
-  target?: 'all' | 'students';
+  target?: 'all' | 'students' | 'course_enrolled';
   icon?: string;
+  courseId?: string;
+  courseTitle?: string;
+  liveClassId?: string;
+  deliveryKey?: string;
+  reminderType?: 'published' | '30m' | '5m' | 'manual';
+}
+
+export type LiveClassStatus = 'draft' | 'published' | 'live' | 'completed' | 'cancelled';
+
+export interface LiveClassItem {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  title: string;
+  description: string;
+  instructorName: string;
+  scheduledStartAt: number; // Epoch ms
+  durationMinutes: number; // Default 40
+  scheduledEndAt: number; // Epoch ms
+  maxCapacity: number; // Default 80
+  registeredCount: number;
+  status: LiveClassStatus;
+  joinWindowMinutesBefore: number; // Default 15
+  zoomCreated: boolean;
+  zoomMeetingStatus: 'created' | 'failed' | 'pending';
+  zoomMeetingIdMasked?: string;
+  zoomError?: string;
+  idempotencyKey?: string;
+  sendReminder30m?: boolean;
+  sendReminder5m?: boolean;
+  reminder30mSent?: boolean;
+  reminder5mSent?: boolean;
+  publishedAt?: number;
+  createdBy?: string;
+  createdByRole?: 'main_admin' | 'sub_admin';
+  createdAt: number;
+  updatedAt: number;
+  // Admin-only hydrated secrets (never populated for students in list endpoints)
+  zoomMeetingId?: string;
+  zoomPasscode?: string;
+  zoomStartUrl?: string;
+  zoomJoinUrl?: string;
+  // Client-hydrated registration flag
+  isRegistered?: boolean;
+}
+
+export interface LiveClassRegistration {
+  id: string;
+  liveClassId: string;
+  userId: string;
+  studentName: string;
+  studentEmail?: string;
+  activationCode?: string;
+  courseId: string;
+  status: 'registered' | 'joined';
+  registeredAt: number;
+  joinedAt?: number;
+}
+
+export interface LiveClassJoinResponse {
+  success: boolean;
+  liveClassId: string;
+  title: string;
+  courseTitle: string;
+  joinUrl: string;
+  startUrl?: string;
+  meetingId: string;
+  passcode: string;
+  scheduledStartAt: number;
+  durationMinutes: number;
+  registeredCount: number;
+  maxCapacity: number;
+}
+
+export interface LiveClassHealthStatus {
+  zoomConfigured: boolean;
+  firebaseAdminConfigured: boolean;
+  fcmConfigured: boolean;
+  cronConfigured: boolean;
+  databaseId: string;
 }
 
 export interface SupportMessage {

@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v28';
+const CACHE_NAME = 'aiclipzone-pwa-v29';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -66,9 +66,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Ignore non-http, browser extensions, or the Service Worker script itself
+  // Ignore non-http, browser extensions, API calls, or Service Worker scripts
   if (!url.protocol.startsWith('http')) return;
-  if (url.pathname.endsWith('sw.js')) return;
+  if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.endsWith('sw.js') || url.pathname.endsWith('firebase-messaging-sw.js')) return;
 
   // A. HTML Page Navigation requests (Network-first with offline index.html fallback)
   const isNavigation =
@@ -146,23 +147,31 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 4. Notification Click Event: Focus or open the app when user taps system notification
+// 4. Notification Click Event: Focus or open the app at the exact Live Class route
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  const notifData = event.notification.data || {};
+  const targetUrl = notifData.url || (notifData.liveClassId ? `/?tab=live&classId=${encodeURIComponent(notifData.liveClassId)}` : '/');
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus an existing open window if available
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
       for (const client of clientList) {
         if ('focus' in client) {
+          try {
+            client.postMessage({
+              type: 'OPEN_LIVE_CLASS',
+              url: targetUrl,
+              liveClassId: notifData.liveClassId || null,
+            });
+          } catch (e) {}
           if ('navigate' in client && targetUrl !== '/') {
-            client.navigate(targetUrl);
+            try {
+              await client.navigate(targetUrl);
+            } catch (e) {}
           }
           return client.focus();
         }
       }
-      // Otherwise open a new window
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
@@ -170,28 +179,37 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// 5. Push Event: Handle server push notifications if configured
+// 5. Push Event: Handle server push notifications (supports both custom Web Push & FCM payloads)
 self.addEventListener('push', (event) => {
-  let data = {
-    title: 'AI Clipzone Nepal',
-    body: 'New update or course discount available!',
-    icon: '/pwa-192x192.png',
-    data: { url: '/' }
-  };
+  let raw = {};
   if (event.data) {
     try {
-      data = event.data.json();
+      raw = event.data.json();
     } catch (e) {
-      data.body = event.data.text();
+      raw = { body: event.data.text() };
     }
   }
 
+  const notifPayload = raw.notification || {};
+  const dataPayload = raw.data || {};
+  const title = notifPayload.title || raw.title || dataPayload.title || 'AI Clipzone Nepal';
+  const body = notifPayload.body || raw.body || dataPayload.body || 'New update available!';
+  const liveClassId = dataPayload.liveClassId || '';
+  const targetUrl = dataPayload.url || raw.url || (liveClassId ? `/?tab=live&classId=${encodeURIComponent(liveClassId)}` : '/');
+  const tag = dataPayload.deliveryKey || raw.tag || (liveClassId ? `live-${liveClassId}` : `clipzone-${Date.now()}`);
+
   event.waitUntil(
-    self.registration.showNotification(data.title || 'AI Clipzone Nepal', {
-      body: data.body,
-      icon: data.icon || '/pwa-192x192.png',
+    self.registration.showNotification(title, {
+      body,
+      icon: notifPayload.icon || raw.icon || '/pwa-192x192.png',
       badge: '/pwa-192x192.png',
-      data: data.data || { url: '/' }
+      tag,
+      renotify: false,
+      data: {
+        ...dataPayload,
+        url: targetUrl,
+        liveClassId,
+      },
     })
   );
 });

@@ -9,11 +9,13 @@ service cloud.firestore {
 
     // Helper to check if user is the administrator
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email.lower() == 'ai.clipzone.edu@gmail.com' ||
-        request.auth.token.email.lower() == 'rajababum426@gmail.com' || 
-        request.auth.token.email.lower().matches('^admin.*')
-      );
+      return isSignedIn() &&
+        'email' in request.auth.token &&
+        request.auth.token.email is string && (
+          request.auth.token.email.lower() == 'ai.clipzone.edu@gmail.com' ||
+          request.auth.token.email.lower() == 'rajababum426@gmail.com' ||
+          request.auth.token.email.lower().matches('^admin.*')
+        );
     }
 
     // Security rules for student course access requests
@@ -78,6 +80,54 @@ service cloud.firestore {
     // Security rules for course-scoped sub-admin accounts
     match /sub_admins/{code} {
       allow read, write: if true;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Verified course enrollments (managed by backend/Admin, readable by owner/admin)
+    match /enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (
+        resource == null ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Live class schedule metadata (no Zoom secrets stored here; writable by Admin or Admin SDK)
+    match /liveClasses/{classId} {
+      allow read: if (resource != null && resource.data.status != 'draft') || isAdmin();
+      allow write: if isAdmin();
+
+      match /registrations/{registrationId} {
+        allow read: if isAdmin() || (
+          isSignedIn() && resource != null && resource.data.userId == request.auth.uid
+        );
+        allow write: if isAdmin();
+      }
+    }
+
+    // Strictly Admin/Backend-only Zoom meeting secrets (ID, passcode, joinUrl, startUrl)
+    match /liveClassSecrets/{classId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Server/Admin-managed FCM device tokens (prevents client-side course enrollment spoofing)
+    match /fcmTokens/{tokenId} {
+      allow read: if isAdmin() || (
+        isSignedIn() && resource != null && resource.data.userId == request.auth.uid
+      );
+      allow write: if isAdmin();
+    }
+
+    // Notification deduplication locks (Admin/Backend only)
+    match /notificationDeliveries/{deliveryKey} {
+      allow read, write: if isAdmin();
     }
 
     // Global default catch-all: deny all other paths

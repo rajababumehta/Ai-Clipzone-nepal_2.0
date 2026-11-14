@@ -82,7 +82,9 @@ import { VerifiedBadge } from './components/VerifiedBadge';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
+import { StudentLiveClassesView } from './components/StudentLiveClassesView';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
+import { registerFcmPushToken } from './utils/fcm';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 
 enum OperationType {
@@ -919,28 +921,6 @@ export default function App() {
         // Sort newest first
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setNotifications(list);
-
-        // Calculate unread count and IDs
-        try {
-          const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
-          const unread = list.filter(n => !readIds.includes(n.id));
-          setUnreadNotifIds(unread.map(n => n.id));
-          setUnreadNotifCount(unread.length);
-
-          // If a fresh broadcast was just sent by admin in last 30 seconds, trigger system notification ONLY in PWA mode
-          const isPwaActive = checkIsAppMode();
-          const seenAlertIds: string[] = JSON.parse(sessionStorage.getItem('clipzone_alerted_notifs') || '[]');
-          const newest = list[0];
-          if (isPwaActive && newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
-            seenAlertIds.push(newest.id);
-            sessionStorage.setItem('clipzone_alerted_notifs', JSON.stringify(seenAlertIds));
-            showNativeNotification({
-              title: newest.title,
-              body: newest.body,
-              url: newest.url || '/'
-            });
-          }
-        } catch (e) {}
       } catch (e) {
         console.warn('Notifications parse error:', e);
       }
@@ -989,7 +969,7 @@ export default function App() {
   };
 
   const handleMarkAllNotifsRead = () => {
-    const allIds = notifications.map(n => n.id);
+    const allIds = visibleNotifications.map(n => n.id);
     localStorage.setItem('clipzone_read_notifs', JSON.stringify(allIds));
     setUnreadNotifIds([]);
     setUnreadNotifCount(0);
@@ -3567,7 +3547,20 @@ export default function App() {
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'ask' | 'account'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'live' | 'ask' | 'account'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'live') return 'live';
+    } catch {}
+    return 'home';
+  });
+  const [focusedLiveClassId, setFocusedLiveClassId] = useState<string | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('classId');
+    } catch {}
+    return null;
+  });
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
 
   // Automatically route any legacy modal trigger to full screen account view
@@ -3861,6 +3854,92 @@ export default function App() {
       }
     }
   }, [activeCourseIds, fullscreenVideo, isUserAdminSession]);
+
+  // Enrolled-course scoped notifications (hides course-specific live class alerts from non-enrolled users)
+  const visibleNotifications = useMemo(() => {
+    return notifications.filter((n) => {
+      if (n.target === 'course_enrolled' && !isUserAdminSession) {
+        if (!n.courseId) return false;
+        return (
+          activeCourseIds.includes(n.courseId) ||
+          activeCourseIds.includes('all') ||
+          activeCourseIds.includes('course-all')
+        );
+      }
+      return true;
+    });
+  }, [notifications, activeCourseIds, isUserAdminSession]);
+
+  // Keep unread notification counts & PWA fresh native alert strictly scoped & deduplicated
+  useEffect(() => {
+    try {
+      const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
+      const unread = visibleNotifications.filter((n) => !readIds.includes(n.id));
+      setUnreadNotifIds(unread.map((n) => n.id));
+      setUnreadNotifCount(unread.length);
+
+      const isPwaActive = checkIsAppMode();
+      const seenAlertIds: string[] = JSON.parse(sessionStorage.getItem('clipzone_alerted_notifs') || '[]');
+      const newest = visibleNotifications[0];
+      if (isPwaActive && newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
+        seenAlertIds.push(newest.id);
+        if (newest.deliveryKey) seenAlertIds.push(newest.deliveryKey);
+        sessionStorage.setItem('clipzone_alerted_notifs', JSON.stringify(seenAlertIds));
+        showNativeNotification({
+          title: newest.title,
+          body: newest.body,
+          url: newest.url || (newest.liveClassId ? `/?tab=live&classId=${encodeURIComponent(newest.liveClassId)}` : '/'),
+          tag: newest.deliveryKey || newest.id,
+        });
+      }
+    } catch (e) {}
+  }, [visibleNotifications]);
+
+  // Handle Service Worker deep-link navigation when user taps a push notification in PWA
+  useEffect(() => {
+    const syncUrlParams = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('tab') === 'live') {
+          setCurrentView('live');
+          const cid = params.get('classId');
+          if (cid) setFocusedLiveClassId(cid);
+        }
+      } catch {}
+    };
+    syncUrlParams();
+
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'OPEN_LIVE_CLASS') {
+        setCurrentView('live');
+        if (event.data.liveClassId) {
+          setFocusedLiveClassId(event.data.liveClassId);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', syncUrlParams);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+    return () => {
+      window.removeEventListener('popstate', syncUrlParams);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
+  }, []);
+
+  // Automatically sync FCM push device token whenever notification permission or course enrollments change
+  useEffect(() => {
+    if (!isNotificationSupported() || Notification.permission !== 'granted') return;
+    registerFcmPushToken({
+      deviceId: getOrCreateDeviceId(),
+      onForegroundLiveNotification: (payload) => {
+        showToast(`${payload.title}`, 'info');
+      },
+    }).catch(() => {});
+  }, [activeCourseIds.join(','), currentUser?.uid, userActivationKeys.length]);
 
   // Open Certificate with strict validation:
   // 1. User must have an active/enrolled course (only activated courses can be viewed)
@@ -4987,6 +5066,26 @@ export default function App() {
               studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
             />
           </section>
+        ) : currentView === 'live' ? (
+          <StudentLiveClassesView
+            courses={courses}
+            activeCourseIds={activeCourseIds}
+            isAdminSession={isUserAdminSession}
+            notifications={visibleNotifications}
+            focusedClassId={focusedLiveClassId}
+            onClearFocusedClass={() => setFocusedLiveClassId(null)}
+            onRequestUnlockCourse={(course) => {
+              if (course) {
+                setSelectedCourse(course);
+                setShowQrModal(true);
+              } else {
+                setActivationCodeInput('');
+                setShowCodeInputModal(true);
+              }
+            }}
+            onRequestEnablePush={() => setShowNotifPromptModal(true)}
+            showToast={showToast}
+          />
         ) : currentView === 'account' ? (
           <section id="account-full-view" className="w-full max-w-3xl mx-auto space-y-5 pb-20 pt-2">
 
@@ -5515,6 +5614,19 @@ export default function App() {
                                 📜 Course Certificate
                               </button>
                             )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCurrentView('live');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="bg-gradient-to-r from-rose-600/90 to-purple-600/90 hover:from-rose-500 hover:to-purple-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-rose-900/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
+                              title="View scheduled Zoom Live Classes"
+                            >
+                              <Video className="w-3.5 h-3.5" />
+                              🔴 Live Classes
+                            </button>
 
                             <button
                               type="button"
@@ -8341,7 +8453,13 @@ export default function App() {
         onClose={() => setShowNotifPromptModal(false)}
         showToast={showToast}
         onPermissionGranted={() => {
-          showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
+          registerFcmPushToken({
+            deviceId: getOrCreateDeviceId(),
+            onForegroundLiveNotification: (payload) => {
+              showToast(`${payload.title}`, 'info');
+            },
+          }).catch(() => {});
+          showToast('🎉 Notifications enabled! You will receive live class alerts & course updates.', 'success');
         }}
       />
 
@@ -8349,18 +8467,25 @@ export default function App() {
       <NotificationCenterModal
         isOpen={showNotifCenterModal}
         onClose={() => setShowNotifCenterModal(false)}
-        notifications={notifications}
+        notifications={visibleNotifications}
         unreadIds={unreadNotifIds}
         showToast={showToast}
         onNotificationClick={(notif) => {
+          if (notif.liveClassId || (notif.url && notif.url.includes('tab=live'))) {
+            setShowNotifCenterModal(false);
+            setCurrentView('live');
+            if (notif.liveClassId) {
+              setFocusedLiveClassId(notif.liveClassId);
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
           if (notif.url) {
             if (notif.url.startsWith('#') || notif.url.startsWith('/#')) {
               const hash = notif.url.replace('/#', '#');
               window.location.hash = hash;
             } else if (notif.url.startsWith('/')) {
-              window.location.href = notif.url;
-            } else {
-              window.open(notif.url, '_blank');
+              window.location.assign(notif.url);
             }
           }
         }}
@@ -8412,6 +8537,27 @@ export default function App() {
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
+          </button>
+
+          {/* 3. Live Classes (Zoom) */}
+          <button
+            id="app-nav-live"
+            onClick={() => {
+              setShowProfileModal(false);
+              setCurrentView('live');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
+              currentView === 'live'
+                ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
+                : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
+            }`}
+          >
+            <div className="relative flex items-center justify-center shrink-0">
+              <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'live' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <span className="w-2 h-2 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
+            </div>
+            <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Live</span>
           </button>
 
           {/* 3. Certificate - Shown only if user has activated course or Main Admin */}

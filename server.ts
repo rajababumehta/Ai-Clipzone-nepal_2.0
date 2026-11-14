@@ -4,6 +4,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { createLiveClassRouter } from "./server/liveClassRoutes.js";
 
 dotenv.config();
 
@@ -40,6 +41,9 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: Date.now() });
   });
+
+  // Live Class Management, Zoom S2S OAuth & FCM Push API
+  app.use("/api/live-classes", createLiveClassRouter());
 
   // Dedicated Service Worker route to ensure correct MIME type and avoid HTML fallback
   app.get("/sw.js", (req, res) => {

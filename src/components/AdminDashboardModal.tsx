@@ -42,6 +42,7 @@ import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_
 import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
 import { AdminSubAdminsTab } from './AdminSubAdminsTab';
+import { AdminLiveClassesTab } from './AdminLiveClassesTab';
 import { compressImageFile } from '../utils/chatMedia';
 
 interface AdminDashboardModalProps {
@@ -87,7 +88,7 @@ interface AdminDashboardModalProps {
   onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteNotification?: (id: string) => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
-  initialTab?: 'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask';
+  initialTab?: 'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'liveclasses' | 'notifications' | 'ask';
   adminUnreadAskCount?: number;
 }
 
@@ -148,7 +149,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     : allActivationKeys.filter(k => k.courseId === assignedCourseId);
   const assignedCourse = isSubAdmin ? courses.find(c => c.id === assignedCourseId) : undefined;
 
-  const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'liveclasses' | 'notifications' | 'ask'>(initialTab);
 
   // Key Deletion Confirmation state
   const [keyToDelete, setKeyToDelete] = useState<any | null>(null);
@@ -232,9 +233,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Enforce role-based activeTab and assigned course lock
   useEffect(() => {
     if (isSubAdmin) {
-      if (initialTab && ['keys', 'courses', 'qr', 'ask'].includes(initialTab)) {
+      if (initialTab && ['keys', 'liveclasses', 'courses', 'qr', 'ask'].includes(initialTab)) {
         setActiveTab(initialTab);
-      } else if (!['keys', 'courses', 'qr', 'ask'].includes(activeTab)) {
+      } else if (!['keys', 'liveclasses', 'courses', 'qr', 'ask'].includes(activeTab)) {
         setActiveTab('keys');
       }
       if (assignedCourseId) {
@@ -992,6 +993,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           >
             <BookOpen className="w-3.5 h-3.5" />
             {isMainAdmin ? `📚 Course Catalog (${visibleCourses.length})` : '📚 My Course Details'}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('liveclasses')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'liveclasses'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md font-bold'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+            🔴 Live Classes (Zoom)
           </button>
 
           {isMainAdmin && (
@@ -3021,6 +3034,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 )}
               </div>
             </div>
+          )}
+
+          {activeTab === 'liveclasses' && (
+            <AdminLiveClassesTab
+              courses={courses}
+              allActivationKeys={allActivationKeys}
+              isMainAdmin={isMainAdmin}
+              assignedCourseId={assignedCourseId}
+              showToast={showToast}
+            />
           )}
 
           {/* ========================================================================= */}
