@@ -42,6 +42,7 @@ import {
   retryZoomMeeting,
   triggerRemindersCron,
   updateLiveClass,
+  verifyZoomOAuth,
 } from '../utils/liveClassApi';
 
 interface AdminLiveClassesTabProps {
@@ -110,6 +111,8 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
   // Row action loading states
   const [busyId, setBusyId] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [zoomCheckStatus, setZoomCheckStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
+  const [zoomErrorBanner, setZoomErrorBanner] = useState<{ code?: string; message: string } | null>(null);
 
   // Participants modal
   const [participantsModalClass, setParticipantsModalClass] = useState<LiveClassItem | null>(null);
@@ -166,6 +169,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormReminder5m(true);
     setFormPublishImmediately(true);
     setFormIdempotencyKey(`lc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    setZoomErrorBanner(null);
     setShowForm(true);
   };
 
@@ -184,8 +188,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setShowForm(true);
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitClassForm = async (overridePublishImmediately?: boolean) => {
     const selectedCourse = availableCourses.find((c) => c.id === formCourseId);
     if (!selectedCourse) {
       showToast('Please select an existing course.', 'error');
@@ -202,7 +205,11 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       return;
     }
 
+    const publishNow =
+      typeof overridePublishImmediately === 'boolean' ? overridePublishImmediately : formPublishImmediately;
+
     setIsSubmitting(true);
+    setZoomErrorBanner(null);
     try {
       if (editingClass) {
         await updateLiveClass(editingClass.id, {
@@ -230,18 +237,22 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           joinWindowMinutesBefore: Number(formJoinWindow) || 15,
           sendReminder30m: formReminder30m,
           sendReminder5m: formReminder5m,
-          publishImmediately: formPublishImmediately,
+          publishImmediately: publishNow,
           idempotencyKey: formIdempotencyKey,
         });
 
-        if (res.zoomError) {
+        const zoomIssue = res.zoomWarning || res.zoomError;
+        if (zoomIssue) {
+          setZoomCheckStatus('error');
+          setZoomErrorBanner({ message: zoomIssue });
           showToast(
-            `Class saved, but Zoom sync returned an error: ${res.zoomError}. Use Retry Zoom Sync once Zoom env vars are ready.`,
+            `Class saved as Draft, but Zoom sync failed: ${zoomIssue}`,
             'info'
           );
         } else {
+          setZoomCheckStatus('ok');
           showToast(
-            formPublishImmediately
+            publishNow
               ? 'Live class + Zoom meeting created & published to enrolled students!'
               : 'Draft live class + Zoom meeting created.',
             'success'
@@ -251,9 +262,52 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       setShowForm(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to save live class', 'error');
+      const msg = err?.message || 'Failed to save live class';
+      const code = err?.code;
+      if (
+        code === 'ZOOM_APP_DISABLED' ||
+        code === 'ZOOM_OAUTH_ERROR' ||
+        code === 'ZOOM_CREATE_FAILED' ||
+        code === 'ZOOM_NOT_CONFIGURED' ||
+        msg.toLowerCase().includes('zoom')
+      ) {
+        setZoomCheckStatus('error');
+        setZoomErrorBanner({ code, message: msg });
+      }
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitClassForm();
+  };
+
+  const handleVerifyZoom = async () => {
+    setZoomCheckStatus('checking');
+    try {
+      const res = await verifyZoomOAuth();
+      if (res.ok) {
+        setZoomCheckStatus('ok');
+        setZoomErrorBanner(null);
+        showToast(res.message || 'Zoom Server-to-Server OAuth is active!', 'success');
+      } else {
+        setZoomCheckStatus('error');
+        setZoomErrorBanner({
+          code: res.code,
+          message: res.error || 'Zoom Server-to-Server OAuth verification failed.',
+        });
+        showToast(res.error || 'Zoom verification failed.', 'error');
+      }
+    } catch (err: any) {
+      setZoomCheckStatus('error');
+      setZoomErrorBanner({
+        code: err?.code,
+        message: err?.message || 'Could not verify Zoom connection.',
+      });
+      showToast(err?.message || 'Could not verify Zoom connection.', 'error');
     }
   };
 
@@ -262,13 +316,20 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     try {
       const res = await retryZoomMeeting(cls.id);
       if (res.zoomError) {
+        setZoomCheckStatus('error');
+        setZoomErrorBanner({ message: res.zoomError });
         showToast(`Zoom retry error: ${res.zoomError}`, 'error');
       } else {
+        setZoomCheckStatus('ok');
+        setZoomErrorBanner(null);
         showToast('Zoom meeting synced successfully without duplicates!', 'success');
       }
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Zoom retry failed', 'error');
+      const msg = err?.message || 'Zoom retry failed';
+      setZoomCheckStatus('error');
+      setZoomErrorBanner({ code: err?.code, message: msg });
+      showToast(msg, 'error');
     } finally {
       setBusyId(null);
     }
@@ -441,14 +502,36 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
               </span>
               <span
                 className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                  health.zoomConfigured
+                  zoomCheckStatus === 'error'
+                    ? 'bg-rose-950/50 border-rose-500/40 text-rose-300'
+                    : zoomCheckStatus === 'ok'
+                    ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
+                    : health.zoomConfigured
                     ? 'bg-blue-950/50 border-blue-500/30 text-blue-300'
                     : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
                 }`}
               >
                 <Video className="w-3.5 h-3.5" />
-                Zoom S2S OAuth: {health.zoomConfigured ? 'Configured' : 'Needs ZOOM_* Env Vars'}
+                Zoom S2S OAuth:{' '}
+                {zoomCheckStatus === 'error'
+                  ? 'Action Required'
+                  : zoomCheckStatus === 'ok'
+                  ? 'Active & Verified'
+                  : health.zoomConfigured
+                  ? 'Configured'
+                  : 'Needs ZOOM_* Env Vars'}
               </span>
+              {health.zoomConfigured && (
+                <button
+                  type="button"
+                  onClick={handleVerifyZoom}
+                  disabled={zoomCheckStatus === 'checking'}
+                  className="px-2.5 py-1 rounded-lg border border-blue-500/30 bg-blue-950/40 hover:bg-blue-900/50 text-blue-200 transition cursor-pointer flex items-center gap-1 disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-3 h-3 ${zoomCheckStatus === 'checking' ? 'animate-spin' : ''}`} />
+                  <span>{zoomCheckStatus === 'checking' ? 'Checking Zoom...' : 'Verify Zoom'}</span>
+                </button>
+              )}
               <span
                 className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
                   health.fcmConfigured
@@ -468,6 +551,35 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                   <code className="px-1 py-0.5 rounded bg-black/40 text-amber-300">FIREBASE_SERVICE_ACCOUNT_JSON</code>{' '}
                   in Secrets for full Student Seat Registration, Secret-Code Admin writes, and FCM Push delivery.
                 </div>
+              </div>
+            )}
+            {zoomErrorBanner && (
+              <div className="bg-rose-950/40 border border-rose-500/40 rounded-xl px-3.5 py-3 text-[11px] text-rose-200 flex items-start justify-between gap-3 leading-relaxed">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-rose-100">{zoomErrorBanner.message}</p>
+                    {(zoomErrorBanner.code === 'ZOOM_APP_DISABLED' ||
+                      zoomErrorBanner.message.toLowerCase().includes('disabled by the developer')) && (
+                      <p className="text-rose-300/90">
+                        Fix in Zoom Marketplace: Sign in to <span className="font-semibold">marketplace.zoom.us</span>{' '}
+                        &rarr; <span className="font-semibold">Manage</span> &rarr;{' '}
+                        <span className="font-semibold">Created Apps</span> &rarr; open your Server-to-Server OAuth app
+                        &rarr; <span className="font-semibold">Activation</span> tab &rarr; click{' '}
+                        <span className="font-semibold">Activate your app</span>, then click{' '}
+                        <span className="font-semibold">Verify Zoom</span> above.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setZoomErrorBanner(null)}
+                  className="text-rose-300 hover:text-white p-1 rounded cursor-pointer shrink-0"
+                  aria-label="Dismiss Zoom notice"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
           </div>
@@ -655,6 +767,30 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                 </label>
               )}
             </div>
+
+            {zoomErrorBanner && (
+              <div className="bg-rose-950/40 border border-rose-500/40 rounded-xl p-3 text-xs text-rose-200 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">{zoomErrorBanner.message}</p>
+                </div>
+                {!editingClass && formPublishImmediately && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-rose-500/20">
+                    <span className="text-[11px] text-rose-300">
+                      Want to keep your class schedule and sync Zoom later?
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => submitClassForm(false)}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                    >
+                      Save as Draft (Sync Zoom Later)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
               <button

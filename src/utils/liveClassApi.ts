@@ -132,6 +132,12 @@ export async function fetchLiveClassHealth(): Promise<LiveClassHealthStatus> {
   return apiRequest<LiveClassHealthStatus>('/health', { method: 'GET' });
 }
 
+export async function verifyZoomOAuth(): Promise<{ ok: boolean; message?: string; error?: string; code?: string }> {
+  return apiRequest<{ ok: boolean; message?: string; error?: string; code?: string }>('/verify-zoom', {
+    method: 'POST',
+  });
+}
+
 export async function fetchLiveClasses(): Promise<{ classes: LiveClassItem[]; role: string }> {
   return apiRequest<{ classes: LiveClassItem[]; role: string }>('/', { method: 'GET' });
 }

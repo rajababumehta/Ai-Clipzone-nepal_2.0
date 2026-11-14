@@ -6,6 +6,7 @@ import { createLiveClassRouter } from '../server/liveClassRoutes.ts';
 import {
   createZoomMeeting,
   resetZoomTokenCacheForTests,
+  verifyZoomConnection,
   ZoomApiError,
 } from '../server/zoomService.ts';
 
@@ -626,4 +627,31 @@ test('Scenario 9: Zoom API failure handled gracefully & recovered via retry-zoom
   } finally {
     await ctx.close();
   }
+});
+
+test('Zoom Service: Translates disabled Zoom Marketplace app into ZOOM_APP_DISABLED', async () => {
+  process.env.ZOOM_ACCOUNT_ID = 'acct_test';
+  process.env.ZOOM_CLIENT_ID = 'client_test';
+  process.env.ZOOM_CLIENT_SECRET = 'secret_test';
+  resetZoomTokenCacheForTests();
+
+  const mockDisabledFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        reason: 'The app has been disabled by the developer',
+        error: 'invalid_client',
+      }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    )) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () => verifyZoomConnection(mockDisabledFetch),
+    (err: unknown) => {
+      assert.ok(err instanceof ZoomApiError);
+      assert.equal(err.code, 'ZOOM_APP_DISABLED');
+      assert.equal(err.statusCode, 401);
+      assert.match(err.message, /marketplace\.zoom\.us/i);
+      return true;
+    }
+  );
 });

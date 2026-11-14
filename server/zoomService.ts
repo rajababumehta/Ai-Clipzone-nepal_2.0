@@ -88,8 +88,20 @@ async function getZoomAccessToken(fetchFn: typeof fetch = fetch): Promise<string
 
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || !data?.access_token) {
-    const errMsg = data?.reason || data?.error_description || data?.message || `Zoom OAuth failed (${res.status})`;
-    throw new ZoomApiError(errMsg, res.status >= 400 && res.status < 500 ? 401 : 502, 'ZOOM_OAUTH_ERROR');
+    const rawMsg =
+      data?.reason ||
+      data?.error_description ||
+      data?.message ||
+      `Zoom OAuth failed (${res.status})`;
+    const lower = String(rawMsg).toLowerCase();
+    if (lower.includes('disabled by the developer') || lower.includes('app has been disabled')) {
+      throw new ZoomApiError(
+        'The Zoom Server-to-Server OAuth app has been disabled by the developer in Zoom App Marketplace. Open marketplace.zoom.us -> Manage -> Created Apps -> your Server-to-Server OAuth app -> Activation tab -> click "Activate your app", or update ZOOM_ACCOUNT_ID / ZOOM_CLIENT_ID / ZOOM_CLIENT_SECRET.',
+        401,
+        'ZOOM_APP_DISABLED'
+      );
+    }
+    throw new ZoomApiError(rawMsg, res.status >= 400 && res.status < 500 ? 401 : 502, 'ZOOM_OAUTH_ERROR');
   }
 
   const expiresInSec = typeof data.expires_in === 'number' ? data.expires_in : 3600;
@@ -152,6 +164,9 @@ export async function createZoomMeeting(
 
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || !data?.id || !data?.join_url) {
+    if (res.status === 401) {
+      cachedZoomToken = null;
+    }
     const msg =
       data?.message ||
       (Array.isArray(data?.errors) ? data.errors.map((e: any) => e.message).join(', ') : '') ||
@@ -202,6 +217,9 @@ export async function updateZoomMeeting(
   );
 
   if (!res.ok && res.status !== 404) {
+    if (res.status === 401) {
+      cachedZoomToken = null;
+    }
     const data: any = await res.json().catch(() => ({}));
     throw new ZoomApiError(data?.message || `Zoom update failed (${res.status})`, 502, 'ZOOM_UPDATE_FAILED');
   }
@@ -226,9 +244,18 @@ export async function deleteZoomMeeting(
 
   // 204 = deleted, 404 = already missing on Zoom side
   if (!res.ok && res.status !== 204 && res.status !== 404) {
+    if (res.status === 401) {
+      cachedZoomToken = null;
+    }
     const data: any = await res.json().catch(() => ({}));
     throw new ZoomApiError(data?.message || `Zoom delete failed (${res.status})`, 502, 'ZOOM_DELETE_FAILED');
   }
+}
+
+export async function verifyZoomConnection(fetchFn: typeof fetch = fetch): Promise<{ ok: true }> {
+  cachedZoomToken = null;
+  await getZoomAccessToken(fetchFn);
+  return { ok: true };
 }
 
 export function resetZoomTokenCacheForTests(): void {

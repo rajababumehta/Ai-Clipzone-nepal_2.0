@@ -17,6 +17,7 @@ import {
   updateZoomMeeting,
   deleteZoomMeeting,
   isZoomConfigured,
+  verifyZoomConnection,
   ZoomApiError,
 } from './zoomService.ts';
 import {
@@ -35,6 +36,7 @@ export interface LiveClassRouterDeps {
     createMeeting: typeof createZoomMeeting;
     updateMeeting: typeof updateZoomMeeting;
     deleteMeeting: typeof deleteZoomMeeting;
+    verifyConnection?: typeof verifyZoomConnection;
   };
 }
 
@@ -263,6 +265,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     createMeeting: createZoomMeeting,
     updateMeeting: updateZoomMeeting,
     deleteMeeting: deleteZoomMeeting,
+    verifyConnection: verifyZoomConnection,
   };
 
   const joinLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 25, keyPrefix: 'join' });
@@ -281,6 +284,29 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       databaseId: getConfiguredDatabaseId(),
       initError: db ? null : getFirebaseAdminInitError(),
     });
+  });
+
+  // Admin-only live verification of Zoom Server-to-Server OAuth credentials
+  router.post('/verify-zoom', adminMutationLimiter, async (req: Request, res: Response) => {
+    try {
+      const db = getRequestDb(req);
+      const adminCtx = await verifyAdminIdentity(req, db, resolveAuth());
+      if (!adminCtx) {
+        return res.status(403).json({ error: 'Only verified Admin or Sub-Admin can test Zoom credentials.' });
+      }
+      const verifyFn = zoomApi.verifyConnection || verifyZoomConnection;
+      await verifyFn();
+      return res.json({
+        ok: true,
+        message: 'Zoom Server-to-Server OAuth credentials are active and verified.',
+      });
+    } catch (err: any) {
+      return res.json({
+        ok: false,
+        code: err instanceof ZoomApiError ? err.code : 'ZOOM_OAUTH_ERROR',
+        error: err?.message || 'Zoom verification failed.',
+      });
+    }
   });
 
   // Helper to resolve Firebase Admin DB or seamless Firestore REST adapter forwarding caller ID token
