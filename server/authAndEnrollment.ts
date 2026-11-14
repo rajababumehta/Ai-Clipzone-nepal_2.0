@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Auth } from 'firebase-admin/auth';
-import { verifyFirebaseIdTokenViaRest } from './firestoreRest.js';
+import { verifyFirebaseIdTokenViaRest } from './firestoreRest.ts';
 
 const ADMIN_EMAILS = new Set([
   'ai.clipzone.edu@gmail.com',

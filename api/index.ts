@@ -1,7 +1,7 @@
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { createLiveClassRouter } from "../server/liveClassRoutes.js";
+import { createLiveClassRouter } from "../server/liveClassRoutes.ts";
 
 dotenv.config();
 

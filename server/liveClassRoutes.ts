@@ -1,4 +1,4 @@
-import express, { Request, Response, Router } from 'express';
+import express, { type Request, type Response, type Router } from 'express';
 import crypto from 'crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Auth } from 'firebase-admin/auth';
@@ -10,21 +10,21 @@ import {
   getConfiguredDatabaseId,
   getFirebaseAdminInitError,
   markAdminSdkUnusable,
-} from './firebaseAdmin.js';
-import { createRestFirestore } from './firestoreRest.js';
+} from './firebaseAdmin.ts';
+import { createRestFirestore } from './firestoreRest.ts';
 import {
   createZoomMeeting,
   updateZoomMeeting,
   deleteZoomMeeting,
   isZoomConfigured,
   ZoomApiError,
-} from './zoomService.js';
+} from './zoomService.ts';
 import {
   createRateLimiter,
   verifyAdminIdentity,
   verifyStudentEnrollment,
   isActivationKeyExpiredServer,
-} from './authAndEnrollment.js';
+} from './authAndEnrollment.ts';
 
 export interface LiveClassRouterDeps {
   getDb?: () => Firestore | null;

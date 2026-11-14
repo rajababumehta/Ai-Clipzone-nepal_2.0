@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import { createLiveClassRouter } from '../server/liveClassRoutes.js';
+import { createLiveClassRouter } from '../server/liveClassRoutes.ts';
 import {
   createZoomMeeting,
   resetZoomTokenCacheForTests,
   ZoomApiError,
-} from '../server/zoomService.js';
+} from '../server/zoomService.ts';
 
 // ============================================================================
 // In-Memory Transactional Firestore Test Double matching Admin SDK API

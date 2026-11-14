@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { getAuth, Auth } from 'firebase-admin/auth';
-import { getMessaging, Messaging } from 'firebase-admin/messaging';
+import { initializeApp, getApps, cert, applicationDefault, type App } from 'firebase-admin/app';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getAuth, type Auth } from 'firebase-admin/auth';
+import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 
 let cachedApp: App | null = null;
 let cachedDb: Firestore | null = null;
