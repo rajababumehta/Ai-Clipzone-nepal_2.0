@@ -648,7 +648,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
           };
         } catch (mErr: any) {
           providerError = mErr?.message || 'Google Meet space creation failed.';
-          console.error('[GoogleMeet] Create space failed:', providerError);
+          console.warn('[GoogleMeet] Create space warning:', providerError);
           if (publishNow) {
             return res.status(mErr instanceof GoogleMeetApiError ? mErr.statusCode : 502).json({
               error: providerError,
@@ -681,7 +681,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
           };
         } catch (zErr: any) {
           providerError = zErr?.message || 'Zoom meeting creation failed.';
-          console.error('[Zoom] Create meeting failed:', providerError);
+          console.warn('[Zoom] Create meeting warning:', providerError);
           if (publishNow) {
             return res.status(zErr instanceof ZoomApiError ? zErr.statusCode : 502).json({
               error: `Zoom API Error: ${providerError}`,
