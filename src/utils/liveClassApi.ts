@@ -3,8 +3,10 @@ import {
   LiveClassHealthStatus,
   LiveClassItem,
   LiveClassJoinResponse,
+  LiveClassProvider,
   LiveClassRegistration,
 } from '../types';
+import { clearMeetAccessToken, getMeetAccessToken } from './googleMeetOAuth';
 
 export interface CreateLiveClassPayload {
   courseId: string;
@@ -12,6 +14,10 @@ export interface CreateLiveClassPayload {
   title: string;
   description: string;
   instructorName?: string;
+  provider?: LiveClassProvider;
+  manualMeetingUrl?: string;
+  manualMeetingId?: string;
+  manualPasscode?: string;
   scheduledStartAt: number;
   durationMinutes?: number;
   maxCapacity?: number;
@@ -46,6 +52,11 @@ async function buildRequestHeaders(): Promise<Record<string, string>> {
     }
   } catch {
     // Ignore anonymous/offline token failures; fallback headers handle code-based sessions
+  }
+
+  const meetToken = getMeetAccessToken();
+  if (meetToken) {
+    headers['x-google-meet-token'] = `Bearer ${meetToken}`;
   }
 
   try {
@@ -114,6 +125,9 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
   }
 
   if (!res.ok) {
+    if (data.code === 'GOOGLE_MEET_REAUTH') {
+      clearMeetAccessToken();
+    }
     const err = new Error(data.error || `Request failed (${res.status})`) as Error & {
       status?: number;
       code?: string;
@@ -155,10 +169,22 @@ export async function createLiveClass(
 }
 
 export async function retryZoomMeeting(
-  classId: string
-): Promise<{ success: boolean; liveClass: LiveClassItem; zoomError?: string | null }> {
+  classId: string,
+  options?: {
+    provider?: LiveClassProvider;
+    manualMeetingUrl?: string;
+    manualMeetingId?: string;
+    manualPasscode?: string;
+  }
+): Promise<{
+  success: boolean;
+  provider?: LiveClassProvider;
+  liveClass?: LiveClassItem;
+  zoomError?: string | null;
+}> {
   return apiRequest(`/${encodeURIComponent(classId)}/retry-zoom`, {
     method: 'POST',
+    body: JSON.stringify(options || {}),
   });
 }
 

@@ -187,6 +187,7 @@ export interface PushNotificationItem {
 }
 
 export type LiveClassStatus = 'draft' | 'published' | 'live' | 'completed' | 'cancelled';
+export type LiveClassProvider = 'google_meet' | 'manual' | 'zoom';
 
 export interface LiveClassItem {
   id: string;
@@ -195,6 +196,7 @@ export interface LiveClassItem {
   title: string;
   description: string;
   instructorName: string;
+  provider?: LiveClassProvider;
   scheduledStartAt: number; // Epoch ms
   durationMinutes: number; // Default 40
   scheduledEndAt: number; // Epoch ms
@@ -241,6 +243,7 @@ export interface LiveClassRegistration {
 export interface LiveClassJoinResponse {
   success: boolean;
   liveClassId: string;
+  provider?: LiveClassProvider;
   title: string;
   courseTitle: string;
   joinUrl: string;
@@ -255,6 +258,7 @@ export interface LiveClassJoinResponse {
 
 export interface LiveClassHealthStatus {
   zoomConfigured: boolean;
+  googleMeetSupported?: boolean;
   firebaseAdminConfigured: boolean;
   restFallbackActive?: boolean;
   fcmConfigured: boolean;

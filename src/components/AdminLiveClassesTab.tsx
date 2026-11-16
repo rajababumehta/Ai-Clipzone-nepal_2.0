@@ -23,11 +23,13 @@ import {
   X,
   Lock,
   Radio,
+  Link2,
 } from 'lucide-react';
 import {
   Course,
   LiveClassHealthStatus,
   LiveClassItem,
+  LiveClassProvider,
   LiveClassRegistration,
 } from '../types';
 import {
@@ -44,6 +46,47 @@ import {
   updateLiveClass,
   verifyZoomOAuth,
 } from '../utils/liveClassApi';
+import {
+  getMeetAccessToken,
+  initGoogleMeetAuth,
+  signInWithGoogleForMeet,
+} from '../utils/googleMeetOAuth';
+
+const GoogleSignInButton: React.FC<{
+  onClick: () => void;
+  disabled?: boolean;
+  label?: string;
+  compact?: boolean;
+}> = ({ onClick, disabled, label = 'Sign in with Google', compact = false }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`inline-flex items-center justify-center gap-2.5 rounded-xl bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-900 font-bold border border-zinc-300 shadow-sm transition cursor-pointer disabled:opacity-60 ${
+      compact ? 'px-3 py-1.5 text-[11px]' : 'px-4 py-2.5 text-xs'
+    }`}
+  >
+    <svg className={compact ? 'w-3.5 h-3.5 shrink-0' : 'w-4 h-4 shrink-0'} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"
+      />
+    </svg>
+    <span>{label}</span>
+  </button>
+);
 
 interface AdminLiveClassesTabProps {
   courses: Course[];
@@ -107,6 +150,16 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
   const [formReminder5m, setFormReminder5m] = useState(true);
   const [formPublishImmediately, setFormPublishImmediately] = useState(true);
   const [formIdempotencyKey, setFormIdempotencyKey] = useState('');
+  const [formProvider, setFormProvider] = useState<LiveClassProvider>('google_meet');
+  const [formManualUrl, setFormManualUrl] = useState('');
+  const [formManualMeetingId, setFormManualMeetingId] = useState('');
+  const [formManualPasscode, setFormManualPasscode] = useState('');
+
+  // Google Meet OAuth session state (in-memory token only)
+  const [meetConnected, setMeetConnected] = useState(() => Boolean(getMeetAccessToken()));
+  const [meetUserEmail, setMeetUserEmail] = useState<string>('');
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
+  const [meetReauthRequired, setMeetReauthRequired] = useState(false);
 
   // Row action loading states
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -148,11 +201,44 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
   }, [loadData]);
 
   useEffect(() => {
+    const unsubscribe = initGoogleMeetAuth(
+      (user) => {
+        setMeetConnected(true);
+        setMeetUserEmail(user.email || user.displayName || 'Google Account');
+        setMeetReauthRequired(false);
+      },
+      () => {
+        setMeetConnected(false);
+        setMeetUserEmail('');
+      }
+    );
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     if (!formCourseId && availableCourses.length > 0) {
       const firstLiveCourse = availableCourses.find((c) => Boolean(c.hasLiveSessions));
       setFormCourseId(assignedCourseId || firstLiveCourse?.id || availableCourses[0].id);
     }
   }, [availableCourses, assignedCourseId, formCourseId]);
+
+  const handleConnectGoogleMeet = async (): Promise<boolean> => {
+    setIsConnectingGoogle(true);
+    try {
+      const { user } = await signInWithGoogleForMeet();
+      setMeetConnected(true);
+      setMeetUserEmail(user.email || user.displayName || 'Google Account');
+      setMeetReauthRequired(false);
+      showToast('Google Meet connected! You can now auto-create live Meet links.', 'success');
+      return true;
+    } catch (err: any) {
+      const msg = err?.message || 'Google Meet sign-in was cancelled or failed.';
+      showToast(msg, 'error');
+      return false;
+    } finally {
+      setIsConnectingGoogle(false);
+    }
+  };
 
   const openCreateForm = () => {
     const firstLiveCourse = availableCourses.find((c) => Boolean(c.hasLiveSessions));
@@ -168,6 +254,10 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormReminder30m(true);
     setFormReminder5m(true);
     setFormPublishImmediately(true);
+    setFormProvider('google_meet');
+    setFormManualUrl('');
+    setFormManualMeetingId('');
+    setFormManualPasscode('');
     setFormIdempotencyKey(`lc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     setZoomErrorBanner(null);
     setShowForm(true);
@@ -185,6 +275,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormJoinWindow(cls.joinWindowMinutesBefore ?? 15);
     setFormReminder30m(cls.sendReminder30m !== false);
     setFormReminder5m(cls.sendReminder5m !== false);
+    setFormProvider(cls.provider || 'zoom');
     setShowForm(true);
   };
 
@@ -205,8 +296,22 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       return;
     }
 
+    if (!editingClass && formProvider === 'manual' && !/^https?:\/\/\S+/i.test(formManualUrl.trim())) {
+      showToast('Please enter a valid meeting link starting with https:// or http://.', 'error');
+      return;
+    }
+
     const publishNow =
       typeof overridePublishImmediately === 'boolean' ? overridePublishImmediately : formPublishImmediately;
+
+    // Ensure Google Meet OAuth token exists before calling backend when Google Meet is selected
+    if (!editingClass && formProvider === 'google_meet' && !getMeetAccessToken()) {
+      const ok = await handleConnectGoogleMeet();
+      if (!ok) {
+        setMeetReauthRequired(true);
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     setZoomErrorBanner(null);
@@ -223,7 +328,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           sendReminder30m: formReminder30m,
           sendReminder5m: formReminder5m,
         });
-        showToast('Live class updated and synced with Zoom.', 'success');
+        showToast('Live class updated successfully.', 'success');
       } else {
         const res = await createLiveClass({
           courseId: selectedCourse.id,
@@ -231,6 +336,10 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           title: formTitle.trim(),
           description: formDescription.trim(),
           instructorName: formInstructor.trim() || 'AI Clipzone Mentor',
+          provider: formProvider,
+          manualMeetingUrl: formProvider === 'manual' ? formManualUrl.trim() : undefined,
+          manualMeetingId: formProvider === 'manual' ? formManualMeetingId.trim() : undefined,
+          manualPasscode: formProvider === 'manual' ? formManualPasscode.trim() : undefined,
           scheduledStartAt: scheduledMs,
           durationMinutes: Number(formDuration) || 40,
           maxCapacity: Number(formCapacity) || 80,
@@ -241,20 +350,27 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           idempotencyKey: formIdempotencyKey,
         });
 
-        const zoomIssue = res.zoomWarning || res.zoomError;
-        if (zoomIssue) {
-          setZoomCheckStatus('error');
-          setZoomErrorBanner({ message: zoomIssue });
-          showToast(
-            `Class saved as Draft, but Zoom sync failed: ${zoomIssue}`,
-            'info'
-          );
+        const syncIssue = res.zoomWarning || res.zoomError;
+        if (syncIssue) {
+          if (formProvider === 'zoom') {
+            setZoomCheckStatus('error');
+            setZoomErrorBanner({ message: syncIssue });
+          }
+          showToast(`Class saved as Draft, sync pending: ${syncIssue}`, 'info');
         } else {
-          setZoomCheckStatus('ok');
+          if (formProvider === 'zoom') {
+            setZoomCheckStatus('ok');
+          }
+          const providerLabel =
+            formProvider === 'google_meet'
+              ? 'Google Meet'
+              : formProvider === 'manual'
+              ? 'Live Link'
+              : 'Zoom';
           showToast(
             publishNow
-              ? 'Live class + Zoom meeting created & published to enrolled students!'
-              : 'Draft live class + Zoom meeting created.',
+              ? `Live class + ${providerLabel} created & published to enrolled students!`
+              : `Draft live class + ${providerLabel} created.`,
             'success'
           );
         }
@@ -264,7 +380,10 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     } catch (err: any) {
       const msg = err?.message || 'Failed to save live class';
       const code = err?.code;
-      if (
+      if (code === 'GOOGLE_MEET_REAUTH') {
+        setMeetConnected(false);
+        setMeetReauthRequired(true);
+      } else if (
         code === 'ZOOM_APP_DISABLED' ||
         code === 'ZOOM_OAUTH_ERROR' ||
         code === 'ZOOM_CREATE_FAILED' ||
@@ -311,24 +430,44 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     }
   };
 
-  const handleRetryZoom = async (cls: LiveClassItem) => {
+  const handleRetryZoom = async (cls: LiveClassItem, overrideProvider?: LiveClassProvider) => {
+    const targetProvider = overrideProvider || cls.provider || 'zoom';
+    if (targetProvider === 'google_meet' && !getMeetAccessToken()) {
+      const ok = await handleConnectGoogleMeet();
+      if (!ok) return;
+    }
+
     setBusyId(cls.id);
     try {
-      const res = await retryZoomMeeting(cls.id);
+      const res = await retryZoomMeeting(cls.id, { provider: targetProvider });
       if (res.zoomError) {
-        setZoomCheckStatus('error');
-        setZoomErrorBanner({ message: res.zoomError });
-        showToast(`Zoom retry error: ${res.zoomError}`, 'error');
+        if (targetProvider === 'zoom') {
+          setZoomCheckStatus('error');
+          setZoomErrorBanner({ message: res.zoomError });
+        }
+        showToast(`Sync error: ${res.zoomError}`, 'error');
       } else {
-        setZoomCheckStatus('ok');
-        setZoomErrorBanner(null);
-        showToast('Zoom meeting synced successfully without duplicates!', 'success');
+        if (targetProvider === 'zoom') {
+          setZoomCheckStatus('ok');
+          setZoomErrorBanner(null);
+        }
+        showToast(
+          targetProvider === 'google_meet'
+            ? 'Google Meet link generated and synced!'
+            : 'Meeting synced successfully without duplicates!',
+          'success'
+        );
       }
       await loadData();
     } catch (err: any) {
-      const msg = err?.message || 'Zoom retry failed';
-      setZoomCheckStatus('error');
-      setZoomErrorBanner({ code: err?.code, message: msg });
+      const msg = err?.message || 'Meeting sync failed';
+      if (err?.code === 'GOOGLE_MEET_REAUTH') {
+        setMeetConnected(false);
+        setMeetReauthRequired(true);
+      } else if (targetProvider === 'zoom') {
+        setZoomCheckStatus('error');
+        setZoomErrorBanner({ code: err?.code, message: msg });
+      }
       showToast(msg, 'error');
     } finally {
       setBusyId(null);
@@ -449,10 +588,10 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           <div>
             <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
               <Video className="w-5 h-5 text-blue-400" />
-              Automatic Zoom Live Class Management
+              Live Class Management (Google Meet, Manual & Zoom)
             </h3>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Server-to-Server Zoom OAuth, 40-min default sessions, 80-seat atomic capacity & course-enrolled FCM alerts.
+              1-click Google Meet Space creation, Direct Manual Links, or Zoom S2S OAuth • 80-seat atomic capacity & course-enrolled FCM alerts.
             </p>
           </div>
 
@@ -492,6 +631,24 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
               <span
                 className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                  meetConnected
+                    ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
+                    : 'bg-blue-950/50 border-blue-500/30 text-blue-300'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                Google Meet: {meetConnected ? `Connected (${meetUserEmail || 'Ready'})` : '1-Click Sign-In Ready'}
+              </span>
+              {!meetConnected && (
+                <GoogleSignInButton
+                  compact
+                  onClick={handleConnectGoogleMeet}
+                  disabled={isConnectingGoogle}
+                  label={isConnectingGoogle ? 'Connecting...' : 'Sign in with Google'}
+                />
+              )}
+              <span
+                className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
                   health.firebaseAdminConfigured
                     ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
                     : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
@@ -500,37 +657,35 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Firebase Admin: {health.firebaseAdminConfigured ? 'Connected' : 'REST Mode (Check Service Account)'}
               </span>
-              <span
-                className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                  zoomCheckStatus === 'error'
-                    ? 'bg-rose-950/50 border-rose-500/40 text-rose-300'
-                    : zoomCheckStatus === 'ok'
-                    ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
-                    : health.zoomConfigured
-                    ? 'bg-blue-950/50 border-blue-500/30 text-blue-300'
-                    : 'bg-amber-950/50 border-amber-500/30 text-amber-300'
-                }`}
-              >
-                <Video className="w-3.5 h-3.5" />
-                Zoom S2S OAuth:{' '}
-                {zoomCheckStatus === 'error'
-                  ? 'Action Required'
-                  : zoomCheckStatus === 'ok'
-                  ? 'Active & Verified'
-                  : health.zoomConfigured
-                  ? 'Configured'
-                  : 'Needs ZOOM_* Env Vars'}
-              </span>
               {health.zoomConfigured && (
-                <button
-                  type="button"
-                  onClick={handleVerifyZoom}
-                  disabled={zoomCheckStatus === 'checking'}
-                  className="px-2.5 py-1 rounded-lg border border-blue-500/30 bg-blue-950/40 hover:bg-blue-900/50 text-blue-200 transition cursor-pointer flex items-center gap-1 disabled:opacity-60"
-                >
-                  <RefreshCw className={`w-3 h-3 ${zoomCheckStatus === 'checking' ? 'animate-spin' : ''}`} />
-                  <span>{zoomCheckStatus === 'checking' ? 'Checking Zoom...' : 'Verify Zoom'}</span>
-                </button>
+                <>
+                  <span
+                    className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                      zoomCheckStatus === 'error'
+                        ? 'bg-rose-950/50 border-rose-500/40 text-rose-300'
+                        : zoomCheckStatus === 'ok'
+                        ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                    }`}
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    Zoom (Optional):{' '}
+                    {zoomCheckStatus === 'error'
+                      ? 'App Disabled'
+                      : zoomCheckStatus === 'ok'
+                      ? 'Active'
+                      : 'Configured'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleVerifyZoom}
+                    disabled={zoomCheckStatus === 'checking'}
+                    className="px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition cursor-pointer flex items-center gap-1 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${zoomCheckStatus === 'checking' ? 'animate-spin' : ''}`} />
+                    <span>{zoomCheckStatus === 'checking' ? 'Checking Zoom...' : 'Verify Zoom'}</span>
+                  </button>
+                </>
               )}
               <span
                 className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
@@ -562,12 +717,8 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                     {(zoomErrorBanner.code === 'ZOOM_APP_DISABLED' ||
                       zoomErrorBanner.message.toLowerCase().includes('disabled by the developer')) && (
                       <p className="text-rose-300/90">
-                        Fix in Zoom Marketplace: Sign in to <span className="font-semibold">marketplace.zoom.us</span>{' '}
-                        &rarr; <span className="font-semibold">Manage</span> &rarr;{' '}
-                        <span className="font-semibold">Created Apps</span> &rarr; open your Server-to-Server OAuth app
-                        &rarr; <span className="font-semibold">Activation</span> tab &rarr; click{' '}
-                        <span className="font-semibold">Activate your app</span>, then click{' '}
-                        <span className="font-semibold">Verify Zoom</span> above.
+                        Tip: Use <span className="font-semibold">Google Meet (Auto)</span> or{' '}
+                        <span className="font-semibold">Manual Link</span> in Create Live Class to host classes immediately without Zoom Marketplace activation.
                       </p>
                     )}
                   </div>
@@ -599,7 +750,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h4 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-blue-400" />
-                {editingClass ? `Edit Live Class: ${editingClass.title}` : 'Create New Automatic Zoom Live Class'}
+                {editingClass ? `Edit Live Class: ${editingClass.title}` : 'Create New Live Class'}
               </h4>
               <button
                 type="button"
@@ -609,6 +760,128 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {!editingClass && (
+              <div className="space-y-3 bg-zinc-900/60 border border-zinc-800 rounded-xl p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    Live Meeting Provider
+                  </span>
+                  <span className="text-[11px] text-emerald-400 font-semibold">
+                    Google Meet requires zero Marketplace setup
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(
+                    [
+                      {
+                        id: 'google_meet',
+                        title: 'Google Meet (Auto)',
+                        sub: '1-click instant Meet link',
+                      },
+                      {
+                        id: 'manual',
+                        title: 'Manual Link',
+                        sub: 'Paste any Meet/Zoom URL',
+                      },
+                      {
+                        id: 'zoom',
+                        title: 'Zoom S2S OAuth',
+                        sub: 'Requires active Zoom App',
+                      },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setFormProvider(opt.id);
+                        if (opt.id !== 'zoom') setZoomErrorBanner(null);
+                      }}
+                      className={`text-left px-3 py-2.5 rounded-xl border transition cursor-pointer ${
+                        formProvider === opt.id
+                          ? 'bg-blue-600/20 border-blue-500 text-white shadow-sm'
+                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                      }`}
+                    >
+                      <div className="text-xs font-black">{opt.title}</div>
+                      <div className="text-[10px] opacity-80 mt-0.5">{opt.sub}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {formProvider === 'google_meet' && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-800/80">
+                    {meetConnected && !meetReauthRequired ? (
+                      <div className="flex items-center gap-2 text-xs text-emerald-300 font-semibold">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Connected as {meetUserEmail || 'Google Account'} — ready to create Meet link automatically.</span>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-amber-200">
+                        {meetReauthRequired
+                          ? 'Your Google Meet permission expired. Please sign in again to continue.'
+                          : 'Sign in once with your Google account to auto-generate Google Meet links.'}
+                      </div>
+                    )}
+                    <GoogleSignInButton
+                      compact
+                      onClick={handleConnectGoogleMeet}
+                      disabled={isConnectingGoogle}
+                      label={
+                        isConnectingGoogle
+                          ? 'Connecting...'
+                          : meetConnected && !meetReauthRequired
+                          ? 'Switch Google Account'
+                          : 'Sign in with Google'
+                      }
+                    />
+                  </div>
+                )}
+
+                {formProvider === 'manual' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-zinc-800/80">
+                    <div className="md:col-span-3">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                        Live Meeting URL *
+                      </label>
+                      <input
+                        type="url"
+                        required
+                        value={formManualUrl}
+                        onChange={(e) => setFormManualUrl(e.target.value)}
+                        placeholder="https://meet.google.com/abc-defg-hij or https://zoom.us/j/..."
+                        className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                        Meeting ID / Code (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={formManualMeetingId}
+                        onChange={(e) => setFormManualMeetingId(e.target.value)}
+                        placeholder="abc-defg-hij"
+                        className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                        Passcode (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={formManualPasscode}
+                        onChange={(e) => setFormManualPasscode(e.target.value)}
+                        placeholder="Leave blank if none"
+                        className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -802,11 +1075,19 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                  disabled={isSubmitting}
                 className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
-                <span>{editingClass ? 'Save & Sync Zoom' : 'Create Live Class + Zoom'}</span>
+                <span>
+                  {editingClass
+                    ? 'Save Changes'
+                    : formProvider === 'google_meet'
+                    ? 'Create Live Class + Google Meet'
+                    : formProvider === 'manual'
+                    ? 'Save Live Class + Link'
+                    : 'Create Live Class + Zoom'}
+                </span>
               </button>
             </div>
           </motion.form>
@@ -836,14 +1117,14 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       {isLoading ? (
         <div className="py-14 text-center text-zinc-400 text-sm flex flex-col items-center gap-3">
           <RefreshCw className="w-6 h-6 animate-spin text-blue-400" />
-          <span>Loading Live Classes & Zoom Sync Status...</span>
+          <span>Loading Live Classes...</span>
         </div>
       ) : filteredClasses.length === 0 ? (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-10 text-center space-y-3">
           <Video className="w-10 h-10 text-zinc-600 mx-auto" />
           <p className="text-sm font-bold text-zinc-300">No live classes found in this view.</p>
           <p className="text-xs text-zinc-500">
-            Click &ldquo;Create Live Class&rdquo; to schedule an automatic 40-minute Zoom session for any course.
+            Click &ldquo;Create Live Class&rdquo; to schedule a Google Meet, Manual Link, or Zoom session for any course.
           </p>
         </div>
       ) : (
@@ -854,6 +1135,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
             const seatPct = Math.min(100, Math.round((seatsUsed / maxSeats) * 100));
             const enrolledTotal = enrolledCountForCourse(cls.courseId);
             const isBusy = busyId === cls.id;
+            const clsProvider: LiveClassProvider = cls.provider || 'zoom';
 
             return (
               <div
@@ -887,12 +1169,16 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                       {cls.zoomCreated ? (
                         <span className="text-[11px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/25 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" />
-                          Zoom Synced
+                          {clsProvider === 'google_meet'
+                            ? 'Google Meet Ready'
+                            : clsProvider === 'manual'
+                            ? 'Manual Link Ready'
+                            : 'Zoom Synced'}
                         </span>
                       ) : (
                         <span className="text-[11px] font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />
-                          Zoom Sync Pending/Failed
+                          Meeting Sync Pending
                         </span>
                       )}
                     </div>
@@ -909,7 +1195,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-purple-400" />
-                        {cls.durationMinutes} min (Waiting Room ON)
+                        {cls.durationMinutes} min
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-emerald-400" />
@@ -918,17 +1204,27 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                     </div>
                   </div>
 
-                  {/* Admin Zoom Credentials Box */}
+                  {/* Admin Meeting Credentials Box */}
                   {cls.zoomCreated && (
                     <div className="bg-zinc-950/90 border border-zinc-800 rounded-xl p-3 text-xs space-y-2 shrink-0 min-w-[260px]">
                       <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500">
                         <span className="flex items-center gap-1">
-                          <Lock className="w-3 h-3 text-blue-400" />
-                          Admin Zoom Credentials
+                          {clsProvider === 'manual' ? (
+                            <Link2 className="w-3 h-3 text-blue-400" />
+                          ) : (
+                            <Lock className="w-3 h-3 text-blue-400" />
+                          )}
+                          {clsProvider === 'google_meet'
+                            ? 'Google Meet Details'
+                            : clsProvider === 'manual'
+                            ? 'Live Link Details'
+                            : 'Admin Zoom Credentials'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-zinc-400">Meeting ID:</span>
+                        <span className="text-zinc-400">
+                          {clsProvider === 'google_meet' ? 'Meet Code:' : 'Meeting ID:'}
+                        </span>
                         <button
                           type="button"
                           onClick={() => handleCopy(`id-${cls.id}`, cls.zoomMeetingId || '')}
@@ -967,7 +1263,11 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                           className="mt-1 w-full py-1.5 px-3 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 font-bold text-[11px] flex items-center justify-center gap-1.5 transition"
                         >
                           <ExternalLink className="w-3 h-3" />
-                          Start Meeting as Host
+                          {clsProvider === 'google_meet'
+                            ? 'Open Google Meet'
+                            : clsProvider === 'manual'
+                            ? 'Open Meeting Link'
+                            : 'Start Meeting as Host'}
                         </a>
                       )}
                     </div>
@@ -976,16 +1276,27 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
 
                 {!cls.zoomCreated && cls.zoomError && (
                   <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span>Zoom Error: {cls.zoomError}</span>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => handleRetryZoom(cls)}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-black text-[11px] flex items-center gap-1.5 shrink-0 cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isBusy ? 'animate-spin' : ''}`} />
-                      Retry Zoom Sync
-                    </button>
+                    <span>Sync Issue: {cls.zoomError}</span>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleRetryZoom(cls, 'google_meet')}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Video className="w-3 h-3" />
+                        Generate Google Meet Instead
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleRetryZoom(cls)}
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-black text-[11px] flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isBusy ? 'animate-spin' : ''}`} />
+                        Retry Sync
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1172,7 +1483,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
               <p className="text-xs text-zinc-300 leading-relaxed">
                 {confirmModal.action === 'cancel'
                   ? `Cancelling "${confirmModal.cls.title}" will disable student join access and notify enrolled students.`
-                  : `Deleting "${confirmModal.cls.title}" will permanently remove the Zoom meeting, schedule, and all seat reservations.`}
+                  : `Deleting "${confirmModal.cls.title}" will permanently remove the scheduled meeting, link, and all seat reservations.`}
               </p>
 
               {confirmModal.action === 'cancel' && (

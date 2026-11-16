@@ -9,6 +9,10 @@ import {
   verifyZoomConnection,
   ZoomApiError,
 } from '../server/zoomService.ts';
+import {
+  createGoogleMeetSpace,
+  GoogleMeetApiError,
+} from '../server/googleMeetService.ts';
 
 // ============================================================================
 // In-Memory Transactional Firestore Test Double matching Admin SDK API
@@ -252,6 +256,16 @@ async function startTestApp(opts: {
       getAuth: () => null,
       getMessaging: () => mockMessaging,
       zoomApi,
+      createGoogleMeetSpace: async (token: string) => {
+        if (!token || token === 'expired-token') {
+          throw new GoogleMeetApiError('Re-auth required', 401, 'GOOGLE_MEET_REAUTH');
+        }
+        return {
+          spaceName: 'spaces/abc-defg-hij',
+          meetingUri: 'https://meet.google.com/abc-defg-hij',
+          meetingCode: 'abc-defg-hij',
+        };
+      },
     })
   );
 
@@ -654,4 +668,125 @@ test('Zoom Service: Translates disabled Zoom Marketplace app into ZOOM_APP_DISAB
       return true;
     }
   );
+});
+
+test('Google Meet Service: creates space and maps 401/missing token to GOOGLE_MEET_REAUTH', async () => {
+  await assert.rejects(
+    () => createGoogleMeetSpace(''),
+    (err: unknown) => {
+      assert.ok(err instanceof GoogleMeetApiError);
+      assert.equal(err.code, 'GOOGLE_MEET_REAUTH');
+      assert.equal(err.statusCode, 401);
+      return true;
+    }
+  );
+
+  const mockOkFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        name: 'spaces/xyz-1234',
+        meetingUri: 'https://meet.google.com/xyz-abcd-efg',
+        meetingCode: 'xyz-abcd-efg',
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    )) as unknown as typeof fetch;
+
+  const okSpace = await createGoogleMeetSpace('valid-meet-oauth-token', mockOkFetch);
+  assert.equal(okSpace.spaceName, 'spaces/xyz-1234');
+  assert.equal(okSpace.meetingUri, 'https://meet.google.com/xyz-abcd-efg');
+  assert.equal(okSpace.meetingCode, 'xyz-abcd-efg');
+
+  const mock401Fetch = (async () =>
+    new Response(JSON.stringify({ error: { message: 'Invalid Credentials' } }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () => createGoogleMeetSpace('expired-token', mock401Fetch),
+    (err: unknown) => {
+      assert.ok(err instanceof GoogleMeetApiError);
+      assert.equal(err.code, 'GOOGLE_MEET_REAUTH');
+      assert.equal(err.statusCode, 401);
+      return true;
+    }
+  );
+});
+
+test('Multi-provider: Google Meet Auto & Manual Link work without Zoom credentials', async () => {
+  const ctx = await startTestApp({ zoomShouldFail: true });
+  try {
+    // 1. Google Meet without token -> 401 GOOGLE_MEET_REAUTH
+    const noTokenRes = await reqJson(ctx.baseUrl, '/', {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({
+        courseId: 'ai-masterclass',
+        title: 'Google Meet Workshop',
+        provider: 'google_meet',
+        scheduledStartAt: Date.now() + 5 * 60_000,
+        publishImmediately: true,
+      }),
+    });
+    assert.equal(noTokenRes.status, 401);
+    assert.equal(noTokenRes.data.code, 'GOOGLE_MEET_REAUTH');
+
+    // 2. Google Meet with valid token -> creates & publishes immediately
+    const meetRes = await reqJson(ctx.baseUrl, '/', {
+      method: 'POST',
+      headers: {
+        ...ADMIN_HEADERS,
+        'x-google-meet-token': 'Bearer valid-google-token-xyz',
+      },
+      body: JSON.stringify({
+        courseId: 'ai-masterclass',
+        title: 'Google Meet Live Workshop',
+        provider: 'google_meet',
+        scheduledStartAt: Date.now() + 5 * 60_000,
+        publishImmediately: true,
+      }),
+    });
+    assert.equal(meetRes.status, 201);
+    assert.equal(meetRes.data.liveClass.provider, 'google_meet');
+    assert.equal(meetRes.data.liveClass.status, 'published');
+    assert.equal(meetRes.data.liveClass.zoomMeetingId, 'abc-defg-hij');
+    assert.equal(ctx.getZoomCreateCalls(), 0);
+
+    // Enrolled student joins Google Meet
+    const meetJoin = await reqJson(ctx.baseUrl, `/${meetRes.data.liveClass.id}/join`, {
+      method: 'POST',
+      headers: ENROLLED_HEADERS,
+    });
+    assert.equal(meetJoin.status, 200);
+    assert.equal(meetJoin.data.provider, 'google_meet');
+    assert.equal(meetJoin.data.joinUrl, 'https://meet.google.com/abc-defg-hij');
+
+    // 3. Manual link provider -> works with zero external OAuth calls
+    const manualRes = await reqJson(ctx.baseUrl, '/', {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({
+        courseId: 'ai-masterclass',
+        title: 'Manual Link Q&A',
+        provider: 'manual',
+        manualMeetingUrl: 'https://meet.google.com/man-ual-lnk',
+        manualMeetingId: 'man-ual-lnk',
+        scheduledStartAt: Date.now() + 5 * 60_000,
+        publishImmediately: true,
+      }),
+    });
+    assert.equal(manualRes.status, 201);
+    assert.equal(manualRes.data.liveClass.provider, 'manual');
+    assert.equal(manualRes.data.liveClass.status, 'published');
+
+    const manualJoin = await reqJson(ctx.baseUrl, `/${manualRes.data.liveClass.id}/join`, {
+      method: 'POST',
+      headers: ENROLLED_HEADERS,
+    });
+    assert.equal(manualJoin.status, 200);
+    assert.equal(manualJoin.data.provider, 'manual');
+    assert.equal(manualJoin.data.joinUrl, 'https://meet.google.com/man-ual-lnk');
+  } finally {
+    await ctx.close();
+  }
 });

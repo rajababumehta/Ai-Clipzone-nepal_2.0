@@ -21,6 +21,10 @@ import {
   ZoomApiError,
 } from './zoomService.ts';
 import {
+  createGoogleMeetSpace,
+  GoogleMeetApiError,
+} from './googleMeetService.ts';
+import {
   createRateLimiter,
   verifyAdminIdentity,
   verifyStudentEnrollment,
@@ -38,6 +42,23 @@ export interface LiveClassRouterDeps {
     deleteMeeting: typeof deleteZoomMeeting;
     verifyConnection?: typeof verifyZoomConnection;
   };
+  createGoogleMeetSpace?: typeof createGoogleMeetSpace;
+}
+
+type ResolvedProvider = 'google_meet' | 'manual' | 'zoom';
+
+function normalizeProvider(raw: unknown, fallback: ResolvedProvider = 'zoom'): ResolvedProvider {
+  const val = String(raw || '').trim();
+  if (val === 'google_meet' || val === 'manual' || val === 'zoom') return val;
+  return fallback;
+}
+
+function extractGoogleMeetToken(req: Request): string {
+  const headerVal = String(req.headers['x-google-meet-token'] || '').trim();
+  if (headerVal) {
+    return headerVal.startsWith('Bearer ') ? headerVal.slice(7).trim() : headerVal;
+  }
+  return String(req.body?.googleMeetAccessToken || '').trim();
 }
 
 function sanitizeId(raw: string): string {
@@ -267,6 +288,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     deleteMeeting: deleteZoomMeeting,
     verifyConnection: verifyZoomConnection,
   };
+  const createMeetSpaceFn = deps.createGoogleMeetSpace || createGoogleMeetSpace;
 
   const joinLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 25, keyPrefix: 'join' });
   const adminMutationLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'admin' });
@@ -277,6 +299,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     const messaging = resolveMessaging();
     res.json({
       zoomConfigured: zoomApi.isConfigured(),
+      googleMeetSupported: true,
       firebaseAdminConfigured: Boolean(db),
       restFallbackActive: !db,
       fcmConfigured: Boolean(messaging),
@@ -447,6 +470,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
           title: data.title,
           description: data.description || '',
           instructorName: data.instructorName || 'AI Clipzone',
+          provider: normalizeProvider(data.provider, 'zoom'),
           scheduledStartAt: Number(data.scheduledStartAt),
           durationMinutes: Number(data.durationMinutes || 40),
           scheduledEndAt: Number(data.scheduledEndAt || Number(data.scheduledStartAt) + Number(data.durationMinutes || 40) * 60_000),
@@ -532,6 +556,10 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     const sendReminder5m = req.body?.sendReminder5m !== false;
     const publishNow = Boolean(req.body?.publishNow ?? req.body?.publishImmediately);
     const idempotencyKey = String(req.body?.idempotencyKey || '').trim().slice(0, 128);
+    const provider = normalizeProvider(req.body?.provider, 'zoom');
+    const manualMeetingUrl = String(req.body?.manualMeetingUrl || '').trim();
+    const manualMeetingId = String(req.body?.manualMeetingId || '').trim();
+    const manualPasscode = String(req.body?.manualPasscode || '').trim();
 
     if (!title || title.length < 3 || title.length > 200) {
       return res.status(400).json({ error: 'Class title must be between 3 and 200 characters.' });
@@ -545,9 +573,15 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     if (adminCtx.role === 'sub_admin' && adminCtx.assignedCourseId && adminCtx.assignedCourseId !== courseId) {
       return res.status(403).json({ error: 'Sub-Admin can only create live classes for their assigned course.' });
     }
+    if (provider === 'manual' && !/^https?:\/\/\S+/i.test(manualMeetingUrl)) {
+      return res.status(400).json({
+        error: 'Please enter a valid live meeting URL starting with https:// or http://.',
+        code: 'MANUAL_URL_REQUIRED',
+      });
+    }
 
     try {
-      // 1. Prevent duplicate Zoom meeting creation on retry using idempotencyKey
+      // 1. Prevent duplicate meeting creation on retry using idempotencyKey
       if (idempotencyKey) {
         try {
           const dupSnap = await db
@@ -565,6 +599,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
               liveClass: {
                 id: existingDoc.id,
                 ...existingData,
+                provider: normalizeProvider(existingData?.provider, 'zoom'),
                 zoomMeetingId: sec?.zoomMeetingId || '',
                 zoomPasscode: sec?.zoomPasscode || '',
                 zoomStartUrl: sec?.zoomStartUrl || '',
@@ -582,25 +617,71 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
         ? String(courseSnap.data()?.title || req.body?.courseTitle || courseId)
         : String(req.body?.courseTitle || courseId);
 
-      // 3. Create Zoom Meeting via Server-to-Server OAuth API
-      let zoomResult: Awaited<ReturnType<typeof createZoomMeeting>> | null = null;
-      let zoomError = '';
-      try {
-        zoomResult = await zoomApi.createMeeting({
-          topic: `${title} — ${courseTitle}`,
-          agenda: description || `Live Class for ${courseTitle}`,
-          startTimeMs: scheduledStartAt,
-          durationMinutes,
-        });
-      } catch (zErr: any) {
-        zoomError = zErr?.message || 'Zoom meeting creation failed.';
-        console.error('[Zoom] Create meeting failed:', zoomError);
-        // If user tried to publish immediately without Zoom working, reject cleanly
-        if (publishNow) {
-          return res.status(zErr instanceof ZoomApiError ? zErr.statusCode : 502).json({
-            error: `Zoom API Error: ${zoomError}`,
-            code: zErr instanceof ZoomApiError ? zErr.code : 'ZOOM_ERROR',
+      // 3. Create meeting via selected provider (Google Meet, Manual Link, or Zoom S2S OAuth)
+      let meetingResult: {
+        meetingId: string;
+        joinUrl: string;
+        startUrl: string;
+        password: string;
+        hostEmail?: string;
+        meetSpaceName?: string;
+      } | null = null;
+      let providerError = '';
+
+      if (provider === 'google_meet') {
+        try {
+          const accessToken = extractGoogleMeetToken(req);
+          const space = await createMeetSpaceFn(accessToken);
+          meetingResult = {
+            meetingId: space.meetingCode,
+            joinUrl: space.meetingUri,
+            startUrl: space.meetingUri,
+            password: '',
+            hostEmail: adminCtx.email || '',
+            meetSpaceName: space.spaceName,
+          };
+        } catch (mErr: any) {
+          providerError = mErr?.message || 'Google Meet space creation failed.';
+          console.error('[GoogleMeet] Create space failed:', providerError);
+          if (publishNow) {
+            return res.status(mErr instanceof GoogleMeetApiError ? mErr.statusCode : 502).json({
+              error: providerError,
+              code: mErr instanceof GoogleMeetApiError ? mErr.code : 'GOOGLE_MEET_ERROR',
+            });
+          }
+        }
+      } else if (provider === 'manual') {
+        meetingResult = {
+          meetingId: manualMeetingId || 'Direct Link',
+          joinUrl: manualMeetingUrl,
+          startUrl: manualMeetingUrl,
+          password: manualPasscode,
+          hostEmail: adminCtx.email || '',
+        };
+      } else {
+        try {
+          const z = await zoomApi.createMeeting({
+            topic: `${title} — ${courseTitle}`,
+            agenda: description || `Live Class for ${courseTitle}`,
+            startTimeMs: scheduledStartAt,
+            durationMinutes,
           });
+          meetingResult = {
+            meetingId: z.meetingId,
+            joinUrl: z.joinUrl,
+            startUrl: z.startUrl,
+            password: z.password,
+            hostEmail: z.hostEmail || '',
+          };
+        } catch (zErr: any) {
+          providerError = zErr?.message || 'Zoom meeting creation failed.';
+          console.error('[Zoom] Create meeting failed:', providerError);
+          if (publishNow) {
+            return res.status(zErr instanceof ZoomApiError ? zErr.statusCode : 502).json({
+              error: `Zoom API Error: ${providerError}`,
+              code: zErr instanceof ZoomApiError ? zErr.code : 'ZOOM_ERROR',
+            });
+          }
         }
       }
 
@@ -608,7 +689,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       const classRef = db.collection('liveClasses').doc();
       const classId = classRef.id;
       const scheduledEndAt = scheduledStartAt + durationMinutes * 60_000;
-      const initialStatus = publishNow && zoomResult ? 'published' : 'draft';
+      const initialStatus = publishNow && meetingResult ? 'published' : 'draft';
 
       const classDoc = {
         id: classId,
@@ -617,6 +698,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
         title,
         description,
         instructorName,
+        provider,
         scheduledStartAt,
         durationMinutes,
         scheduledEndAt,
@@ -624,10 +706,10 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
         registeredCount: 0,
         status: initialStatus,
         joinWindowMinutesBefore,
-        zoomCreated: Boolean(zoomResult),
-        zoomMeetingStatus: zoomResult ? 'created' : 'failed',
-        zoomMeetingIdMasked: zoomResult ? maskMeetingId(zoomResult.meetingId) : '',
-        zoomError: zoomError || '',
+        zoomCreated: Boolean(meetingResult),
+        zoomMeetingStatus: meetingResult ? 'created' : 'failed',
+        zoomMeetingIdMasked: meetingResult ? maskMeetingId(meetingResult.meetingId) : '',
+        zoomError: providerError || '',
         idempotencyKey: idempotencyKey || classId,
         sendReminder30m,
         sendReminder5m,
@@ -642,14 +724,16 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
 
       await classRef.set(classDoc);
 
-      if (zoomResult) {
+      if (meetingResult) {
         await db.collection('liveClassSecrets').doc(classId).set({
           liveClassId: classId,
-          zoomMeetingId: zoomResult.meetingId,
-          zoomJoinUrl: zoomResult.joinUrl,
-          zoomStartUrl: zoomResult.startUrl,
-          zoomPasscode: zoomResult.password,
-          hostEmail: zoomResult.hostEmail || '',
+          provider,
+          zoomMeetingId: meetingResult.meetingId,
+          zoomJoinUrl: meetingResult.joinUrl,
+          zoomStartUrl: meetingResult.startUrl,
+          zoomPasscode: meetingResult.password,
+          hostEmail: meetingResult.hostEmail || '',
+          ...(meetingResult.meetSpaceName ? { meetSpaceName: meetingResult.meetSpaceName } : {}),
           createdAt: now,
           updatedAt: now,
         });
@@ -669,12 +753,12 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
         success: true,
         liveClass: {
           ...classDoc,
-          zoomMeetingId: zoomResult?.meetingId || '',
-          zoomPasscode: zoomResult?.password || '',
-          zoomStartUrl: zoomResult?.startUrl || '',
+          zoomMeetingId: meetingResult?.meetingId || '',
+          zoomPasscode: meetingResult?.password || '',
+          zoomStartUrl: meetingResult?.startUrl || '',
         },
         notificationResult,
-        zoomWarning: zoomError || undefined,
+        zoomWarning: providerError || undefined,
       });
     } catch (err: any) {
       console.error('[LiveClasses] Create error:', err);
@@ -682,7 +766,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     }
   });
 
-  // Retry Zoom Meeting creation cleanly without duplicating existing meetings
+  // Retry or switch provider sync cleanly without duplicating existing meetings
   router.post('/:id/retry-zoom', adminMutationLimiter, async (req: Request, res: Response) => {
     try {
       const db = requireDb(res, req);
@@ -706,65 +790,129 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
         return res.json({
           success: true,
           deduplicated: true,
+          provider: normalizeProvider(sec.provider || data.provider, 'zoom'),
           zoomMeetingId: sec.zoomMeetingId,
           zoomPasscode: sec.zoomPasscode,
           zoomStartUrl: sec.zoomStartUrl,
         });
       }
 
-    try {
-      const zoomResult = await zoomApi.createMeeting({
-        topic: `${data.title} — ${data.courseTitle || data.courseId}`,
-        agenda: data.description || '',
-        startTimeMs: Number(data.scheduledStartAt),
-        durationMinutes: Number(data.durationMinutes || 40),
-      });
+      const targetProvider = normalizeProvider(req.body?.provider, normalizeProvider(data.provider, 'zoom'));
 
-      const now = Date.now();
-      await db.collection('liveClassSecrets').doc(classId).set({
-        liveClassId: classId,
-        zoomMeetingId: zoomResult.meetingId,
-        zoomJoinUrl: zoomResult.joinUrl,
-        zoomStartUrl: zoomResult.startUrl,
-        zoomPasscode: zoomResult.password,
-        hostEmail: zoomResult.hostEmail || '',
-        createdAt: now,
-        updatedAt: now,
-      });
+      try {
+        let meetingResult: {
+          meetingId: string;
+          joinUrl: string;
+          startUrl: string;
+          password: string;
+          hostEmail?: string;
+          meetSpaceName?: string;
+        };
 
-      await classRef.set(
-        {
-          zoomCreated: true,
-          zoomMeetingStatus: 'created',
-          zoomMeetingIdMasked: maskMeetingId(zoomResult.meetingId),
-          zoomError: '',
+        if (targetProvider === 'google_meet') {
+          const accessToken = extractGoogleMeetToken(req);
+          const space = await createMeetSpaceFn(accessToken);
+          meetingResult = {
+            meetingId: space.meetingCode,
+            joinUrl: space.meetingUri,
+            startUrl: space.meetingUri,
+            password: '',
+            hostEmail: adminCtx.email || '',
+            meetSpaceName: space.spaceName,
+          };
+        } else if (targetProvider === 'manual') {
+          const manualMeetingUrl = String(req.body?.manualMeetingUrl || '').trim();
+          if (!/^https?:\/\/\S+/i.test(manualMeetingUrl)) {
+            return res.status(400).json({
+              error: 'Please enter a valid live meeting URL starting with https:// or http://.',
+              code: 'MANUAL_URL_REQUIRED',
+            });
+          }
+          meetingResult = {
+            meetingId: String(req.body?.manualMeetingId || '').trim() || 'Direct Link',
+            joinUrl: manualMeetingUrl,
+            startUrl: manualMeetingUrl,
+            password: String(req.body?.manualPasscode || '').trim(),
+            hostEmail: adminCtx.email || '',
+          };
+        } else {
+          const z = await zoomApi.createMeeting({
+            topic: `${data.title} — ${data.courseTitle || data.courseId}`,
+            agenda: data.description || '',
+            startTimeMs: Number(data.scheduledStartAt),
+            durationMinutes: Number(data.durationMinutes || 40),
+          });
+          meetingResult = {
+            meetingId: z.meetingId,
+            joinUrl: z.joinUrl,
+            startUrl: z.startUrl,
+            password: z.password,
+            hostEmail: z.hostEmail || '',
+          };
+        }
+
+        const now = Date.now();
+        await db.collection('liveClassSecrets').doc(classId).set({
+          liveClassId: classId,
+          provider: targetProvider,
+          zoomMeetingId: meetingResult.meetingId,
+          zoomJoinUrl: meetingResult.joinUrl,
+          zoomStartUrl: meetingResult.startUrl,
+          zoomPasscode: meetingResult.password,
+          hostEmail: meetingResult.hostEmail || '',
+          ...(meetingResult.meetSpaceName ? { meetSpaceName: meetingResult.meetSpaceName } : {}),
+          createdAt: now,
           updatedAt: now,
-        },
-        { merge: true }
-      );
+        });
 
-      res.json({
-        success: true,
-        zoomMeetingId: zoomResult.meetingId,
-        zoomPasscode: zoomResult.password,
-        zoomStartUrl: zoomResult.startUrl,
-      });
-    } catch (zErr: any) {
-      const errMsg = zErr?.message || 'Zoom sync failed.';
-      await classRef.set(
-        {
-          zoomCreated: false,
-          zoomMeetingStatus: 'failed',
-          zoomError: errMsg,
-          updatedAt: Date.now(),
-        },
-        { merge: true }
-      ).catch(() => {});
-      res.status(zErr instanceof ZoomApiError ? zErr.statusCode : 502).json({ error: errMsg });
-    }
+        await classRef.set(
+          {
+            provider: targetProvider,
+            zoomCreated: true,
+            zoomMeetingStatus: 'created',
+            zoomMeetingIdMasked: maskMeetingId(meetingResult.meetingId),
+            zoomError: '',
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+
+        res.json({
+          success: true,
+          provider: targetProvider,
+          zoomMeetingId: meetingResult.meetingId,
+          zoomPasscode: meetingResult.password,
+          zoomStartUrl: meetingResult.startUrl,
+        });
+      } catch (pErr: any) {
+        const errMsg = pErr?.message || 'Meeting sync failed.';
+        await classRef.set(
+          {
+            provider: targetProvider,
+            zoomCreated: false,
+            zoomMeetingStatus: 'failed',
+            zoomError: errMsg,
+            updatedAt: Date.now(),
+          },
+          { merge: true }
+        ).catch(() => {});
+        const statusCode =
+          pErr instanceof GoogleMeetApiError
+            ? pErr.statusCode
+            : pErr instanceof ZoomApiError
+            ? pErr.statusCode
+            : 502;
+        const code =
+          pErr instanceof GoogleMeetApiError
+            ? pErr.code
+            : pErr instanceof ZoomApiError
+            ? pErr.code
+            : 'MEETING_SYNC_FAILED';
+        res.status(statusCode).json({ error: errMsg, code });
+      }
     } catch (err: any) {
-      console.error('[LiveClasses] Retry Zoom error:', err);
-      return handleRouteError(res, 'Failed to retry Zoom meeting sync.', err);
+      console.error('[LiveClasses] Retry meeting sync error:', err);
+      return handleRouteError(res, 'Failed to retry meeting sync.', err);
     }
   });
 
@@ -815,7 +963,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     }
 
     const secSnap = await db.collection('liveClassSecrets').doc(classId).get();
-    if (secSnap.exists && secSnap.data()?.zoomMeetingId) {
+    if (normalizeProvider(existing.provider, 'zoom') === 'zoom' && secSnap.exists && secSnap.data()?.zoomMeetingId) {
       try {
         await zoomApi.updateMeeting(secSnap.data()!.zoomMeetingId, {
           topic: `${title} — ${courseTitle}`,
@@ -872,7 +1020,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       }
       if (!data.zoomCreated) {
         return res.status(400).json({
-          error: 'Cannot publish before a Zoom meeting is created. Click "Retry Zoom Sync" first.',
+          error: 'Cannot publish before a meeting link is created. Sync or retry first.',
         });
       }
 
@@ -962,7 +1110,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       await classRef.set({ status: 'cancelled', updatedAt: Date.now() }, { merge: true });
 
       const secSnap = await db.collection('liveClassSecrets').doc(classId).get();
-      if (secSnap.exists && secSnap.data()?.zoomMeetingId) {
+      if (normalizeProvider(data.provider, 'zoom') === 'zoom' && secSnap.exists && secSnap.data()?.zoomMeetingId) {
         await zoomApi.deleteMeeting(secSnap.data()!.zoomMeetingId).catch(() => {});
       }
 
@@ -1005,7 +1153,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
 
       const secRef = db.collection('liveClassSecrets').doc(classId);
       const secSnap = await secRef.get();
-      if (secSnap.exists && secSnap.data()?.zoomMeetingId) {
+      if (normalizeProvider(data.provider, 'zoom') === 'zoom' && secSnap.exists && secSnap.data()?.zoomMeetingId) {
         await zoomApi.deleteMeeting(secSnap.data()!.zoomMeetingId).catch(() => {});
       }
 
@@ -1218,7 +1366,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
 
     const secSnap = await db.collection('liveClassSecrets').doc(classId).get();
     if (!secSnap.exists || !secSnap.data()?.zoomJoinUrl) {
-      return res.status(404).json({ error: 'Zoom meeting link is not available for this class yet.' });
+      return res.status(404).json({ error: 'Meeting link is not available for this class yet.' });
     }
     const sec = secSnap.data()!;
 
@@ -1276,6 +1424,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     res.json({
       success: true,
       liveClassId: classId,
+      provider: normalizeProvider(classData.provider, 'zoom'),
       title: classData.title,
       courseTitle: classData.courseTitle,
       joinUrl: sec.zoomJoinUrl,

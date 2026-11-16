@@ -228,7 +228,7 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
       setJoinSessionModal(res);
       await loadClasses();
     } catch (err: any) {
-      showToast(err?.message || 'Cannot join Zoom meeting right now', 'error');
+      showToast(err?.message || 'Cannot join live session right now', 'error');
     } finally {
       setBusyId(null);
     }
@@ -386,7 +386,15 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
                   ) : (
                     <Video className="w-4 h-4" />
                   )}
-                  <span>{isFull && !cls.isRegistered ? 'Class Full (80/80)' : 'Join Zoom Now'}</span>
+                  <span>
+                    {isFull && !cls.isRegistered
+                      ? `Class Full (${maxCap}/${maxCap})`
+                      : cls.provider === 'google_meet'
+                      ? 'Join Google Meet'
+                      : cls.provider === 'manual'
+                      ? 'Join Live Class'
+                      : 'Join Zoom Now'}
+                  </span>
                 </button>
               ) : cls.isRegistered ? (
                 <div className="w-full px-4 py-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5">
@@ -427,10 +435,10 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
               <Video className="w-7 h-7 text-blue-400 shrink-0" />
-              <span>Zoom Live Classes</span>
+              <span>Interactive Live Classes</span>
             </h1>
             <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl">
-              Exclusive live Zoom sessions for enrolled AI Clipzone students. Reserve your seat early (max 80 learners per session) and join straight from your PWA.
+              Exclusive live workshops for enrolled AI Clipzone students. Reserve your seat early (max 80 learners per session) and join straight from your PWA.
             </p>
           </div>
 
@@ -546,7 +554,7 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
                 <Video className="w-10 h-10 text-zinc-700 mx-auto" />
                 <p className="text-sm font-bold text-zinc-300">No upcoming live sessions scheduled right now.</p>
                 <p className="text-xs text-zinc-500">
-                  Enable push alerts above to get notified immediately when your course mentor schedules a live Zoom class.
+                  Enable push alerts above to get notified immediately when your course mentor schedules a live class.
                 </p>
               </div>
             ) : (
@@ -641,7 +649,13 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
 
               <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 space-y-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400 font-semibold">Zoom Meeting ID</span>
+                  <span className="text-zinc-400 font-semibold">
+                    {joinSessionModal.provider === 'google_meet'
+                      ? 'Google Meet Code'
+                      : joinSessionModal.provider === 'manual'
+                      ? 'Session ID'
+                      : 'Zoom Meeting ID'}
+                  </span>
                   <button
                     type="button"
                     onClick={() => handleCopy('mid', joinSessionModal.meetingId)}
@@ -651,17 +665,19 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
                     {copiedField === 'mid' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-400 font-semibold">Passcode</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy('pw', joinSessionModal.passcode)}
-                    className="font-mono font-black text-amber-300 hover:text-amber-200 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {joinSessionModal.passcode}
-                    {copiedField === 'pw' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
+                {Boolean(joinSessionModal.passcode) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 font-semibold">Passcode</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy('pw', joinSessionModal.passcode)}
+                      className="font-mono font-black text-amber-300 hover:text-amber-200 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {joinSessionModal.passcode}
+                      {copiedField === 'pw' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-zinc-400 pt-1 border-t border-zinc-800">
                   <span>Seated Learners</span>
                   <span className="font-bold text-zinc-200">
@@ -673,7 +689,11 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
               <div className="bg-blue-950/30 border border-blue-500/20 rounded-xl p-3 text-[11px] text-blue-200 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                 <span>
-                  Waiting Room is enabled for security. Use your registered student name when entering Zoom.
+                  {joinSessionModal.provider === 'google_meet'
+                    ? 'Tap "Open Google Meet" below to join the live workshop using Google Meet in your browser or Meet app.'
+                    : joinSessionModal.provider === 'manual'
+                    ? 'Tap "Open Live Class" below to launch the verified live session link.'
+                    : 'Waiting Room is enabled for security. Use your registered student name when entering Zoom.'}
                 </span>
               </div>
 
@@ -685,7 +705,13 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
                   className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-blue-900/30 transition"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  <span>Open Zoom Meeting</span>
+                  <span>
+                    {joinSessionModal.provider === 'google_meet'
+                      ? 'Open Google Meet'
+                      : joinSessionModal.provider === 'manual'
+                      ? 'Open Live Class'
+                      : 'Open Zoom Meeting'}
+                  </span>
                 </a>
                 <button
                   type="button"
