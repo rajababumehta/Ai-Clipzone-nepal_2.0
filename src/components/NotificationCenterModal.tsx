@@ -11,8 +11,7 @@ import {
   Info, 
   BookOpen, 
   CheckCheck,
-  AlertCircle,
-  Video
+  AlertCircle
 } from 'lucide-react';
 import { PushNotificationItem } from '../types';
 import { requestNotificationPermission, showNativeNotification, getNotificationPermission } from '../utils/notifications';
@@ -48,7 +47,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     }
   };
 
-  const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'discount' | 'course' | 'announcement'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'discount' | 'course' | 'announcement'>('all');
   const [permStatus, setPermStatus] = useState<NotificationPermission>(() => getNotificationPermission());
 
   if (!isOpen) return null;
@@ -74,18 +73,14 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
 
   const filteredNotifications = safeNotifications.filter(n => {
     if (activeFilter === 'all') return true;
-    if (activeFilter === 'live') return n.type === 'live_class' || n.type === 'live_reminder';
     if (activeFilter === 'discount') return n.type === 'discount';
-    if (activeFilter === 'course') return n.type === 'course' || n.type === 'live_class';
-    if (activeFilter === 'announcement') return n.type === 'announcement' || n.type === 'general' || n.type === 'welcome' || n.type === 'live_reminder';
+    if (activeFilter === 'course') return n.type === 'course';
+    if (activeFilter === 'announcement') return n.type === 'announcement' || n.type === 'general' || n.type === 'welcome';
     return true;
   });
 
-  const getTypeIcon = (type?: string) => {
+  const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'live_class':
-      case 'live_reminder':
-        return <Video className="w-4 h-4 text-rose-400" />;
       case 'discount':
         return <Tag className="w-4 h-4 text-emerald-400" />;
       case 'course':
@@ -99,11 +94,8 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     }
   };
 
-  const getTypeBadgeClass = (type?: string) => {
+  const getTypeBadgeClass = (type: string) => {
     switch (type) {
-      case 'live_class':
-      case 'live_reminder':
-        return 'bg-rose-950/80 text-rose-300 border-rose-500/40';
       case 'discount':
         return 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40';
       case 'course':
@@ -234,17 +226,6 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
             सबै ({safeNotifications.length})
           </button>
           <button
-            onClick={() => setActiveFilter('live')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1 ${
-              activeFilter === 'live'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Video className="w-3 h-3" />
-            Live Classes
-          </button>
-          <button
             onClick={() => setActiveFilter('discount')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1 ${
               activeFilter === 'discount'
@@ -324,7 +305,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                     <div className="flex-1 min-w-0 pr-2">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${getTypeBadgeClass(notif.type)}`}>
-                          {notif.badge || (notif.type || 'general').replace(/_/g, ' ').toUpperCase()}
+                          {notif.badge || notif.type.toUpperCase()}
                         </span>
                         <span className="text-[10px] text-zinc-500">
                           {formattedDate}

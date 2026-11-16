@@ -104,12 +104,6 @@ export const downloadFileAttachment = (url: string, filename: string) => {
     document.body.removeChild(link);
   } catch (e) {
     console.error('Download failed:', e);
-    const fallbackLink = document.createElement('a');
-    fallbackLink.href = url;
-    fallbackLink.target = '_blank';
-    fallbackLink.rel = 'noopener noreferrer';
-    document.body.appendChild(fallbackLink);
-    fallbackLink.click();
-    document.body.removeChild(fallbackLink);
+    window.open(url, '_blank');
   }
 };

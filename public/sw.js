@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v33';
+const CACHE_NAME = 'aiclipzone-pwa-v28';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -66,17 +66,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Ignore non-http, browser extensions, API calls, dev Vite modules, or Service Worker scripts
+  // Ignore non-http, browser extensions, or the Service Worker script itself
   if (!url.protocol.startsWith('http')) return;
-  if (url.pathname.startsWith('/api/')) return;
-  if (
-    url.pathname.startsWith('/@') ||
-    url.pathname.startsWith('/src/') ||
-    url.pathname.startsWith('/node_modules/')
-  ) {
-    return;
-  }
-  if (url.pathname.endsWith('sw.js') || url.pathname.endsWith('firebase-messaging-sw.js')) return;
+  if (url.pathname.endsWith('sw.js')) return;
 
   // A. HTML Page Navigation requests (Network-first with offline index.html fallback)
   const isNavigation =
@@ -87,28 +79,17 @@ self.addEventListener('fetch', (event) => {
   if (isNavigation) {
     event.respondWith(
       fetch(event.request)
-        .then(async (networkResponse) => {
+        .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-            return networkResponse;
-          }
-          if (networkResponse && networkResponse.status === 404) {
-            const cachedRoot = (await caches.match('/')) || (await caches.match('/index.html'));
-            if (cachedRoot) return cachedRoot;
-            try {
-              const rootRes = await fetch('/');
-              if (rootRes && rootRes.ok) return rootRes;
-            } catch {}
           }
           return networkResponse;
         })
-        .catch(async () => {
-          const cached =
-            (await caches.match(event.request)) ||
-            (await caches.match('/')) ||
-            (await caches.match('/index.html'));
-          return cached || Response.error();
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse) => {
+            return cachedResponse || caches.match('/') || caches.match('/index.html');
+          });
         })
     );
     return;
@@ -132,9 +113,8 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(async () => {
-          const cached = await caches.match(event.request);
-          return cached || Response.error();
+        .catch(() => {
+          return caches.match(event.request);
         })
     );
     return;
@@ -161,37 +141,28 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch((err) => {
         console.warn('[SW] Fetch failed offline:', event.request.url, err);
-        return Response.error();
       });
     })
   );
 });
 
-// 4. Notification Click Event: Focus or open the app at the exact Live Class route
+// 4. Notification Click Event: Focus or open the app when user taps system notification
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const notifData = event.notification.data || {};
-  const targetUrl = notifData.url || (notifData.liveClassId ? `/?tab=live&classId=${encodeURIComponent(notifData.liveClassId)}` : '/');
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Focus an existing open window if available
       for (const client of clientList) {
         if ('focus' in client) {
-          try {
-            client.postMessage({
-              type: 'OPEN_LIVE_CLASS',
-              url: targetUrl,
-              liveClassId: notifData.liveClassId || null,
-            });
-          } catch (e) {}
           if ('navigate' in client && targetUrl !== '/') {
-            try {
-              await client.navigate(targetUrl);
-            } catch (e) {}
+            client.navigate(targetUrl);
           }
           return client.focus();
         }
       }
+      // Otherwise open a new window
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
@@ -199,37 +170,28 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// 5. Push Event: Handle server push notifications (supports both custom Web Push & FCM payloads)
+// 5. Push Event: Handle server push notifications if configured
 self.addEventListener('push', (event) => {
-  let raw = {};
+  let data = {
+    title: 'AI Clipzone Nepal',
+    body: 'New update or course discount available!',
+    icon: '/pwa-192x192.png',
+    data: { url: '/' }
+  };
   if (event.data) {
     try {
-      raw = event.data.json();
+      data = event.data.json();
     } catch (e) {
-      raw = { body: event.data.text() };
+      data.body = event.data.text();
     }
   }
 
-  const notifPayload = raw.notification || {};
-  const dataPayload = raw.data || {};
-  const title = notifPayload.title || raw.title || dataPayload.title || 'AI Clipzone Nepal';
-  const body = notifPayload.body || raw.body || dataPayload.body || 'New update available!';
-  const liveClassId = dataPayload.liveClassId || '';
-  const targetUrl = dataPayload.url || raw.url || (liveClassId ? `/?tab=live&classId=${encodeURIComponent(liveClassId)}` : '/');
-  const tag = dataPayload.deliveryKey || raw.tag || (liveClassId ? `live-${liveClassId}` : `clipzone-${Date.now()}`);
-
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: notifPayload.icon || raw.icon || '/pwa-192x192.png',
+    self.registration.showNotification(data.title || 'AI Clipzone Nepal', {
+      body: data.body,
+      icon: data.icon || '/pwa-192x192.png',
       badge: '/pwa-192x192.png',
-      tag,
-      renotify: false,
-      data: {
-        ...dataPayload,
-        url: targetUrl,
-        liveClassId,
-      },
+      data: data.data || { url: '/' }
     })
   );
 });

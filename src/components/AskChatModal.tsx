@@ -367,20 +367,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   useEffect(() => {
     if (!isOpen || isAdmin || !studentConvId) return;
     const convRef = doc(db, 'support_conversations', studentConvId);
-    const unsub = onSnapshot(
-      convRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const d = docSnap.data();
-          if (d.clearedByUserAt !== undefined) {
-            setStudentClearedAt((prev) => Math.max(prev, d.clearedByUserAt || 0));
-          }
+    const unsub = onSnapshot(convRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        if (d.clearedByUserAt !== undefined) {
+          setStudentClearedAt((prev) => Math.max(prev, d.clearedByUserAt || 0));
         }
-      },
-      (err) => {
-        console.warn('Could not sync cleared chat state:', err);
       }
-    );
+    });
     return () => unsub();
   }, [isOpen, isAdmin, studentConvId]);
 

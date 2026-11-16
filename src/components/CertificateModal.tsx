@@ -61,7 +61,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -312,7 +311,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       node.style.transformOrigin = origTransformOrigin;
 
       if (dataUrl) {
-        setDownloadError(null);
         const link = document.createElement('a');
         const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
         link.download = `AI_Clipzone_Certificate_${sanitizedName}.png`;
@@ -323,7 +321,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       }
     } catch (err) {
       console.error('Download error:', err);
-      setDownloadError('Could not download certificate image. Please try again.');
+      alert('Could not download image. Please try again.');
     } finally {
       setIsDownloading(false);
     }
@@ -445,19 +443,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             </button>
           </div>
         </div>
-
-        {downloadError && (
-          <div className="w-full max-w-5xl mb-2 px-4 py-2.5 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs font-semibold flex items-center justify-between gap-2 print:hidden shrink-0">
-            <span>{downloadError}</span>
-            <button
-              onClick={() => setDownloadError(null)}
-              className="text-rose-300 hover:text-white p-1 rounded-lg cursor-pointer"
-              aria-label="Dismiss error"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
 
         {/* MAIN CERTIFICATE CANVAS SCALED CONTAINER */}
         <div ref={containerRef} className="w-full flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2">
