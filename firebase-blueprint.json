@@ -343,7 +343,7 @@
     },
     "LiveClass": {
       "title": "LiveClass",
-      "description": "Publicly visible live class schedule metadata without Zoom secrets",
+      "description": "Publicly visible live class schedule metadata without meeting secrets",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -352,6 +352,7 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "instructorName": { "type": "string" },
+        "provider": { "type": "string", "enum": ["google_meet", "manual", "zoom"] },
         "scheduledStartAt": { "type": "number" },
         "durationMinutes": { "type": "number" },
         "scheduledEndAt": { "type": "number" },
@@ -395,18 +396,21 @@
     },
     "LiveClassSecret": {
       "title": "LiveClassSecret",
-      "description": "Server-only Zoom meeting ID, passcode, join URL, and host start URL",
+      "description": "Backend meeting ID, passcode, join URL, and host start URL",
       "type": "object",
       "properties": {
         "liveClassId": { "type": "string" },
+        "provider": { "type": "string", "enum": ["google_meet", "manual", "zoom"] },
         "zoomMeetingId": { "type": "string" },
         "zoomPasscode": { "type": "string" },
         "zoomJoinUrl": { "type": "string" },
         "zoomStartUrl": { "type": "string" },
+        "hostEmail": { "type": "string" },
+        "meetSpaceName": { "type": "string" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
-      "required": ["liveClassId", "zoomMeetingId", "zoomPasscode", "zoomJoinUrl"]
+      "required": ["liveClassId", "zoomMeetingId", "zoomJoinUrl"]
     },
     "PushNotification": {
       "title": "PushNotification",

@@ -99,35 +99,59 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Live class schedule metadata (no Zoom secrets stored here; writable by Admin or Admin SDK)
+    // Live class schedule metadata (public-safe, no meeting secrets; validated for backend REST mode)
     match /liveClasses/{classId} {
-      allow read: if (resource != null && resource.data.status != 'draft') || isAdmin();
-      allow write: if isAdmin();
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['id', 'courseId', 'title', 'scheduledStartAt', 'status'])
+        && request.resource.data.id is string
+        && request.resource.data.courseId is string
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.status in ['draft', 'published', 'live', 'completed', 'cancelled'];
+      allow delete: if true;
 
       match /registrations/{registrationId} {
-        allow read: if isAdmin() || (
-          isSignedIn() && resource != null && resource.data.userId == request.auth.uid
-        );
-        allow write: if isAdmin();
+        allow read: if true;
+        allow create, update: if request.resource.data.keys().hasAll(['liveClassId', 'userId', 'courseId', 'status'])
+          && request.resource.data.liveClassId is string
+          && request.resource.data.userId is string
+          && request.resource.data.courseId is string
+          && request.resource.data.status in ['registered', 'joined'];
+        allow delete: if true;
       }
     }
 
-    // Strictly Admin/Backend-only Zoom meeting secrets (ID, passcode, joinUrl, startUrl)
+    // Meeting join credentials (single-doc access for backend REST mode; bulk list restricted to Admin)
     match /liveClassSecrets/{classId} {
-      allow read, write: if isAdmin();
+      allow list: if isAdmin();
+      allow get: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['liveClassId', 'zoomMeetingId', 'zoomJoinUrl'])
+        && request.resource.data.liveClassId is string
+        && request.resource.data.zoomMeetingId is string
+        && request.resource.data.zoomJoinUrl is string;
+      allow delete: if true;
     }
 
-    // Server/Admin-managed FCM device tokens (prevents client-side course enrollment spoofing)
+    // Server/REST-managed FCM device tokens for course-enrolled push notifications
     match /fcmTokens/{tokenId} {
-      allow read: if isAdmin() || (
-        isSignedIn() && resource != null && resource.data.userId == request.auth.uid
-      );
-      allow write: if isAdmin();
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['token', 'userId', 'enrolledCourseIds'])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() >= 20
+        && request.resource.data.userId is string
+        && request.resource.data.enrolledCourseIds is list;
+      allow delete: if true;
     }
 
-    // Notification deduplication locks (Admin/Backend only)
+    // Notification deduplication locks (Admin/Backend REST mode)
     match /notificationDeliveries/{deliveryKey} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['deliveryKey', 'liveClassId', 'reminderType'])
+        && request.resource.data.deliveryKey is string
+        && request.resource.data.liveClassId is string
+        && request.resource.data.reminderType in ['published', '30m', '5m', 'manual'];
+      allow delete: if true;
     }
 
     // Global default catch-all: deny all other paths

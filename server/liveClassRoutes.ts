@@ -414,14 +414,12 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       const adminAuth = resolveAuth();
       const adminCtx = await verifyAdminIdentity(req, db, adminAuth);
       const studentCtx = adminCtx ? null : await verifyStudentEnrollment(req, db, adminAuth);
-      const hasAdminJwt = Boolean(adminCtx?.email);
       const isRestDb = Boolean((db as any).isRestFallback);
 
       let rawDocs: any[] = [];
       try {
-        // When using Firestore REST without a verified Firebase Admin JWT, query status != 'draft'
-        // via public REST query so expired/non-admin client tokens never trigger 7 PERMISSION_DENIED.
-        if (isRestDb && !hasAdminJwt) {
+        // Non-admin callers only list non-draft classes; verified Admins & Sub-Admins see all including drafts.
+        if (isRestDb && !adminCtx) {
           const publicRestDb = createRestFirestore();
           const snap = await publicRestDb.collection('liveClasses').where('status', '!=', 'draft').get();
           rawDocs = snap.docs;
@@ -436,8 +434,8 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
           markAdminSdkUnusable(msg);
           const authHeader = String(req.headers.authorization || '');
           const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-          db = createRestFirestore(hasAdminJwt ? idToken : undefined) as unknown as Firestore;
-          const fallbackSnap = hasAdminJwt
+          db = createRestFirestore(adminCtx?.email ? idToken : undefined) as unknown as Firestore;
+          const fallbackSnap = adminCtx
             ? await db.collection('liveClasses').orderBy('scheduledStartAt', 'asc').get()
             : await db.collection('liveClasses').where('status', '!=', 'draft').get();
           rawDocs = fallbackSnap.docs;
