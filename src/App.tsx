@@ -5132,6 +5132,13 @@ export default function App() {
             courses={courses}
             activeCourseIds={activeCourseIds}
             isAdminSession={isUserAdminSession}
+            canManageLiveClasses={Boolean(
+              isMainAdmin ||
+              (isSubAdmin && Boolean(subAdminSession?.courseId) && courses.some((c) => c.id === subAdminSession?.courseId && Boolean(c.hasLiveSessions)))
+            )}
+            isMainAdmin={isMainAdmin}
+            assignedCourseId={isMainAdmin ? undefined : subAdminSession?.courseId}
+            allActivationKeys={allActivationKeys}
             notifications={visibleNotifications}
             focusedClassId={focusedLiveClassId}
             onClearFocusedClass={() => setFocusedLiveClassId(null)}

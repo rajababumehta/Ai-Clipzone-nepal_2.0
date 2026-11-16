@@ -1365,7 +1365,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       {/* Registered Participants Modal */}
       <AnimatePresence>
         {participantsModalClass && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[5200] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1429,7 +1429,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       {/* Typed CONFIRM Dialog for Cancel / Delete Live Class */}
       <AnimatePresence>
         {confirmModal && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[5300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}

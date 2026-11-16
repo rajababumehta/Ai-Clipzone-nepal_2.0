@@ -33,11 +33,16 @@ import {
 } from '../utils/liveClassApi';
 import { getNotificationPermission, isNotificationSupported } from '../utils/notifications';
 import { LiveClassroomModal } from './LiveClassroomModal';
+import { AdminLiveClassesTab } from './AdminLiveClassesTab';
 
 interface StudentLiveClassesViewProps {
   courses: Course[];
   activeCourseIds: string[];
   isAdminSession?: boolean;
+  canManageLiveClasses?: boolean;
+  isMainAdmin?: boolean;
+  assignedCourseId?: string;
+  allActivationKeys?: any[];
   notifications: PushNotificationItem[];
   focusedClassId?: string | null;
   onClearFocusedClass?: () => void;
@@ -77,6 +82,10 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
   courses,
   activeCourseIds,
   isAdminSession = false,
+  canManageLiveClasses = false,
+  isMainAdmin = false,
+  assignedCourseId,
+  allActivationKeys = [],
   notifications,
   focusedClassId,
   onClearFocusedClass,
@@ -87,12 +96,19 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
   const [classes, setClasses] = useState<LiveClassItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [adminViewMode, setAdminViewMode] = useState<'manage' | 'student'>(() =>
+    canManageLiveClasses ? 'manage' : 'student'
+  );
   const [sectionTab, setSectionTab] = useState<'upcoming' | 'past' | 'history'>('upcoming');
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [joinSessionModal, setJoinSessionModal] = useState<LiveClassJoinResponse | null>(null);
   const [activeLiveRoom, setActiveLiveRoom] = useState<LiveClassJoinResponse | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAdminViewMode(canManageLiveClasses ? 'manage' : 'student');
+  }, [canManageLiveClasses]);
 
   const notifPermission = isNotificationSupported() ? getNotificationPermission() : 'denied';
 
@@ -433,7 +449,58 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
 
   return (
     <section id="student-live-classes-view" className="space-y-6 pb-20 pt-2">
-      {/* Header Banner */}
+      {/* Direct Admin / Sub-Admin Switcher (No need to click Logo -> Dashboard) */}
+      {canManageLiveClasses && (
+        <div className="bg-zinc-900/95 border border-blue-500/30 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-300 text-[11px] font-black uppercase">
+              {isMainAdmin ? 'Main Admin Live Controls' : 'Sub-Admin Live Controls'}
+            </span>
+            <span className="text-xs text-zinc-400 hidden sm:inline">
+              Create, start, and manage live classes directly from the Live menu.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAdminViewMode('manage')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                adminViewMode === 'manage'
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow'
+                  : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800'
+              }`}
+            >
+              Create &amp; Manage Live Classes
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdminViewMode('student');
+                void loadClasses();
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                adminViewMode === 'student'
+                  ? 'bg-emerald-600 text-white shadow'
+                  : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800'
+              }`}
+            >
+              Student View
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canManageLiveClasses && adminViewMode === 'manage' ? (
+        <AdminLiveClassesTab
+          courses={courses}
+          allActivationKeys={allActivationKeys}
+          isMainAdmin={isMainAdmin}
+          assignedCourseId={assignedCourseId}
+          showToast={showToast}
+        />
+      ) : (
+        <>
+          {/* Header Banner */}
       <div className="bg-gradient-to-br from-zinc-900 via-[#0A0A0A] to-blue-950/30 border border-zinc-800 rounded-3xl p-5 sm:p-7 space-y-4 shadow-2xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -733,6 +800,9 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+        </>
+      )}
 
       {activeLiveRoom && (
         <LiveClassroomModal
