@@ -40,7 +40,7 @@ function decryptLivePayload(token: string): any | null {
   }
 }
 
-function buildZoomUrls(rawUrl: string, studentName: string): { webUrl: string; mtgUrl: string } | null {
+function buildZoomUrls(rawUrl: string, studentName: string): { webUrl: string; embedUrl: string } | null {
   try {
     const trimmed = String(rawUrl || "").trim();
     if (!/^https?:\/\//i.test(trimmed)) return null;
@@ -48,20 +48,29 @@ function buildZoomUrls(rawUrl: string, studentName: string): { webUrl: string; m
     if (!["http:", "https:"].includes(parsed.protocol)) return null;
 
     const cleanName = String(studentName || "Student").trim().slice(0, 60) || "Student";
-    const idMatch = parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i);
+    const idMatch =
+      parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i) ||
+      parsed.pathname.match(/\/wc\/(\d{9,12})\/join/i);
     const meetingId = idMatch?.[1] || "";
     const pwd = parsed.searchParams.get("pwd") || "";
+    const tk = parsed.searchParams.get("tk") || "";
 
     if (parsed.hostname.toLowerCase().includes("zoom.")) {
       parsed.searchParams.set("uname", cleanName);
     }
 
     const webUrl = parsed.toString();
-    const mtgUrl = meetingId
-      ? `zoommtg://zoom.us/join?action=join&confno=${encodeURIComponent(meetingId)}${pwd ? `&pwd=${encodeURIComponent(pwd)}` : ""}&uname=${encodeURIComponent(cleanName)}`
-      : "";
+    let embedUrl = webUrl;
+    if (meetingId) {
+      const wc = new URL(`https://app.zoom.us/wc/${meetingId}/join`);
+      wc.searchParams.set("uname", cleanName);
+      wc.searchParams.set("prefer", "1");
+      if (pwd) wc.searchParams.set("pwd", pwd);
+      if (tk) wc.searchParams.set("tk", tk);
+      embedUrl = wc.toString();
+    }
 
-    return { webUrl, mtgUrl };
+    return { webUrl, embedUrl };
   } catch {
     return null;
   }
@@ -85,32 +94,46 @@ app.post("/api/live-join-token", (req, res) => {
     }
     const token = encryptLivePayload({
       w: urls.webUrl,
-      m: urls.mtgUrl,
+      e: urls.embedUrl,
       s: String(studentName || "Student").slice(0, 60),
       t: String(sessionTitle || "Live Class Session").slice(0, 100),
       c: String(courseTitle || "AI Clipzone Live").slice(0, 100),
       exp: Date.now() + 15 * 60 * 1000,
     });
-    res.json({ launchUrl: `/api/live-launch?t=${encodeURIComponent(token)}` });
+    const encoded = encodeURIComponent(token);
+    res.json({
+      embedUrl: `/api/live-embed?t=${encoded}`,
+      launchUrl: `/api/live-launch?t=${encoded}`,
+    });
   } catch {
     res.status(500).json({ error: "Unable to create live session pass" });
   }
 });
 
+app.get("/api/live-embed", (req, res) => {
+  const token = String(req.query.t || "");
+  const payload = token ? decryptLivePayload(token) : null;
+  const target = payload?.e || payload?.w;
+  if (!payload || !target || !payload.exp || Date.now() > Number(payload.exp)) {
+    res.status(410).type("html").send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:380px;background:#18181b;border:1px solid #27272a;border-radius:16px;padding:24px}h1{font-size:16px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0}</style></head><body><div class="card"><h1>Live Session Pass Expired</h1><p>Please click Leave Class and click Join again.</p></div></body></html>`);
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.redirect(302, String(target));
+});
+
 app.get("/api/live-launch", (req, res) => {
   const token = String(req.query.t || "");
   const payload = token ? decryptLivePayload(token) : null;
-  if (!payload || !payload.w || !payload.exp || Date.now() > Number(payload.exp)) {
-    res.status(410).type("html").send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Link Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:400px;background:#18181b;border:1px solid #27272a;border-radius:20px;padding:28px}h1{font-size:18px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0 0 18px}button{background:#2563eb;color:#fff;border:0;border-radius:12px;padding:10px 18px;font-weight:700;cursor:pointer}</style></head><body><div class="card"><h1>Live Pass Expired</h1><p>Please return to your course section and click Join again.</p><button onclick="window.close()">Close</button></div></body></html>`);
+  const target = payload?.e || payload?.w;
+  if (!payload || !target || !payload.exp || Date.now() > Number(payload.exp)) {
+    res.status(410).type("html").send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Link Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:400px;background:#18181b;border:1px solid #27272a;border-radius:20px;padding:28px}h1{font-size:18px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0}</style></head><body><div class="card"><h1>Live Pass Expired</h1><p>Please return to your course section and click Join again.</p></div></body></html>`);
     return;
   }
 
   const safeTitle = escapeHtml(payload.t || "Live Class Session");
-  const safeCourse = escapeHtml(payload.c || "Course Live Class");
-  const safeStudent = escapeHtml(payload.s || "Student");
-  const webUrlJson = JSON.stringify(String(payload.w));
-  const mtgUrlJson = JSON.stringify(String(payload.m || ""));
-
+  const embedSrc = `/api/live-embed?t=${encodeURIComponent(token)}`;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.type("html").send(`<!DOCTYPE html>
@@ -118,52 +141,11 @@ app.get("/api/live-launch", (req, res) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Joining ${safeTitle}</title>
-  <style>
-    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;color:#fafafa;font-family:system-ui,-apple-system,sans-serif;padding:24px}
-    .box{max-width:420px;width:100%;background:#09090b;border:1px solid #27272a;border-radius:24px;padding:32px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.7)}
-    .dot{width:12px;height:12px;border-radius:999px;background:#10b981;display:inline-block;margin-right:8px;animation:p 1.2s infinite}
-    @keyframes p{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
-    .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#34d399;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);padding:6px 12px;border-radius:999px;margin-bottom:16px}
-    h1{font-size:20px;font-weight:800;margin:0 0 8px;line-height:1.3}
-    .course{font-size:13px;color:#a1a1aa;margin:0 0 18px}
-    .user{font-size:12px;color:#d4d4d8;background:#18181b;border:1px solid #27272a;border-radius:12px;padding:10px 14px;margin-bottom:20px}
-    .btn{width:100%;background:#2563eb;color:#fff;border:0;border-radius:14px;padding:13px 18px;font-size:14px;font-weight:800;cursor:pointer}
-    .btn:hover{background:#3b82f6}
-    .hint{font-size:11px;color:#71717a;margin-top:14px;line-height:1.5}
-  </style>
+  <title>${safeTitle}</title>
+  <style>html,body,iframe{margin:0;padding:0;width:100%;height:100%;border:0;background:#000;overflow:hidden}</style>
 </head>
 <body>
-  <div class="box">
-    <div class="badge"><span class="dot"></span>Connecting to Live Class</div>
-    <h1>${safeTitle}</h1>
-    <p class="course">${safeCourse}</p>
-    <div class="user">Joining as: <strong>${safeStudent}</strong></div>
-    <button class="btn" id="join-now-btn" type="button">Join Live Classroom</button>
-    <p class="hint">Launching your live classroom automatically. If Zoom asks to open, allow it to join immediately.</p>
-  </div>
-  <iframe id="zoom-app-frame" style="display:none;width:0;height:0;border:0;" aria-hidden="true"></iframe>
-  <script>
-    (function(){
-      var wUrl = ${webUrlJson};
-      var mUrl = ${mtgUrlJson};
-      function launch() {
-        if (mUrl) {
-          try {
-            var frame = document.getElementById('zoom-app-frame');
-            if (frame) frame.src = mUrl;
-          } catch (e) {}
-        }
-        setTimeout(function() {
-          window.location.replace(wUrl);
-        }, mUrl ? 750 : 120);
-      }
-      document.getElementById('join-now-btn').addEventListener('click', function() {
-        window.location.replace(wUrl);
-      });
-      launch();
-    })();
-  </script>
+  <iframe src="${embedSrc}" allow="camera *; microphone *; display-capture *; autoplay *; clipboard-write *; fullscreen *" allowfullscreen referrerpolicy="no-referrer"></iframe>
 </body>
 </html>`);
 });

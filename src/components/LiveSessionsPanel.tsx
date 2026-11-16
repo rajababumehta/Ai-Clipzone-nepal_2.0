@@ -20,16 +20,7 @@ import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Course, LiveSession, SubAdminAccount } from '../types';
 
-function escapeHtmlSafe(str: string): string {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: string; mtgUrl: string } | null {
+function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: string; embedUrl: string } | null {
   try {
     const trimmed = String(rawUrl || '').trim();
     if (!/^https?:\/\//i.test(trimmed)) return null;
@@ -37,93 +28,29 @@ function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: str
     if (!['http:', 'https:'].includes(parsed.protocol)) return null;
 
     const cleanName = String(studentName || 'Student').trim().slice(0, 60) || 'Student';
-    const idMatch = parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i);
+    const idMatch =
+      parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i) ||
+      parsed.pathname.match(/\/wc\/(\d{9,12})\/join/i);
     const meetingId = idMatch?.[1] || '';
     const pwd = parsed.searchParams.get('pwd') || '';
+    const tk = parsed.searchParams.get('tk') || '';
 
     if (parsed.hostname.toLowerCase().includes('zoom.')) {
       parsed.searchParams.set('uname', cleanName);
     }
 
     const webUrl = parsed.toString();
-    const mtgUrl = meetingId
-      ? `zoommtg://zoom.us/join?action=join&confno=${encodeURIComponent(meetingId)}${pwd ? `&pwd=${encodeURIComponent(pwd)}` : ''}&uname=${encodeURIComponent(cleanName)}`
-      : '';
+    let embedUrl = webUrl;
+    if (meetingId) {
+      const wc = new URL(`https://app.zoom.us/wc/${meetingId}/join`);
+      wc.searchParams.set('uname', cleanName);
+      wc.searchParams.set('prefer', '1');
+      if (pwd) wc.searchParams.set('pwd', pwd);
+      if (tk) wc.searchParams.set('tk', tk);
+      embedUrl = wc.toString();
+    }
 
-    return { webUrl, mtgUrl };
-  } catch {
-    return null;
-  }
-}
-
-function createLocalAutoLaunchBlobUrl(
-  urls: { webUrl: string; mtgUrl: string },
-  studentName: string,
-  sessionTitle: string,
-  courseTitle: string
-): string | null {
-  try {
-    const safeTitle = escapeHtmlSafe(sessionTitle || 'Live Class Session');
-    const safeCourse = escapeHtmlSafe(courseTitle || 'Course Live Class');
-    const safeStudent = escapeHtmlSafe(studentName || 'Student');
-    const webUrlJson = JSON.stringify(urls.webUrl);
-    const mtgUrlJson = JSON.stringify(urls.mtgUrl || '');
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="referrer" content="no-referrer" />
-  <title>Joining ${safeTitle}</title>
-  <style>
-    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;color:#fafafa;font-family:system-ui,-apple-system,sans-serif;padding:24px}
-    .box{max-width:420px;width:100%;background:#09090b;border:1px solid #27272a;border-radius:24px;padding:32px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.7)}
-    .dot{width:12px;height:12px;border-radius:999px;background:#10b981;display:inline-block;margin-right:8px;animation:p 1.2s infinite}
-    @keyframes p{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
-    .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#34d399;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);padding:6px 12px;border-radius:999px;margin-bottom:16px}
-    h1{font-size:20px;font-weight:800;margin:0 0 8px;line-height:1.3}
-    .course{font-size:13px;color:#a1a1aa;margin:0 0 18px}
-    .user{font-size:12px;color:#d4d4d8;background:#18181b;border:1px solid #27272a;border-radius:12px;padding:10px 14px;margin-bottom:20px}
-    .btn{width:100%;background:#2563eb;color:#fff;border:0;border-radius:14px;padding:13px 18px;font-size:14px;font-weight:800;cursor:pointer}
-    .btn:hover{background:#3b82f6}
-    .hint{font-size:11px;color:#71717a;margin-top:14px;line-height:1.5}
-  </style>
-</head>
-<body>
-  <div class="box">
-    <div class="badge"><span class="dot"></span>Connecting to Live Class</div>
-    <h1>${safeTitle}</h1>
-    <p class="course">${safeCourse}</p>
-    <div class="user">Joining as: <strong>${safeStudent}</strong></div>
-    <button class="btn" id="join-now-btn" type="button">Join Live Classroom</button>
-    <p class="hint">Launching your live classroom automatically. If Zoom asks to open, allow it to join immediately.</p>
-  </div>
-  <iframe id="zoom-app-frame" style="display:none;width:0;height:0;border:0;" aria-hidden="true"></iframe>
-  <script>
-    (function(){
-      var wUrl = ${webUrlJson};
-      var mUrl = ${mtgUrlJson};
-      function launch() {
-        if (mUrl) {
-          try {
-            var frame = document.getElementById('zoom-app-frame');
-            if (frame) frame.src = mUrl;
-          } catch (e) {}
-        }
-        setTimeout(function() {
-          window.location.replace(wUrl);
-        }, mUrl ? 750 : 120);
-      }
-      document.getElementById('join-now-btn').addEventListener('click', function() {
-        window.location.replace(wUrl);
-      });
-      launch();
-    })();
-  </script>
-</body>
-</html>`;
-    const blob = new Blob([html], { type: 'text/html' });
-    return URL.createObjectURL(blob);
+    return { webUrl, embedUrl };
   } catch {
     return null;
   }
@@ -187,19 +114,22 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
   // =========================
   const [launchUrls, setLaunchUrls] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Record<string, boolean>>({});
+  const [activeClassroom, setActiveClassroom] = useState<{
+    session: LiveSession;
+    embedSrc: string;
+    nonce: number;
+  } | null>(null);
+  const [iframeLoading, setIframeLoading] = useState(false);
   const inFlightRef = useRef<Record<string, boolean>>({});
-  const blobUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
+    if (!activeClassroom) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      blobUrlsRef.current.forEach((u) => {
-        try {
-          URL.revokeObjectURL(u);
-        } catch {}
-      });
-      blobUrlsRef.current = [];
+      document.body.style.overflow = prevOverflow;
     };
-  }, []);
+  }, [activeClassroom]);
 
   const studentCourseSessions = useMemo(() => {
     if (mode !== 'student' || !course) return [];
@@ -235,7 +165,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
 
         const cleanStudentName = (studentName || 'Student').trim() || 'Student';
 
-        // Primary: server-encrypted short-lived opaque launch route
+        // Primary: server-encrypted short-lived opaque embed route (/api/live-embed?t=...)
         try {
           const resp = await fetch('/api/live-join-token', {
             method: 'POST',
@@ -250,29 +180,20 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
 
           if (resp.ok) {
             const data = await resp.json().catch(() => null);
-            if (data?.launchUrl) {
-              setLaunchUrls((prev) => ({ ...prev, [session.id]: data.launchUrl }));
-              return data.launchUrl;
+            const resolved = data?.embedUrl || data?.launchUrl;
+            if (resolved) {
+              setLaunchUrls((prev) => ({ ...prev, [session.id]: resolved }));
+              return resolved;
             }
           }
         } catch {
-          // Fall through to opaque Blob launcher
+          // Fall through to in-memory web client URL
         }
 
-        // Resilient fallback: opaque Blob auto-launcher (never exposes Zoom URL in UI/DOM/href)
         const clientUrls = buildClientZoomUrls(zoomLink, cleanStudentName);
-        if (clientUrls) {
-          const blobUrl = createLocalAutoLaunchBlobUrl(
-            clientUrls,
-            cleanStudentName,
-            session.title,
-            session.courseTitle
-          );
-          if (blobUrl) {
-            blobUrlsRef.current.push(blobUrl);
-            setLaunchUrls((prev) => ({ ...prev, [session.id]: blobUrl }));
-            return blobUrl;
-          }
+        if (clientUrls?.embedUrl) {
+          setLaunchUrls((prev) => ({ ...prev, [session.id]: clientUrls.embedUrl }));
+          return clientUrls.embedUrl;
         }
 
         return null;
@@ -307,15 +228,15 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     return () => clearInterval(interval);
   }, [mode]);
 
-  const handleFallbackStudentJoin = async (session: LiveSession) => {
-    const existing = launchUrls[session.id];
-    if (existing) {
-      window.location.assign(existing);
-      return;
+  const handleJoinInsideWebsite = async (session: LiveSession) => {
+    let embedSrc: string | undefined = launchUrls[session.id];
+    if (!embedSrc) {
+      const resolved = await resolveOpaqueJoinUrl(session);
+      embedSrc = resolved || undefined;
     }
-    const url = await resolveOpaqueJoinUrl(session);
-    if (url) {
-      window.location.assign(url);
+    if (embedSrc) {
+      setIframeLoading(true);
+      setActiveClassroom({ session, embedSrc, nonce: Date.now() });
     } else {
       notify('Live session link is not ready yet. Please contact your instructor.', 'error');
     }
@@ -572,33 +493,18 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                     )}
                   </div>
 
-                  {/* Join Action (NEVER exposes Zoom URL) */}
+                  {/* Join Action (Opens Zoom directly inside our website — NEVER exposes Zoom URL) */}
                   <div className="shrink-0 flex items-center justify-end">
                     {isEnded ? (
                       <span className="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 text-xs font-bold">
                         Session Ended
                       </span>
-                    ) : opaqueUrl ? (
-                      <a
-                        href={opaqueUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onContextMenu={(e) => e.preventDefault()}
-                        title="Join Live Session"
-                        className={`px-6 py-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center gap-2 shadow-lg cursor-pointer select-none active:scale-95 ${
-                          isLive
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/25'
-                        }`}
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        <span>Join</span>
-                      </a>
                     ) : (
                       <button
                         type="button"
                         disabled={isResolving}
-                        onClick={() => handleFallbackStudentJoin(session)}
+                        onClick={() => handleJoinInsideWebsite(session)}
+                        title="Join Live Session"
                         className={`px-6 py-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center gap-2 shadow-lg cursor-pointer select-none active:scale-95 disabled:opacity-60 ${
                           isLive
                             ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
@@ -610,7 +516,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                         ) : (
                           <Play className="w-4 h-4 fill-current" />
                         )}
-                        <span>{isResolving ? 'Preparing...' : 'Join'}</span>
+                        <span>{isResolving ? 'Connecting...' : 'Join'}</span>
                       </button>
                     )}
                   </div>
@@ -629,6 +535,85 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             <p className="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
               तपाईंको कोर्ष शिक्षकले Zoom मार्फत Live Class Create Meeting गर्नुभएपछि तपाईंलाई तुरुन्तै Notification आउनेछ र यहाँ Join बटन देखा पर्नेछ।
             </p>
+          </div>
+        )}
+
+        {/* IN-WEBSITE EMBEDDED ZOOM CLASSROOM MODAL */}
+        {activeClassroom && (
+          <div
+            className="fixed inset-0 z-[9999] bg-black flex flex-col"
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            {/* Classroom Top Bar */}
+            <div className="h-14 px-3 sm:px-5 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2.5 py-1 rounded-full uppercase shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Classroom
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-black text-white truncate">
+                    {activeClassroom.session.title}
+                  </p>
+                  <p className="text-[10px] text-zinc-400 truncate">
+                    {activeClassroom.session.courseTitle} • {(studentName || 'Student').trim() || 'Student'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIframeLoading(true);
+                    setActiveClassroom((prev) =>
+                      prev ? { ...prev, nonce: Date.now() } : null
+                    );
+                  }}
+                  title="Reload Live Classroom"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reload</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveClassroom(null)}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-rose-600/25 active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Leave Class</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Embedded Live Meeting Frame */}
+            <div className="flex-1 relative w-full h-full bg-black overflow-hidden">
+              {iframeLoading && (
+                <div className="absolute inset-0 z-10 bg-zinc-950 flex flex-col items-center justify-center gap-3 p-6 text-center pointer-events-none">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                  </div>
+                  <p className="text-sm font-black text-white">
+                    Live Class लोड हुँदैछ...
+                  </p>
+                  <p className="text-xs text-zinc-400 max-w-xs">
+                    कृपया Camera र Microphone को अनुमति (Allow) दिनुहोस् ताकि तपाईं कक्षामा सजिलै जोडिन सक्नुहोस्।
+                  </p>
+                </div>
+              )}
+
+              <iframe
+                key={`${activeClassroom.session.id}-${activeClassroom.nonce}`}
+                src={activeClassroom.embedSrc}
+                title={activeClassroom.session.title}
+                onLoad={() => setIframeLoading(false)}
+                allow="camera *; microphone *; display-capture *; autoplay *; clipboard-write *; fullscreen *"
+                allowFullScreen
+                referrerPolicy="no-referrer"
+                className="w-full h-full border-0 bg-black"
+              />
+            </div>
           </div>
         )}
       </div>
