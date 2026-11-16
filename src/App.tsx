@@ -3571,8 +3571,12 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'live' | 'ask' | 'account'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const path = window.location.pathname.replace(/\/+$/, '');
-      if (params.get('tab') === 'live' || path === '/live') return 'live';
+      const tab = (params.get('tab') || '').toLowerCase();
+      const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+      if (tab === 'live' || path === '/live') return 'live';
+      if (tab === 'course' || tab === 'classroom' || path === '/course' || path === '/classroom') return 'classroom';
+      if (tab === 'ask' || path === '/ask') return 'ask';
+      if (tab === 'account' || path === '/account') return 'account';
     } catch {}
     return 'home';
   });
@@ -3945,11 +3949,20 @@ export default function App() {
     const syncUrlParams = () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const path = window.location.pathname.replace(/\/+$/, '');
-        if (params.get('tab') === 'live' || path === '/live') {
+        const tab = (params.get('tab') || '').toLowerCase();
+        const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+        if (tab === 'live' || path === '/live') {
           setCurrentView('live');
           const cid = params.get('classId');
           if (cid) setFocusedLiveClassId(cid);
+        } else if (tab === 'course' || tab === 'classroom' || path === '/course' || path === '/classroom') {
+          setCurrentView('classroom');
+        } else if (tab === 'ask' || path === '/ask') {
+          setCurrentView('ask');
+        } else if (tab === 'account' || path === '/account') {
+          setCurrentView('account');
+        } else if (tab === 'courses' || tab === 'home') {
+          setCurrentView('home');
         }
       } catch {}
     };
@@ -8625,7 +8638,24 @@ export default function App() {
               const hash = notif.url.replace('/#', '#');
               window.location.hash = hash;
             } else if (notif.url.startsWith('/')) {
-              window.location.assign(notif.url);
+              try {
+                const parsed = new URL(notif.url, window.location.origin);
+                const tab = (parsed.searchParams.get('tab') || '').toLowerCase();
+                const path = parsed.pathname.replace(/\/+$/, '').toLowerCase();
+                setShowNotifCenterModal(false);
+                if (tab === 'course' || tab === 'classroom' || path === '/course' || path === '/classroom') {
+                  setCurrentView('classroom');
+                } else if (tab === 'ask' || path === '/ask') {
+                  setCurrentView('ask');
+                } else if (tab === 'account' || path === '/account') {
+                  setCurrentView('account');
+                } else {
+                  setCurrentView('home');
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              } catch {
+                window.location.assign(notif.url);
+              }
             }
           }
         }}

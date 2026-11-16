@@ -1,23 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-interface AppletFirebaseConfig {
-  projectId?: string;
-  firestoreDatabaseId?: string;
-  apiKey?: string;
-}
-
-function readAppletConfig(): AppletFirebaseConfig {
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf-8')) as AppletFirebaseConfig;
-    }
-  } catch {
-    // ignore
-  }
-  return {};
-}
+import { readAppletConfig } from './appletConfig.ts';
 
 function isValidFirestoreDatabaseId(val?: string): val is string {
   if (!val) return false;

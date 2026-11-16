@@ -1219,7 +1219,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                         </button>
                       ) : cls.zoomStartUrl ? (
                         <a
-                          href={cls.zoomStartUrl}
+                          href={/^https?:\/\//i.test(cls.zoomStartUrl.trim()) ? cls.zoomStartUrl.trim() : `https://${cls.zoomStartUrl.trim().replace(/^\/+/, '')}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-1 w-full py-1.5 px-3 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 font-bold text-[11px] flex items-center justify-center gap-1.5 transition"

@@ -1,7 +1,7 @@
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { createLiveClassRouter } from "../server/liveClassRoutes.ts";
+import { createLiveClassRouter } from "./liveClassRoutes.ts";
 
 dotenv.config();
 
@@ -10,7 +10,7 @@ const app = express();
 // Body parser
 app.use(express.json());
 
-app.get("/api/health", (_req, res) => {
+app.get(["/api", "/api/health"], (_req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
@@ -38,15 +38,25 @@ app.post("/api/chat", async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
+    if (!ai && process.env.GEMINI_API_KEY) {
+      ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+    }
+
     if (!ai) {
       return res.json({
         reply: "नमस्ते! 🙏 AI Clipzone Nepal मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।"
       });
     }
 
-    // Format history into the format that Gemini API expects
     const contents = [];
-    
+
     if (history && Array.isArray(history)) {
       for (const turn of history) {
         contents.push({
@@ -56,7 +66,6 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    // Append current user message
     contents.push({
       role: 'user',
       parts: [{ text: message }]
@@ -76,7 +85,7 @@ Our Course Catalog:
 5. "YouTube Blueprint Course" — Rs. 549 (Hindi & Nepali, covers YouTube growth, niche selection, editing, monetization, and AI automation).
 
 Important Core Selling Points (HIGHLIGHT THESE):
-- Recorded lectures (Watch anytime, anywhere) plus Live Zoom Workshops for courses with live sessions enabled.
+- Recorded lectures (Watch anytime, anywhere) plus Live Interactive Classes for courses with live sessions enabled.
 - Professional Completion Certificate for every course with student name & unique verification code.
 - 24/7 dedicated student help and premium support via WhatsApp.
 
@@ -102,7 +111,6 @@ Tone and Language Guidelines:
 
     const replyText = response.text || "थप जानकारीका लागि कृपया हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।";
     res.json({ reply: replyText });
-
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     res.json({
@@ -111,5 +119,9 @@ Tone and Language Guidelines:
   }
 });
 
-// Export the Express app for Vercel Serverless Functions
+// Clean JSON 404 for unknown /api/* endpoints
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "API endpoint not found" });
+});
+
 export default app;

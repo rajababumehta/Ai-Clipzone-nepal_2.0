@@ -66,6 +66,13 @@ function formatCountdown(targetMs: number, nowMs: number): string {
   return `${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`;
 }
 
+function normalizeExternalMeetingUrl(rawUrl?: string): string {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) return '#';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
+}
+
 function formatClassDate(ms: number): string {
   try {
     return new Intl.DateTimeFormat('en-US', {
@@ -793,7 +800,7 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
 
               <div className="flex flex-col gap-2">
                 <a
-                  href={joinSessionModal.joinUrl}
+                  href={normalizeExternalMeetingUrl(joinSessionModal.joinUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-blue-900/30 transition"

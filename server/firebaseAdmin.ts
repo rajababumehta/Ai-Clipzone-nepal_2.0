@@ -1,9 +1,8 @@
-import fs from 'fs';
-import path from 'path';
 import { initializeApp, getApps, cert, applicationDefault, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getMessaging, type Messaging } from 'firebase-admin/messaging';
+import { readAppletConfig } from './appletConfig.ts';
 
 let cachedApp: App | null = null;
 let cachedDb: Firestore | null = null;
@@ -11,24 +10,6 @@ let cachedAuth: Auth | null = null;
 let cachedMessaging: Messaging | null = null;
 let initAttempted = false;
 let initError: string | null = null;
-
-interface AppletFirebaseConfig {
-  projectId?: string;
-  firestoreDatabaseId?: string;
-}
-
-function readAppletConfig(): AppletFirebaseConfig {
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      const raw = fs.readFileSync(configPath, 'utf-8');
-      return JSON.parse(raw) as AppletFirebaseConfig;
-    }
-  } catch (err) {
-    console.warn('[FirebaseAdmin] Could not read firebase-applet-config.json:', err);
-  }
-  return {};
-}
 
 function isValidFirestoreDatabaseId(val?: string): val is string {
   if (!val) return false;
