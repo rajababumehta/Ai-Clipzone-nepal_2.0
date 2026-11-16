@@ -3867,10 +3867,12 @@ export default function App() {
     }
     return liveCourses.some((c) => activeCourseIds.includes(c.id));
   }, [activeCourseIds, courses]);
-  const canAccessLiveClasses = Boolean(
-    hasLiveIncludedCourseActivated ||
+  const canManageLiveClasses = Boolean(
     isMainAdmin ||
     (isSubAdmin && Boolean(subAdminSession?.courseId) && courses.some((c) => c.id === subAdminSession?.courseId && Boolean(c.hasLiveSessions)))
+  );
+  const canAccessLiveClasses = Boolean(
+    hasLiveIncludedCourseActivated || canManageLiveClasses
   );
   const hasStudentProfile = Boolean(
     !isUserAdminSession
@@ -5132,13 +5134,15 @@ export default function App() {
             courses={courses}
             activeCourseIds={activeCourseIds}
             isAdminSession={isUserAdminSession}
-            canManageLiveClasses={Boolean(
-              isMainAdmin ||
-              (isSubAdmin && Boolean(subAdminSession?.courseId) && courses.some((c) => c.id === subAdminSession?.courseId && Boolean(c.hasLiveSessions)))
-            )}
+            canManageLiveClasses={canManageLiveClasses}
             isMainAdmin={isMainAdmin}
             assignedCourseId={isMainAdmin ? undefined : subAdminSession?.courseId}
             allActivationKeys={allActivationKeys}
+            initialCourseId={selectedClassroomCourseId}
+            onBackToCourse={() => {
+              setCurrentView('classroom');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             notifications={visibleNotifications}
             focusedClassId={focusedLiveClassId}
             onClearFocusedClass={() => setFocusedLiveClassId(null)}
@@ -5687,11 +5691,12 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => {
+                                  setSelectedClassroomCourseId(currentClassroomCourse.id);
                                   setCurrentView('live');
                                   window.scrollTo({ top: 0, behavior: 'smooth' });
                                 }}
                                 className="bg-gradient-to-r from-rose-600/90 to-purple-600/90 hover:from-rose-500 hover:to-purple-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-rose-900/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
-                                title="View scheduled Zoom Live Classes"
+                                title="View and join Live Classes for this course"
                               >
                                 <Video className="w-3.5 h-3.5" />
                                 🔴 Live Classes
@@ -8674,8 +8679,8 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Live Classes (Zoom) - Shown ONLY to users who activated a Live-Session-Included course (or Main Admin / Live Sub-Admin) */}
-          {canAccessLiveClasses && (
+          {/* 3. Live Classes - Shown ONLY to Mentors (Main Admin / Live Sub-Admin). Students enter Live Classes via their Course section. */}
+          {canManageLiveClasses && (
             <button
               id="app-nav-live"
               onClick={() => {

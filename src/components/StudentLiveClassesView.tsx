@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Ticket,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   Course,
@@ -43,6 +44,8 @@ interface StudentLiveClassesViewProps {
   isMainAdmin?: boolean;
   assignedCourseId?: string;
   allActivationKeys?: any[];
+  initialCourseId?: string | null;
+  onBackToCourse?: () => void;
   notifications: PushNotificationItem[];
   focusedClassId?: string | null;
   onClearFocusedClass?: () => void;
@@ -86,6 +89,8 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
   isMainAdmin = false,
   assignedCourseId,
   allActivationKeys = [],
+  initialCourseId,
+  onBackToCourse,
   notifications,
   focusedClassId,
   onClearFocusedClass,
@@ -100,7 +105,11 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
     canManageLiveClasses ? 'manage' : 'student'
   );
   const [sectionTab, setSectionTab] = useState<'upcoming' | 'past' | 'history'>('upcoming');
-  const [courseFilter, setCourseFilter] = useState<string>('all');
+  const [courseFilter, setCourseFilter] = useState<string>(() =>
+    initialCourseId && !focusedClassId && courses.some((c) => c.id === initialCourseId && Boolean(c.hasLiveSessions))
+      ? initialCourseId
+      : 'all'
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [joinSessionModal, setJoinSessionModal] = useState<LiveClassJoinResponse | null>(null);
   const [activeLiveRoom, setActiveLiveRoom] = useState<LiveClassJoinResponse | null>(null);
@@ -518,6 +527,16 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {onBackToCourse && !canManageLiveClasses && (
+              <button
+                type="button"
+                onClick={onBackToCourse}
+                className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-black text-zinc-100 flex items-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Course</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onRequestEnablePush}
