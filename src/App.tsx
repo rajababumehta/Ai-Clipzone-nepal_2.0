@@ -791,7 +791,7 @@ export default function App() {
     fileSize?: string;
     courseTitle?: string;
   } | null>(null);
-  const [classroomTab, setClassroomTab] = useState<'videos' | 'pdfs' | 'live'>('videos');
+  const [classroomTab, setClassroomTab] = useState<'videos' | 'pdfs'>('videos');
   const [courseDetailTab, setCourseDetailTab] = useState<'videos' | 'pdfs'>('videos');
 
   // Realtime synchronization of courses from Firestore
@@ -3572,8 +3572,9 @@ export default function App() {
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'live' | 'ask' | 'account'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'course-live' | 'live' | 'ask' | 'account'>('home');
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
+  const [selectedLiveCourseId, setSelectedLiveCourseId] = useState<string | null>(null);
 
   // Automatically route any legacy modal trigger to full screen account view
   useEffect(() => {
@@ -4093,25 +4094,15 @@ export default function App() {
     setShowCertificateModal(true);
   };
 
-  // Auto-exit Ask or Live view if user loses eligibility
+  // Auto-exit Ask, Course-Live, or Live view if user loses eligibility
   useEffect(() => {
-    if (!isCourseActiveUser && currentView === 'ask') {
+    if (!isCourseActiveUser && (currentView === 'ask' || currentView === 'course-live')) {
       setCurrentView('home');
     }
     if (currentView === 'live' && !canSubAdminAccessLive && !isMainAdmin) {
       setCurrentView('home');
     }
   }, [isCourseActiveUser, currentView, canSubAdminAccessLive, isMainAdmin]);
-
-  // Reset classroomTab from 'live' if selected classroom course does not include live sessions
-  useEffect(() => {
-    if (classroomTab !== 'live') return;
-    const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
-    const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0];
-    if (currentCourse && !currentCourse.includeLive) {
-      setClassroomTab('videos');
-    }
-  }, [classroomTab, courses, activeCourseIds, selectedClassroomCourseId]);
 
   // 1. Real-time listener for Main Admin: tracks ONLY Sub-Admin messages (zero course-student chats)
   useEffect(() => {
@@ -5173,6 +5164,97 @@ export default function App() {
               showToast={showToast}
             />
           </section>
+        ) : currentView === 'course-live' && isCourseActiveUser ? (
+          (() => {
+            const activeLiveCourses = courses.filter(
+              c => activeCourseIds.includes(c.id) && c.includeLive === true
+            );
+            const targetLiveCourse =
+              activeLiveCourses.find(c => c.id === selectedLiveCourseId) ||
+              activeLiveCourses.find(c => c.id === selectedClassroomCourseId) ||
+              activeLiveCourses[0];
+
+            return (
+              <section id="course-live-view" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-5">
+                <div className="bg-black border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
+                  {/* Top Back + Course Title Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+                    <div className="space-y-1.5 text-left">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (targetLiveCourse) {
+                            setSelectedClassroomCourseId(targetLiveCourse.id);
+                          }
+                          setCurrentView('classroom');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition cursor-pointer"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>कोर्षमा फर्कनुहोस् (Back to Course)</span>
+                      </button>
+
+                      {targetLiveCourse && (
+                        <div className="pt-1">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                            <Video className="w-3 h-3" />
+                            Course Live Session
+                          </span>
+                          <h2 className="text-lg sm:text-2xl font-black text-white mt-1.5 leading-snug">
+                            {targetLiveCourse.title}
+                          </h2>
+                        </div>
+                      )}
+                    </div>
+
+                    {activeLiveCourses.length > 1 && targetLiveCourse && (
+                      <div className="flex flex-wrap gap-2">
+                        {activeLiveCourses.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setSelectedLiveCourseId(c.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                              c.id === targetLiveCourse.id
+                                ? 'bg-rose-600 text-white'
+                                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+                            }`}
+                          >
+                            {c.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {targetLiveCourse ? (
+                    <LiveSessionsPanel
+                      mode="student"
+                      course={targetLiveCourse}
+                      courses={courses}
+                      sessions={liveSessions}
+                      studentName={currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student'}
+                      showToast={showToast}
+                    />
+                  ) : (
+                    <div className="text-center py-12 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-3">
+                      <p className="text-sm font-bold text-zinc-300">
+                        यस कोर्षमा Live Session उपलब्ध छैन।
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentView('classroom')}
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-4 py-2 rounded-xl transition cursor-pointer"
+                      >
+                        Go to Classroom
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })()
         ) : currentView === 'ask' && isCourseActiveUser ? (
           <section id="ask-embedded-view" className="w-full flex-1 min-h-0 flex flex-col bg-black">
             <AskChatModal
@@ -5561,9 +5643,8 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setSelectedClassroomCourseId(course.id);
-                                      setClassroomTab('live');
-                                      setCurrentView('classroom');
+                                      setSelectedLiveCourseId(course.id);
+                                      setCurrentView('course-live');
                                       window.scrollTo({ top: 0, behavior: 'auto' });
                                     }}
                                     className="bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-500/40 font-semibold text-xs px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5"
@@ -5770,9 +5851,13 @@ export default function App() {
                             {currentClassroomCourse.includeLive ? (
                               <button
                                 type="button"
-                                onClick={() => setClassroomTab('live')}
+                                onClick={() => {
+                                  setSelectedLiveCourseId(currentClassroomCourse.id);
+                                  setCurrentView('course-live');
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
                                 className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-rose-500/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
-                                title="Open Live Session"
+                                title="Open Live Session Page"
                               >
                                 <Video className="w-3.5 h-3.5" />
                                 <span>Live Session</span>
@@ -5822,7 +5907,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Classroom Tab Switcher: Videos vs PDFs & Notes (+ Live Session when enabled by Admin) */}
+                        {/* Classroom Tab Switcher: Videos vs PDFs & Notes */}
                         <div className="flex items-center gap-2 mt-6 border-b border-zinc-800/80 pb-3 overflow-x-auto">
                           <button
                             type="button"
@@ -5854,29 +5939,6 @@ export default function App() {
                               {currentClassroomCourse.pdfs?.length || 0}
                             </span>
                           </button>
-
-                          {currentClassroomCourse.includeLive && (() => {
-                            const activeLiveCount = liveSessions.filter(
-                              s => s.courseId === currentClassroomCourse.id && s.status !== 'ended'
-                            ).length;
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => setClassroomTab('live')}
-                                className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer font-sans whitespace-nowrap ${
-                                  classroomTab === 'live'
-                                    ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
-                                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-                                }`}
-                              >
-                                <Video className="w-3.5 h-3.5" />
-                                <span>Live Session</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${classroomTab === 'live' ? 'bg-zinc-950 text-rose-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                                  {activeLiveCount}
-                                </span>
-                              </button>
-                            );
-                          })()}
                         </div>
 
                         {/* TAB 1: VIDEOS PLAYLIST */}
@@ -6035,18 +6097,6 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                        )}
-
-                        {/* TAB 3: LIVE SESSION (ONLY WHEN COURSE INCLUDES LIVE CLASS) */}
-                        {classroomTab === 'live' && currentClassroomCourse.includeLive && (
-                          <LiveSessionsPanel
-                            mode="student"
-                            course={currentClassroomCourse}
-                            courses={courses}
-                            sessions={liveSessions}
-                            studentName={currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student'}
-                            showToast={showToast}
-                          />
                         )}
                       </motion.div>
                     </div>
@@ -6743,9 +6793,8 @@ export default function App() {
                           onClick={() => {
                             const targetId = selectedCourse.id;
                             setSelectedCourse(null);
-                            setSelectedClassroomCourseId(targetId);
-                            setClassroomTab('live');
-                            setCurrentView('classroom');
+                            setSelectedLiveCourseId(targetId);
+                            setCurrentView('course-live');
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
                           className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-rose-500/20 cursor-pointer"
@@ -8760,9 +8809,8 @@ export default function App() {
               ? notif.courseId
               : activeCourseIds[0];
             if (resolvedCourseId) {
-              setSelectedClassroomCourseId(resolvedCourseId);
-              setClassroomTab('live');
-              setCurrentView('classroom');
+              setSelectedLiveCourseId(resolvedCourseId);
+              setCurrentView('course-live');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }
             return;
@@ -8821,13 +8869,13 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-              currentView === 'classroom'
+              currentView === 'classroom' || currentView === 'course-live'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
             <div className="relative flex items-center justify-center shrink-0">
-              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' || currentView === 'course-live' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>

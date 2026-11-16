@@ -29,6 +29,7 @@ export interface Course {
   // Main-Admin-only delivery & certificate toggles
   includeLive?: boolean;
   includeCertificate?: boolean;
+  hasLiveSessions?: boolean;
   // Per-course Certificate Customization
   certificateTitle?: string;
   certificateSubtitle?: string;
@@ -191,15 +192,69 @@ export interface PushNotificationItem {
   id: string;
   title: string;
   body: string;
-  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'live' | 'general';
+  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'live' | 'live_class' | 'live_reminder' | 'general';
   badge?: string;
   url?: string;
   createdAt: number;
   author?: string;
   target?: 'all' | 'students' | 'course_students';
   courseId?: string;
+  courseTitle?: string;
   sessionId?: string;
+  liveClassId?: string;
   icon?: string;
+}
+
+export type LiveClassProvider = 'builtin' | 'google_meet' | 'manual' | 'zoom';
+
+export interface LiveClassItem {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  title: string;
+  description: string;
+  instructorName?: string;
+  provider?: LiveClassProvider;
+  scheduledStartAt: number;
+  scheduledEndAt?: number;
+  durationMinutes?: number;
+  maxCapacity?: number;
+  registeredCount?: number;
+  joinWindowMinutesBefore?: number;
+  status: 'draft' | 'published' | 'live' | 'completed' | 'cancelled' | string;
+  joinUrl?: string;
+  meetingId?: string;
+  passcode?: string;
+  isRegistered?: boolean;
+  canJoinNow?: boolean;
+  [key: string]: any;
+}
+
+export interface LiveClassRegistration {
+  id: string;
+  liveClassId: string;
+  userId?: string;
+  studentName?: string;
+  studentEmail?: string;
+  registeredAt?: number;
+  [key: string]: any;
+}
+
+export interface LiveClassJoinResponse {
+  liveClassId: string;
+  roomToken?: string;
+  participantRole?: 'mentor' | 'student';
+  participantName?: string;
+  joinUrl?: string;
+  provider?: LiveClassProvider;
+  [key: string]: any;
+}
+
+export interface LiveClassHealthStatus {
+  ok?: boolean;
+  firebaseAdminConfigured?: boolean;
+  zoomConfigured?: boolean;
+  [key: string]: any;
 }
 
 export interface SupportMessage {

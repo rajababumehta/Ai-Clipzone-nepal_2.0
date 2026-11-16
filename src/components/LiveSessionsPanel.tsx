@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Video,
   Plus,
@@ -16,9 +16,118 @@ import {
   RefreshCw,
   X
 } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Course, LiveSession, SubAdminAccount } from '../types';
+
+function escapeHtmlSafe(str: string): string {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: string; mtgUrl: string } | null {
+  try {
+    const trimmed = String(rawUrl || '').trim();
+    if (!/^https?:\/\//i.test(trimmed)) return null;
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+
+    const cleanName = String(studentName || 'Student').trim().slice(0, 60) || 'Student';
+    const idMatch = parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i);
+    const meetingId = idMatch?.[1] || '';
+    const pwd = parsed.searchParams.get('pwd') || '';
+
+    if (parsed.hostname.toLowerCase().includes('zoom.')) {
+      parsed.searchParams.set('uname', cleanName);
+    }
+
+    const webUrl = parsed.toString();
+    const mtgUrl = meetingId
+      ? `zoommtg://zoom.us/join?action=join&confno=${encodeURIComponent(meetingId)}${pwd ? `&pwd=${encodeURIComponent(pwd)}` : ''}&uname=${encodeURIComponent(cleanName)}`
+      : '';
+
+    return { webUrl, mtgUrl };
+  } catch {
+    return null;
+  }
+}
+
+function createLocalAutoLaunchBlobUrl(
+  urls: { webUrl: string; mtgUrl: string },
+  studentName: string,
+  sessionTitle: string,
+  courseTitle: string
+): string | null {
+  try {
+    const safeTitle = escapeHtmlSafe(sessionTitle || 'Live Class Session');
+    const safeCourse = escapeHtmlSafe(courseTitle || 'Course Live Class');
+    const safeStudent = escapeHtmlSafe(studentName || 'Student');
+    const webUrlJson = JSON.stringify(urls.webUrl);
+    const mtgUrlJson = JSON.stringify(urls.mtgUrl || '');
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Joining ${safeTitle}</title>
+  <style>
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;color:#fafafa;font-family:system-ui,-apple-system,sans-serif;padding:24px}
+    .box{max-width:420px;width:100%;background:#09090b;border:1px solid #27272a;border-radius:24px;padding:32px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.7)}
+    .dot{width:12px;height:12px;border-radius:999px;background:#10b981;display:inline-block;margin-right:8px;animation:p 1.2s infinite}
+    @keyframes p{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
+    .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#34d399;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);padding:6px 12px;border-radius:999px;margin-bottom:16px}
+    h1{font-size:20px;font-weight:800;margin:0 0 8px;line-height:1.3}
+    .course{font-size:13px;color:#a1a1aa;margin:0 0 18px}
+    .user{font-size:12px;color:#d4d4d8;background:#18181b;border:1px solid #27272a;border-radius:12px;padding:10px 14px;margin-bottom:20px}
+    .btn{width:100%;background:#2563eb;color:#fff;border:0;border-radius:14px;padding:13px 18px;font-size:14px;font-weight:800;cursor:pointer}
+    .btn:hover{background:#3b82f6}
+    .hint{font-size:11px;color:#71717a;margin-top:14px;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="badge"><span class="dot"></span>Connecting to Live Class</div>
+    <h1>${safeTitle}</h1>
+    <p class="course">${safeCourse}</p>
+    <div class="user">Joining as: <strong>${safeStudent}</strong></div>
+    <button class="btn" id="join-now-btn" type="button">Join Live Classroom</button>
+    <p class="hint">Launching your live classroom automatically. If Zoom asks to open, allow it to join immediately.</p>
+  </div>
+  <iframe id="zoom-app-frame" style="display:none;width:0;height:0;border:0;" aria-hidden="true"></iframe>
+  <script>
+    (function(){
+      var wUrl = ${webUrlJson};
+      var mUrl = ${mtgUrlJson};
+      function launch() {
+        if (mUrl) {
+          try {
+            var frame = document.getElementById('zoom-app-frame');
+            if (frame) frame.src = mUrl;
+          } catch (e) {}
+        }
+        setTimeout(function() {
+          window.location.replace(wUrl);
+        }, mUrl ? 750 : 120);
+      }
+      document.getElementById('join-now-btn').addEventListener('click', function() {
+        window.location.replace(wUrl);
+      });
+      launch();
+    })();
+  </script>
+</body>
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
 
 export interface SaveLiveSessionInput {
   id?: string;
@@ -78,6 +187,19 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
   // =========================
   const [launchUrls, setLaunchUrls] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Record<string, boolean>>({});
+  const inFlightRef = useRef<Record<string, boolean>>({});
+  const blobUrlsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((u) => {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {}
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
 
   const studentCourseSessions = useMemo(() => {
     if (mode !== 'student' || !course) return [];
@@ -94,36 +216,70 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
 
   const resolveOpaqueJoinUrl = useCallback(
     async (session: LiveSession): Promise<string | null> => {
+      if (inFlightRef.current[session.id]) return null;
+      inFlightRef.current[session.id] = true;
       try {
         setResolvingIds((prev) => ({ ...prev, [session.id]: true }));
-        const secretSnap = await getDoc(doc(db, 'live_session_secrets', session.id));
-        if (!secretSnap.exists()) {
+        const secretRef = doc(db, 'live_session_secrets', session.id);
+        let secretSnap = await getDoc(secretRef).catch(() => null);
+        if (!secretSnap || !secretSnap.exists() || !secretSnap.data()?.zoomLink) {
+          secretSnap = await getDocFromServer(secretRef).catch(() => null);
+        }
+        if (!secretSnap || !secretSnap.exists()) {
           return null;
         }
-        const zoomLink = String(secretSnap.data()?.zoomLink || '').trim();
+        const rawZoom = String(secretSnap.data()?.zoomLink || '').trim();
+        const urlMatch = rawZoom.match(/https?:\/\/\S+/i);
+        const zoomLink = urlMatch ? urlMatch[0] : rawZoom;
         if (!zoomLink) return null;
 
-        const resp = await fetch('/api/live-join-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            zoomLink,
-            studentName: (studentName || 'Student').trim() || 'Student',
-            sessionTitle: session.title,
-            courseTitle: session.courseTitle
-          })
-        });
+        const cleanStudentName = (studentName || 'Student').trim() || 'Student';
 
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        if (data?.launchUrl) {
-          setLaunchUrls((prev) => ({ ...prev, [session.id]: data.launchUrl }));
-          return data.launchUrl;
+        // Primary: server-encrypted short-lived opaque launch route
+        try {
+          const resp = await fetch('/api/live-join-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              zoomLink,
+              studentName: cleanStudentName,
+              sessionTitle: session.title,
+              courseTitle: session.courseTitle
+            })
+          });
+
+          if (resp.ok) {
+            const data = await resp.json().catch(() => null);
+            if (data?.launchUrl) {
+              setLaunchUrls((prev) => ({ ...prev, [session.id]: data.launchUrl }));
+              return data.launchUrl;
+            }
+          }
+        } catch {
+          // Fall through to opaque Blob launcher
         }
+
+        // Resilient fallback: opaque Blob auto-launcher (never exposes Zoom URL in UI/DOM/href)
+        const clientUrls = buildClientZoomUrls(zoomLink, cleanStudentName);
+        if (clientUrls) {
+          const blobUrl = createLocalAutoLaunchBlobUrl(
+            clientUrls,
+            cleanStudentName,
+            session.title,
+            session.courseTitle
+          );
+          if (blobUrl) {
+            blobUrlsRef.current.push(blobUrl);
+            setLaunchUrls((prev) => ({ ...prev, [session.id]: blobUrl }));
+            return blobUrl;
+          }
+        }
+
         return null;
       } catch {
         return null;
       } finally {
+        delete inFlightRef.current[session.id];
         setResolvingIds((prev) => ({ ...prev, [session.id]: false }));
       }
     },
@@ -135,23 +291,14 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     const activeOnes = studentCourseSessions.filter((s) => s.status !== 'ended');
     if (activeOnes.length === 0) return;
 
-    let cancelled = false;
     activeOnes.forEach((s) => {
-      if (!launchUrls[s.id]) {
-        resolveOpaqueJoinUrl(s).then((url) => {
-          if (!cancelled && url) {
-            setLaunchUrls((prev) => ({ ...prev, [s.id]: url }));
-          }
-        });
+      if (!launchUrls[s.id] && !inFlightRef.current[s.id]) {
+        void resolveOpaqueJoinUrl(s);
       }
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [mode, studentCourseSessions, resolveOpaqueJoinUrl, launchUrls]);
 
-  // Refresh opaque tokens every 10 minutes while student stays on Live tab
+  // Refresh opaque tokens every 10 minutes while student stays on Live page
   useEffect(() => {
     if (mode !== 'student') return;
     const interval = setInterval(() => {
@@ -170,7 +317,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     if (url) {
       window.location.assign(url);
     } else {
-      notify('Live session is being prepared by your instructor. Please try again in a moment.', 'error');
+      notify('Live session link is not ready yet. Please contact your instructor.', 'error');
     }
   };
 
@@ -272,7 +419,9 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     }
 
     const cleanTitle = formTitle.trim();
-    const cleanLink = formZoomLink.trim();
+    const rawLinkInput = formZoomLink.trim();
+    const matchedUrl = rawLinkInput.match(/https?:\/\/\S+/i);
+    const cleanLink = matchedUrl ? matchedUrl[0] : rawLinkInput;
     if (!cleanTitle) {
       notify('कृपया Live Session को शीर्षक (Title) लेख्नुहोस्।', 'error');
       return;
@@ -317,7 +466,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     const upcomingCount = studentCourseSessions.filter((s) => s.status === 'scheduled').length;
 
     return (
-      <div className="space-y-5 mt-6 text-left">
+      <div className="space-y-5 text-left">
         {/* Info Header */}
         <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start sm:items-center gap-3.5">
