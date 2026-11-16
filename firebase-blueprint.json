@@ -184,12 +184,54 @@
           },
           "description": "List of instructional videos in this course"
         },
+        "includeLive": {
+          "type": "boolean",
+          "description": "Whether live Zoom sessions are enabled for this course (replaces Certificate for activated students)"
+        },
+        "includeCertificate": {
+          "type": "boolean",
+          "description": "Whether completion certificate is enabled for this course"
+        },
         "paymentConfig": {
           "type": "object",
           "description": "Optional per-course payment QR, eSewa, bank, and WhatsApp override"
         }
       },
       "required": ["id", "title", "price", "amount", "message", "learn", "image", "videos"]
+    },
+    "LiveSession": {
+      "title": "LiveSession",
+      "description": "Public student-facing metadata for a course live Zoom class (never stores raw Zoom link)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "scheduledTime": { "type": "string" },
+        "durationMinutes": { "type": "string" },
+        "status": { "type": "string", "enum": ["live", "scheduled", "ended"] },
+        "hostName": { "type": "string" },
+        "createdByRole": { "type": "string", "enum": ["main_admin", "sub_admin"] },
+        "createdBySubAdminCode": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "courseId", "courseTitle", "title", "status", "hostName", "createdByRole", "createdAt", "updatedAt"]
+    },
+    "LiveSessionSecret": {
+      "title": "LiveSessionSecret",
+      "description": "Protected document holding the Zoom join URL for a live session, resolved into opaque launch tokens",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "zoomLink": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["sessionId", "courseId", "zoomLink", "updatedAt"]
     },
     "PaymentQrConfig": {
       "title": "PaymentQrConfig",
@@ -310,6 +352,14 @@
     "courses/{courseId}": {
       "schema": "Course",
       "description": "Collection tracking dynamic courses available for enrollment"
+    },
+    "live_sessions/{sessionId}": {
+      "schema": "LiveSession",
+      "description": "Collection storing public live class session metadata without exposing Zoom links"
+    },
+    "live_session_secrets/{sessionId}": {
+      "schema": "LiveSessionSecret",
+      "description": "Collection storing raw Zoom meeting URLs separately for opaque token resolution"
     },
     "system/payment_qr": {
       "schema": "PaymentQrConfig",

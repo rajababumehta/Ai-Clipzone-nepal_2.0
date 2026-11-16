@@ -26,6 +26,9 @@ export interface Course {
   language?: string;
   videos: CourseVideo[];
   pdfs?: CoursePdf[];
+  // Main-Admin-only delivery & certificate toggles
+  includeLive?: boolean;
+  includeCertificate?: boolean;
   // Per-course Certificate Customization
   certificateTitle?: string;
   certificateSubtitle?: string;
@@ -44,6 +47,23 @@ export interface Course {
   certificateSealText?: string;
   // Per-course Payment & WhatsApp override (editable by Main Admin or Course Sub-Admin)
   paymentConfig?: CoursePaymentConfig;
+}
+
+export interface LiveSession {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  title: string;
+  description?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  durationMinutes?: string;
+  status: 'live' | 'scheduled' | 'ended';
+  hostName: string;
+  createdByRole: 'main_admin' | 'sub_admin';
+  createdBySubAdminCode?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface CoursePaymentConfig {
@@ -171,12 +191,14 @@ export interface PushNotificationItem {
   id: string;
   title: string;
   body: string;
-  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'general';
+  type: 'discount' | 'welcome' | 'announcement' | 'course' | 'live' | 'general';
   badge?: string;
   url?: string;
   createdAt: number;
   author?: string;
-  target?: 'all' | 'students';
+  target?: 'all' | 'students' | 'course_students';
+  courseId?: string;
+  sessionId?: string;
   icon?: string;
 }
 

@@ -80,6 +80,17 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Security rules for live class sessions (public metadata without Zoom links)
+    match /live_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    // Security rules for live class Zoom meeting URLs (get only; disallow listing)
+    match /live_session_secrets/{sessionId} {
+      allow get, create, update, delete: if true;
+      allow list: if false;
+    }
+
     // Global default catch-all: deny all other paths
     match /{document=**} {
       allow read, write: if false;

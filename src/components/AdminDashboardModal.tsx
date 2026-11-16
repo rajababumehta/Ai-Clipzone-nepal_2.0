@@ -34,14 +34,16 @@ import {
   ListChecks,
   Clock,
   UserCheck,
-  Camera
+  Camera,
+  Video
 } from 'lucide-react';
 
-import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount } from '../types';
+import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount, LiveSession } from '../types';
 import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS, cleanLegacyLogoUrl } from '../data';
 import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
 import { AdminSubAdminsTab } from './AdminSubAdminsTab';
+import { LiveSessionsPanel, SaveLiveSessionInput } from './LiveSessionsPanel';
 import { compressImageFile } from '../utils/chatMedia';
 
 interface AdminDashboardModalProps {
@@ -86,8 +88,13 @@ interface AdminDashboardModalProps {
   notifications?: PushNotificationItem[];
   onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteNotification?: (id: string) => Promise<void>;
+  // Live Sessions
+  liveSessions?: LiveSession[];
+  onSaveLiveSession?: (data: SaveLiveSessionInput) => Promise<void>;
+  onDeleteLiveSession?: (sessionId: string) => Promise<void>;
+  onUpdateLiveSessionStatus?: (session: LiveSession, nextStatus: 'live' | 'scheduled' | 'ended') => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
-  initialTab?: 'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask';
+  initialTab?: 'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask';
   adminUnreadAskCount?: number;
 }
 
@@ -127,6 +134,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   notifications,
   onSendNotification,
   onDeleteNotification,
+  liveSessions = [],
+  onSaveLiveSession,
+  onDeleteLiveSession,
+  onUpdateLiveSessionStatus,
   showToast: showToastProp,
   initialTab = 'keys',
   adminUnreadAskCount = 0
@@ -147,8 +158,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     ? allActivationKeys
     : allActivationKeys.filter(k => k.courseId === assignedCourseId);
   const assignedCourse = isSubAdmin ? courses.find(c => c.id === assignedCourseId) : undefined;
+  const subAdminHasLive = Boolean(isSubAdmin && assignedCourse?.includeLive === true);
+  const canAccessLiveTab = Boolean(isMainAdmin || subAdminHasLive);
 
-  const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask'>(initialTab);
 
   // Key Deletion Confirmation state
   const [keyToDelete, setKeyToDelete] = useState<any | null>(null);
@@ -231,10 +244,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Enforce role-based activeTab and assigned course lock
   useEffect(() => {
+    const allowedSubTabs = subAdminHasLive
+      ? ['keys', 'courses', 'live', 'qr', 'ask']
+      : ['keys', 'courses', 'qr', 'ask'];
+
     if (isSubAdmin) {
-      if (initialTab && ['keys', 'courses', 'qr', 'ask'].includes(initialTab)) {
+      if (initialTab && allowedSubTabs.includes(initialTab)) {
         setActiveTab(initialTab);
-      } else if (!['keys', 'courses', 'qr', 'ask'].includes(activeTab)) {
+      } else if (!allowedSubTabs.includes(activeTab)) {
         setActiveTab('keys');
       }
       if (assignedCourseId) {
@@ -244,7 +261,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     } else if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab, isOpen, isSubAdmin, assignedCourseId]);
+  }, [initialTab, isOpen, isSubAdmin, assignedCourseId, subAdminHasLive]);
 
   // Keys Tab states
   const [genSelectedCourseId, setGenSelectedCourseId] = useState(assignedCourseId || '');
@@ -993,6 +1010,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <BookOpen className="w-3.5 h-3.5" />
             {isMainAdmin ? `📚 Course Catalog (${visibleCourses.length})` : '📚 My Course Details'}
           </button>
+
+          {canAccessLiveTab && (
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'live'
+                  ? 'bg-rose-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <Video className="w-3.5 h-3.5 text-rose-400" />
+              🎥 Live Sessions ({(isMainAdmin ? liveSessions : liveSessions.filter(s => s.courseId === assignedCourseId)).length})
+            </button>
+          )}
 
           {isMainAdmin && (
             <button
@@ -2968,7 +2999,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         }}
                       />
                       <div className={`grow space-y-1 overflow-hidden ${isMainAdmin && isBatchModeCourses ? 'pr-6' : ''}`}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-purple-700 bg-purple-50 text-[10px] font-black px-2 py-0.5 rounded border border-purple-200">
                             {course.price}
                           </span>
@@ -2978,6 +3009,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span className="text-rose-600 bg-rose-50 text-[10px] font-bold px-1.5 py-0.5 rounded border border-rose-200">
                             📕 {course.pdfs?.length || 0} PDFs
                           </span>
+                          {course.includeLive ? (
+                            <span className="text-rose-700 bg-rose-100 text-[10px] font-black px-1.5 py-0.5 rounded border border-rose-300">
+                              🎥 Live Class
+                            </span>
+                          ) : course.includeCertificate !== false ? (
+                            <span className="text-blue-700 bg-blue-50 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                              📜 Certificate
+                            </span>
+                          ) : null}
                         </div>
                         <h5 className="text-xs font-black text-slate-900 truncate">
                           {course.title}
@@ -3021,6 +3061,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 )}
               </div>
             </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB: LIVE SESSIONS (MAIN ADMIN OR LIVE-ENABLED SUB-ADMIN ONLY) */}
+          {/* ========================================================================= */}
+          {canAccessLiveTab && activeTab === 'live' && (
+            <LiveSessionsPanel
+              mode="manager"
+              courses={courses}
+              sessions={liveSessions}
+              adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+              subAdminSession={isMainAdmin ? null : subAdminSession}
+              onSaveSession={onSaveLiveSession}
+              onDeleteSession={onDeleteLiveSession}
+              onUpdateStatus={onUpdateLiveSessionStatus}
+              showToast={showToast}
+            />
           )}
 
           {/* ========================================================================= */}

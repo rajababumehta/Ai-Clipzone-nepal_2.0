@@ -70,7 +70,7 @@ import {
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
-import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount } from './types';
+import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -82,6 +82,7 @@ import { VerifiedBadge } from './components/VerifiedBadge';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
+import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 
@@ -318,7 +319,7 @@ export default function App() {
   });
   const [activeSubAdmins, setActiveSubAdmins] = useState<SubAdminAccount[]>([]);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'notifications' | 'ask'>('keys');
+  const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
   const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
   const [logoutAllConfirmWord, setLogoutAllConfirmWord] = useState('');
@@ -691,13 +692,14 @@ export default function App() {
     return defaults;
   });
 
-  // Push Notifications state
+  // Push Notifications & Live Sessions state
   const [isRunningInAppMode, setIsRunningInAppMode] = useState<boolean>(() => checkIsAppMode());
-  const [notifications, setNotifications] = useState<PushNotificationItem[]>([]);
+  const [rawNotifications, setRawNotifications] = useState<PushNotificationItem[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
   const [unreadNotifIds, setUnreadNotifIds] = useState<string[]>([]);
   const [showNotifCenterModal, setShowNotifCenterModal] = useState<boolean>(false);
   const [showNotifPromptModal, setShowNotifPromptModal] = useState<boolean>(false);
+  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
 
   // Network connectivity status for offline resilience
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(() => {
@@ -776,6 +778,8 @@ export default function App() {
   const [formImage, setFormImage] = useState('');
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
+  const [formIncludeLive, setFormIncludeLive] = useState(false);
+  const [formIncludeCertificate, setFormIncludeCertificate] = useState(true);
   const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string; chapterTitle?: string }[]>([]);
@@ -787,7 +791,7 @@ export default function App() {
     fileSize?: string;
     courseTitle?: string;
   } | null>(null);
-  const [classroomTab, setClassroomTab] = useState<'videos' | 'pdfs'>('videos');
+  const [classroomTab, setClassroomTab] = useState<'videos' | 'pdfs' | 'live'>('videos');
   const [courseDetailTab, setCourseDetailTab] = useState<'videos' | 'pdfs'>('videos');
 
   // Realtime synchronization of courses from Firestore
@@ -903,7 +907,7 @@ export default function App() {
     } catch (e) {}
   }, [isRunningInAppMode]);
 
-  // Realtime listener for broadcast push notifications (paginated/limited to 50 newest for high scale)
+  // Realtime listener for broadcast & targeted notifications (paginated/limited to 50 newest)
   useEffect(() => {
     const notifQuery = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
@@ -916,36 +920,37 @@ export default function App() {
             id: d.id
           });
         });
-        // Sort newest first
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        setNotifications(list);
-
-        // Calculate unread count and IDs
-        try {
-          const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
-          const unread = list.filter(n => !readIds.includes(n.id));
-          setUnreadNotifIds(unread.map(n => n.id));
-          setUnreadNotifCount(unread.length);
-
-          // If a fresh broadcast was just sent by admin in last 30 seconds, trigger system notification ONLY in PWA mode
-          const isPwaActive = checkIsAppMode();
-          const seenAlertIds: string[] = JSON.parse(sessionStorage.getItem('clipzone_alerted_notifs') || '[]');
-          const newest = list[0];
-          if (isPwaActive && newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
-            seenAlertIds.push(newest.id);
-            sessionStorage.setItem('clipzone_alerted_notifs', JSON.stringify(seenAlertIds));
-            showNativeNotification({
-              title: newest.title,
-              body: newest.body,
-              url: newest.url || '/'
-            });
-          }
-        } catch (e) {}
+        setRawNotifications(list);
       } catch (e) {
         console.warn('Notifications parse error:', e);
       }
     }, (err) => {
       console.warn('Notifications listener error:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Realtime listener for live_sessions collection
+  useEffect(() => {
+    const liveQuery = query(collection(db, 'live_sessions'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(liveQuery, (snapshot) => {
+      try {
+        const list: LiveSession[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as LiveSession;
+          list.push({
+            ...data,
+            id: d.id
+          });
+        });
+        setLiveSessions(list);
+      } catch (e) {
+        console.warn('Live sessions parse error:', e);
+      }
+    }, (err) => {
+      console.warn('Live sessions listener error:', err);
     });
 
     return () => unsubscribe();
@@ -986,14 +991,6 @@ export default function App() {
       showToast('Failed to delete notification.', 'error');
       throw e;
     }
-  };
-
-  const handleMarkAllNotifsRead = () => {
-    const allIds = notifications.map(n => n.id);
-    localStorage.setItem('clipzone_read_notifs', JSON.stringify(allIds));
-    setUnreadNotifIds([]);
-    setUnreadNotifCount(0);
-    showToast('All notifications marked as read', 'info');
   };
 
   // Realtime listener for global admin session logout commands and deleted courses blacklist across all user devices
@@ -3141,26 +3138,34 @@ export default function App() {
       showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
       return;
     }
-    const cleaned = cleanUndefined(updatedCourse);
+    const existingCourse = courses.find(c => c.id === updatedCourse.id);
+    const safeCourse: Course = isMainAdmin
+      ? updatedCourse
+      : {
+          ...updatedCourse,
+          includeLive: existingCourse?.includeLive,
+          includeCertificate: existingCourse?.includeCertificate,
+        };
+    const cleaned = cleanUndefined(safeCourse);
     setCourses(prev => {
-      const index = prev.findIndex(c => c.id === updatedCourse.id);
+      const index = prev.findIndex(c => c.id === safeCourse.id);
       let updatedList: Course[];
       if (index >= 0) {
         updatedList = [...prev];
-        updatedList[index] = updatedCourse;
+        updatedList[index] = safeCourse;
       } else {
-        updatedList = [...prev, updatedCourse];
+        updatedList = [...prev, safeCourse];
       }
       localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
       return updatedList;
     });
 
-    if (selectedCourse && selectedCourse.id === updatedCourse.id) {
-      setSelectedCourse(updatedCourse);
+    if (selectedCourse && selectedCourse.id === safeCourse.id) {
+      setSelectedCourse(safeCourse);
     }
 
     try {
-      await setDoc(doc(db, 'courses', updatedCourse.id), cleaned, { merge: true });
+      await setDoc(doc(db, 'courses', safeCourse.id), cleaned, { merge: true });
     } catch (err) {
       console.error('Error saving updated course to Firestore:', err);
       handleFirestoreError(err, OperationType.UPDATE, `courses/${updatedCourse.id}`);
@@ -3567,7 +3572,7 @@ export default function App() {
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'ask' | 'account'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'live' | 'ask' | 'account'>('home');
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
 
   // Automatically route any legacy modal trigger to full screen account view
@@ -3837,17 +3842,198 @@ export default function App() {
   const isMainAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
   const isSubAdmin = Boolean(!isMainAdmin && subAdminSession && subAdminSession.status === 'active');
   const isUserAdminSession = Boolean(isMainAdmin || isSubAdmin);
+  const subAdminAssignedCourse = useMemo(
+    () => (isSubAdmin && subAdminSession?.courseId ? courses.find(c => c.id === subAdminSession.courseId) : undefined),
+    [isSubAdmin, subAdminSession?.courseId, courses]
+  );
+  const canSubAdminAccessLive = Boolean(isSubAdmin && subAdminAssignedCourse?.includeLive === true);
   const canEditCourse = useCallback(
     (courseId: string) => isMainAdmin || (isSubAdmin && subAdminSession?.courseId === courseId),
     [isMainAdmin, isSubAdmin, subAdminSession?.courseId]
   );
   const hasCourseActivated = activeCourseIds.length > 0;
   const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
+  const hasCertificateCourse = Boolean(
+    isMainAdmin ||
+    courses.some(
+      (c) =>
+        activeCourseIds.includes(c.id) &&
+        !secondaryCourseIds.includes(c.id) &&
+        !c.includeLive &&
+        c.includeCertificate !== false
+    )
+  );
   const hasStudentProfile = Boolean(
     !isUserAdminSession
       ? (currentUser || localStorage.getItem('clipzone_student_name'))
       : (activeCourseIds.length > 0 || userActivationKeys.length > 0)
   );
+
+  // Role & course-scoped notifications filtering (course_students notifications go ONLY to activated users of that course)
+  const notifications = useMemo(() => {
+    return rawNotifications.filter((n) => {
+      if (n.target === 'course_students') {
+        if (isMainAdmin) return true;
+        if (isSubAdmin && subAdminSession?.courseId && n.courseId === subAdminSession.courseId) return true;
+        if (!isUserAdminSession && n.courseId) {
+          return activeCourseIds.includes(n.courseId) || activeCourseIds.includes('course-all');
+        }
+        return false;
+      }
+      if (n.target === 'students') {
+        return isUserAdminSession || activeCourseIds.length > 0;
+      }
+      return true;
+    });
+  }, [rawNotifications, isMainAdmin, isSubAdmin, subAdminSession?.courseId, isUserAdminSession, activeCourseIds]);
+
+  useEffect(() => {
+    try {
+      const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
+      const unread = notifications.filter(n => !readIds.includes(n.id));
+      setUnreadNotifIds(unread.map(n => n.id));
+      setUnreadNotifCount(unread.length);
+
+      const isPwaActive = checkIsAppMode();
+      const seenAlertIds: string[] = JSON.parse(sessionStorage.getItem('clipzone_alerted_notifs') || '[]');
+      const newest = notifications[0];
+      if (isPwaActive && newest && !seenAlertIds.includes(newest.id) && Date.now() - (newest.createdAt || 0) < 30000) {
+        seenAlertIds.push(newest.id);
+        sessionStorage.setItem('clipzone_alerted_notifs', JSON.stringify(seenAlertIds));
+        showNativeNotification({
+          title: newest.title,
+          body: newest.body,
+          url: newest.url || '/'
+        });
+      }
+    } catch {}
+  }, [notifications]);
+
+  const handleMarkAllNotifsRead = useCallback(() => {
+    const readIds: string[] = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
+      } catch {
+        return [];
+      }
+    })();
+    const merged = Array.from(new Set([...readIds, ...notifications.map(n => n.id)]));
+    localStorage.setItem('clipzone_read_notifs', JSON.stringify(merged));
+    setUnreadNotifIds([]);
+    setUnreadNotifCount(0);
+    showToast('All notifications marked as read', 'info');
+  }, [notifications, showToast]);
+
+  // Live Session CRUD handlers (Sub-Admin for assigned live course, or Main Admin)
+  const handleSaveLiveSession = useCallback(async (data: SaveLiveSessionInput) => {
+    const targetCourse = courses.find(c => c.id === data.courseId);
+    const isAllowed = isMainAdmin || (
+      isSubAdmin &&
+      subAdminSession?.courseId === data.courseId &&
+      targetCourse?.includeLive === true
+    );
+    if (!isAllowed) {
+      showToast('तपाईंलाई Live Session बनाउने अनुमति छैन।', 'error');
+      return;
+    }
+
+    const now = Date.now();
+    const sessionRef = data.id ? doc(db, 'live_sessions', data.id) : doc(collection(db, 'live_sessions'));
+    const sessionId = sessionRef.id;
+    const existing = data.id ? liveSessions.find(s => s.id === data.id) : undefined;
+
+    const sessionPayload: LiveSession = cleanUndefined({
+      id: sessionId,
+      courseId: data.courseId,
+      courseTitle: data.courseTitle,
+      title: data.title,
+      description: data.description,
+      scheduledDate: data.scheduledDate,
+      scheduledTime: data.scheduledTime,
+      durationMinutes: data.durationMinutes,
+      status: data.status,
+      hostName: data.hostName,
+      createdByRole: (isMainAdmin ? 'main_admin' : 'sub_admin') as 'main_admin' | 'sub_admin',
+      createdBySubAdminCode: isSubAdmin ? subAdminSession?.code : undefined,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    });
+
+    try {
+      await setDoc(sessionRef, sessionPayload);
+      await setDoc(doc(db, 'live_session_secrets', sessionId), {
+        sessionId,
+        courseId: data.courseId,
+        zoomLink: data.zoomLink,
+        updatedAt: now
+      });
+
+      if (data.notifyStudents) {
+        const notifRef = doc(collection(db, 'notifications'));
+        const scheduleHint = [data.scheduledDate, data.scheduledTime].filter(Boolean).join(' • ');
+        const liveNotif: PushNotificationItem = cleanUndefined({
+          id: notifRef.id,
+          title: `🎥 Live Class: ${data.title}`,
+          body: `${data.courseTitle}${scheduleHint ? ` (${scheduleHint})` : ''} — कक्षामा Join गर्न आफ्नो Course Section -> Live Session खोल्नुहोस्।`,
+          type: 'live' as const,
+          badge: data.status === 'live' ? 'LIVE NOW' : 'LIVE SCHEDULED',
+          target: 'course_students' as const,
+          courseId: data.courseId,
+          sessionId,
+          author: data.hostName,
+          createdAt: now
+        });
+        await setDoc(notifRef, liveNotif);
+      }
+
+      showToast(
+        data.id
+          ? '✅ Live meeting updated!'
+          : data.notifyStudents
+          ? '🎥 Live meeting created & enrolled students notified!'
+          : '🎥 Live meeting created!',
+        'success'
+      );
+    } catch (err) {
+      handleFirestoreError(err, data.id ? OperationType.UPDATE : OperationType.CREATE, `live_sessions/${sessionId}`);
+    }
+  }, [courses, isMainAdmin, isSubAdmin, subAdminSession, liveSessions, showToast]);
+
+  const handleDeleteLiveSession = useCallback(async (sessionId: string) => {
+    const target = liveSessions.find(s => s.id === sessionId);
+    const isAllowed = isMainAdmin || (isSubAdmin && target && target.courseId === subAdminSession?.courseId);
+    if (!isAllowed) {
+      showToast('तपाईंलाई यो Live Session मेटाउने अनुमति छैन।', 'error');
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'live_sessions', sessionId));
+      await deleteDoc(doc(db, 'live_session_secrets', sessionId)).catch(() => {});
+      showToast('Live session removed.', 'info');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `live_sessions/${sessionId}`);
+    }
+  }, [liveSessions, isMainAdmin, isSubAdmin, subAdminSession?.courseId, showToast]);
+
+  const handleUpdateLiveSessionStatus = useCallback(async (session: LiveSession, nextStatus: 'live' | 'scheduled' | 'ended') => {
+    const isAllowed = isMainAdmin || (isSubAdmin && session.courseId === subAdminSession?.courseId);
+    if (!isAllowed) {
+      showToast('Permission denied.', 'error');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'live_sessions', session.id), {
+        status: nextStatus,
+        updatedAt: Date.now()
+      });
+      showToast(
+        nextStatus === 'live' ? '🟢 Session is now LIVE!' : nextStatus === 'ended' ? 'Session ended.' : 'Session updated.',
+        'info'
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `live_sessions/${session.id}`);
+    }
+  }, [isMainAdmin, isSubAdmin, subAdminSession?.courseId, showToast]);
   const askUnreadCount = isMainAdmin ? adminUnreadCount : isSubAdmin ? subAdminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
@@ -3863,13 +4049,17 @@ export default function App() {
   }, [activeCourseIds, fullscreenVideo, isUserAdminSession]);
 
   // Open Certificate with strict validation:
-  // 1. User must have an active/enrolled course (only activated courses can be viewed)
+  // 1. User must have an active/enrolled course with certificate enabled (not replaced by Live Session)
   // 2. Student MUST have uploaded a photo for the certificate
   const handleOpenStudentCertificate = (targetCourseId?: string) => {
-    const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
+    const enrolledCourses = courses.filter(
+      c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id) && !c.includeLive && c.includeCertificate !== false
+    );
     if (enrolledCourses.length === 0) {
-      showToast('🔒 प्रमाणपत्र केवल सक्रिय (Activated) कोर्सका विद्यार्थीहरूका लागि मात्र उपलब्ध छ। कृपया पहिले कोर्स सक्रिय गर्नुहोस्!', 'error');
-      setShowCodeInputModal(true);
+      showToast('🔒 प्रमाणपत्र केवल Certificate समावेश सक्रिय कोर्सका विद्यार्थीहरूका लागि मात्र उपलब्ध छ।', 'error');
+      if (activeCourseIds.length === 0) {
+        setShowCodeInputModal(true);
+      }
       return;
     }
 
@@ -3903,12 +4093,25 @@ export default function App() {
     setShowCertificateModal(true);
   };
 
-  // Auto-exit Ask tab if user does not have an activated course or admin session
+  // Auto-exit Ask or Live view if user loses eligibility
   useEffect(() => {
     if (!isCourseActiveUser && currentView === 'ask') {
       setCurrentView('home');
     }
-  }, [isCourseActiveUser, currentView]);
+    if (currentView === 'live' && !canSubAdminAccessLive && !isMainAdmin) {
+      setCurrentView('home');
+    }
+  }, [isCourseActiveUser, currentView, canSubAdminAccessLive, isMainAdmin]);
+
+  // Reset classroomTab from 'live' if selected classroom course does not include live sessions
+  useEffect(() => {
+    if (classroomTab !== 'live') return;
+    const activeCourses = courses.filter(c => activeCourseIds.includes(c.id));
+    const currentCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0];
+    if (currentCourse && !currentCourse.includeLive) {
+      setClassroomTab('videos');
+    }
+  }, [classroomTab, courses, activeCourseIds, selectedClassroomCourseId]);
 
   // 1. Real-time listener for Main Admin: tracks ONLY Sub-Admin messages (zero course-student chats)
   useEffect(() => {
@@ -4199,6 +4402,8 @@ export default function App() {
     setFormImage(course.image);
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
+    setFormIncludeLive(Boolean(course.includeLive));
+    setFormIncludeCertificate(course.includeCertificate !== false);
     setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
@@ -4221,6 +4426,8 @@ export default function App() {
     setFormImage('');
     setFormIsPopular(false);
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
+    setFormIncludeLive(false);
+    setFormIncludeCertificate(true);
     setFormLanguage('Hindi & Nepali');
     setFormLearnText('');
     setFormVideos([]);
@@ -4273,6 +4480,9 @@ export default function App() {
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
+      // Strictly Main-Admin-only editable flags: Sub-Admins preserve existing values unchanged
+      includeLive: isMainAdmin ? formIncludeLive : Boolean(editingCourse?.includeLive),
+      includeCertificate: isMainAdmin ? formIncludeCertificate : (editingCourse?.includeCertificate ?? true),
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos,
@@ -4376,6 +4586,18 @@ export default function App() {
         }
       } catch (keyErr) {
         console.warn('Keys cleanup error on course delete:', keyErr);
+      }
+
+      // 6b. Delete live sessions associated with this course
+      try {
+        const liveQ = query(collection(db, 'live_sessions'), where('courseId', '==', courseId));
+        const liveSnap = await getDocs(liveQ);
+        for (const lDoc of liveSnap.docs) {
+          await deleteDoc(doc(db, 'live_sessions', lDoc.id));
+          await deleteDoc(doc(db, 'live_session_secrets', lDoc.id)).catch(() => {});
+        }
+      } catch (liveErr) {
+        console.warn('Live sessions cleanup error on course delete:', liveErr);
       }
 
       // 7. Persist deleted courseId in system config so it is permanently blacklisted across all devices & sessions
@@ -4488,7 +4710,7 @@ export default function App() {
       }
       await batch.commit();
 
-      // 6. Delete any secret activation keys created for these courses
+      // 6. Delete any secret activation keys and live sessions created for these courses
       for (const id of courseIds) {
         try {
           const keysQuery = query(collection(db, 'activation_keys'), where('courseId', '==', id));
@@ -4498,6 +4720,16 @@ export default function App() {
           }
         } catch (keyErr) {
           console.warn('Keys cleanup error on batch delete:', keyErr);
+        }
+        try {
+          const liveQ = query(collection(db, 'live_sessions'), where('courseId', '==', id));
+          const liveSnap = await getDocs(liveQ);
+          for (const lDoc of liveSnap.docs) {
+            await deleteDoc(doc(db, 'live_sessions', lDoc.id));
+            await deleteDoc(doc(db, 'live_session_secrets', lDoc.id)).catch(() => {});
+          }
+        } catch (liveErr) {
+          console.warn('Live sessions cleanup error on batch delete:', liveErr);
         }
       }
 
@@ -4926,8 +5158,22 @@ export default function App() {
       {/* Main Container for Course List / Classroom / Account / Ask */}
       <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
 
-        {/* 1. EMBEDDED ACCOUNT / ASK / CLASSROOM / HOME VIEWS */}
-        {currentView === 'ask' && isCourseActiveUser ? (
+        {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / HOME VIEWS */}
+        {currentView === 'live' && (canSubAdminAccessLive || isMainAdmin) ? (
+          <section id="live-manager-view" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-6">
+            <LiveSessionsPanel
+              mode="manager"
+              courses={courses}
+              sessions={liveSessions}
+              adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+              subAdminSession={isMainAdmin ? null : subAdminSession}
+              onSaveSession={handleSaveLiveSession}
+              onDeleteSession={handleDeleteLiveSession}
+              onUpdateStatus={handleUpdateLiveSessionStatus}
+              showToast={showToast}
+            />
+          </section>
+        ) : currentView === 'ask' && isCourseActiveUser ? (
           <section id="ask-embedded-view" className="w-full flex-1 min-h-0 flex flex-col bg-black">
             <AskChatModal
               embedded={true}
@@ -5311,7 +5557,22 @@ export default function App() {
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0 justify-end">
-                                {!secondaryCourseIds.includes(course.id) && (
+                                {course.includeLive ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedClassroomCourseId(course.id);
+                                      setClassroomTab('live');
+                                      setCurrentView('classroom');
+                                      window.scrollTo({ top: 0, behavior: 'auto' });
+                                    }}
+                                    className="bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-500/40 font-semibold text-xs px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                                    title="Live Session"
+                                  >
+                                    <Video className="w-3.5 h-3.5 text-rose-400" />
+                                    <span>Live Session</span>
+                                  </button>
+                                ) : (!secondaryCourseIds.includes(course.id) && course.includeCertificate !== false) && (
                                   <button
                                     type="button"
                                     onClick={() => handleOpenStudentCertificate(course.id)}
@@ -5506,7 +5767,17 @@ export default function App() {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            {!secondaryCourseIds.includes(currentClassroomCourse.id) && (
+                            {currentClassroomCourse.includeLive ? (
+                              <button
+                                type="button"
+                                onClick={() => setClassroomTab('live')}
+                                className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-rose-500/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
+                                title="Open Live Session"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                <span>Live Session</span>
+                              </button>
+                            ) : (!secondaryCourseIds.includes(currentClassroomCourse.id) && currentClassroomCourse.includeCertificate !== false) && (
                               <button
                                 onClick={() => handleOpenStudentCertificate(currentClassroomCourse.id)}
                                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
@@ -5551,7 +5822,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Classroom Tab Switcher: Videos vs PDFs & Notes */}
+                        {/* Classroom Tab Switcher: Videos vs PDFs & Notes (+ Live Session when enabled by Admin) */}
                         <div className="flex items-center gap-2 mt-6 border-b border-zinc-800/80 pb-3 overflow-x-auto">
                           <button
                             type="button"
@@ -5583,6 +5854,29 @@ export default function App() {
                               {currentClassroomCourse.pdfs?.length || 0}
                             </span>
                           </button>
+
+                          {currentClassroomCourse.includeLive && (() => {
+                            const activeLiveCount = liveSessions.filter(
+                              s => s.courseId === currentClassroomCourse.id && s.status !== 'ended'
+                            ).length;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setClassroomTab('live')}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer font-sans whitespace-nowrap ${
+                                  classroomTab === 'live'
+                                    ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
+                                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+                                }`}
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                <span>Live Session</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${classroomTab === 'live' ? 'bg-zinc-950 text-rose-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                                  {activeLiveCount}
+                                </span>
+                              </button>
+                            );
+                          })()}
                         </div>
 
                         {/* TAB 1: VIDEOS PLAYLIST */}
@@ -5741,6 +6035,18 @@ export default function App() {
                               </div>
                             )}
                           </div>
+                        )}
+
+                        {/* TAB 3: LIVE SESSION (ONLY WHEN COURSE INCLUDES LIVE CLASS) */}
+                        {classroomTab === 'live' && currentClassroomCourse.includeLive && (
+                          <LiveSessionsPanel
+                            mode="student"
+                            course={currentClassroomCourse}
+                            courses={courses}
+                            sessions={liveSessions}
+                            studentName={currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student'}
+                            showToast={showToast}
+                          />
                         )}
                       </motion.div>
                     </div>
@@ -6109,9 +6415,15 @@ export default function App() {
                           <span className="bg-zinc-800 text-zinc-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-zinc-700">
                             🌐 {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
                           </span>
-                          <span className="bg-blue-950/50 text-blue-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-blue-500/30">
-                            📜 Certificate
-                          </span>
+                          {course.includeLive ? (
+                            <span className="bg-rose-950/60 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/40">
+                              🎥 Live Class
+                            </span>
+                          ) : course.includeCertificate !== false ? (
+                            <span className="bg-blue-950/50 text-blue-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-blue-500/30">
+                              📜 Certificate
+                            </span>
+                          ) : null}
                         </div>
 
                         {/* Highlights checklist */}
@@ -6426,12 +6738,29 @@ export default function App() {
                         📺 Expand to Fullscreen
                       </button>
 
-                      <button
-                        onClick={() => handleOpenStudentCertificate(selectedCourse.id)}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
-                      >
-                        📜 View Certificate (प्रमाणपत्र)
-                      </button>
+                      {selectedCourse.includeLive ? (
+                        <button
+                          onClick={() => {
+                            const targetId = selectedCourse.id;
+                            setSelectedCourse(null);
+                            setSelectedClassroomCourseId(targetId);
+                            setClassroomTab('live');
+                            setCurrentView('classroom');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-rose-500/20 cursor-pointer"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          <span>Live Session</span>
+                        </button>
+                      ) : (!secondaryCourseIds.includes(selectedCourse.id) && selectedCourse.includeCertificate !== false) && (
+                        <button
+                          onClick={() => handleOpenStudentCertificate(selectedCourse.id)}
+                          className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
+                        >
+                          📜 View Certificate (प्रमाणपत्र)
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -6686,9 +7015,15 @@ export default function App() {
                   <span className="bg-zinc-900 text-zinc-300 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-zinc-750 flex items-center gap-1">
                     🌐 Language: {selectedCourse.language || (selectedCourse.id.includes('rathee') || selectedCourse.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
                   </span>
-                  <span className="bg-zinc-900 text-emerald-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-emerald-500/30">
-                    📜 Certificate
-                  </span>
+                  {selectedCourse.includeLive ? (
+                    <span className="bg-zinc-900 text-rose-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-rose-500/30">
+                      🎥 Live Class
+                    </span>
+                  ) : selectedCourse.includeCertificate !== false ? (
+                    <span className="bg-zinc-900 text-emerald-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-emerald-500/30">
+                      📜 Certificate
+                    </span>
+                  ) : null}
                 </div>
                 
                 <p className="text-3xl font-black text-emerald-400 mt-3 text-left">
@@ -7137,6 +7472,10 @@ export default function App() {
         notifications={notifications}
         onSendNotification={handleSendNotification}
         onDeleteNotification={handleDeleteNotification}
+        liveSessions={liveSessions}
+        onSaveLiveSession={handleSaveLiveSession}
+        onDeleteLiveSession={handleDeleteLiveSession}
+        onUpdateLiveSessionStatus={handleUpdateLiveSessionStatus}
         showToast={showToast}
         initialTab={adminInitialTab}
         adminUnreadAskCount={isMainAdmin ? adminUnreadCount : subAdminUnreadCount}
@@ -7643,6 +7982,50 @@ export default function App() {
                   )}
                 </div>
 
+                {/* MAIN ADMIN ONLY: Live Class & Certificate Toggles */}
+                {isMainAdmin && (
+                  <div className="bg-zinc-900 p-3.5 rounded-xl border border-blue-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-400">
+                        Main Admin Control • Delivery Options
+                      </span>
+                      <span className="text-[10px] text-zinc-400 font-semibold">
+                        Only editable by Main Admin
+                      </span>
+                    </div>
+
+                    <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-100 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={formIncludeLive}
+                        onChange={(e) => setFormIncludeLive(e.target.checked)}
+                        className="rounded border-zinc-700 text-rose-600 focus:ring-rose-500 w-4 h-4 bg-black mt-0.5"
+                      />
+                      <div>
+                        <span>🎥 Include Live Session (Zoom Live Class)</span>
+                        <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
+                          सक्रिय विद्यार्थीहरूलाई Course Section मा Certificate को सट्टा Live Session देखा पर्नेछ र Sub-Admin लाई Live मेनु खुल्नेछ।
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-100 cursor-pointer select-none pt-1 border-t border-zinc-800">
+                      <input
+                        type="checkbox"
+                        checked={formIncludeCertificate}
+                        onChange={(e) => setFormIncludeCertificate(e.target.checked)}
+                        className="rounded border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 bg-black mt-0.5"
+                      />
+                      <div>
+                        <span>📜 Include Course Certificate</span>
+                        <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
+                          Live Session सक्रिय नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
                 {/* What You Learn (Newline separated) */}
                 <div>
                   <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">What Students Learn (One point per line) *</label>
@@ -8130,8 +8513,10 @@ export default function App() {
 
       {/* CERTIFICATE MODAL */}
       {showCertificateModal && (() => {
-        // Enrolled courses strictly (Excluding secondary account logins):
-        const enrolledCourses = courses.filter(c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id));
+        // Enrolled courses with certificate enabled (excluding secondary logins and live-replaced courses):
+        const enrolledCourses = courses.filter(
+          c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id) && !c.includeLive && c.includeCertificate !== false
+        );
         if (enrolledCourses.length === 0) {
           return null;
         }
@@ -8353,6 +8738,36 @@ export default function App() {
         unreadIds={unreadNotifIds}
         showToast={showToast}
         onNotificationClick={(notif) => {
+          // Mark clicked notification read
+          try {
+            const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
+            if (!readIds.includes(notif.id)) {
+              const updatedRead = [...readIds, notif.id];
+              localStorage.setItem('clipzone_read_notifs', JSON.stringify(updatedRead));
+              setUnreadNotifIds(prev => prev.filter(id => id !== notif.id));
+              setUnreadNotifCount(prev => Math.max(0, prev - 1));
+            }
+          } catch {}
+
+          if (notif.type === 'live' && notif.courseId) {
+            setShowNotifCenterModal(false);
+            if (isUserAdminSession) {
+              setAdminInitialTab('live');
+              setShowAdminDashboard(true);
+              return;
+            }
+            const resolvedCourseId = activeCourseIds.includes(notif.courseId)
+              ? notif.courseId
+              : activeCourseIds[0];
+            if (resolvedCourseId) {
+              setSelectedClassroomCourseId(resolvedCourseId);
+              setClassroomTab('live');
+              setCurrentView('classroom');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            return;
+          }
+
           if (notif.url) {
             if (notif.url.startsWith('#') || notif.url.startsWith('/#')) {
               const hash = notif.url.replace('/#', '#');
@@ -8360,7 +8775,11 @@ export default function App() {
             } else if (notif.url.startsWith('/')) {
               window.location.href = notif.url;
             } else {
-              window.open(notif.url, '_blank');
+              const a = document.createElement('a');
+              a.href = notif.url;
+              a.target = '_blank';
+              a.rel = 'noopener noreferrer';
+              a.click();
             }
           }
         }}
@@ -8414,8 +8833,30 @@ export default function App() {
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 3. Certificate - Shown only if user has activated course or Main Admin */}
-          {Boolean(hasCourseActivated || isMainAdmin) && (
+          {/* 2b. Live Menu - STRICTLY ONLY for Sub-Admins whose assigned course includes Live (NEVER shown to regular users) */}
+          {canSubAdminAccessLive && (
+            <button
+              id="app-nav-live"
+              onClick={() => {
+                setShowProfileModal(false);
+                setCurrentView('live');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
+                currentView === 'live'
+                  ? 'text-rose-400 font-bold bg-rose-500/10 md:bg-rose-600/15 md:border md:border-rose-500/40 md:shadow-md md:shadow-rose-500/15'
+                  : 'text-zinc-400 hover:text-rose-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
+              }`}
+            >
+              <div className="relative flex items-center justify-center shrink-0">
+                <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'live' ? 'stroke-[2.5] text-rose-400' : 'stroke-[1.8]'}`} />
+              </div>
+              <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Live</span>
+            </button>
+          )}
+
+          {/* 3. Certificate - Shown only if Main Admin or user has an active Certificate-enabled course (not replaced by Live) */}
+          {hasCertificateCourse && (
             <button
               id="app-nav-certificate"
               onClick={() => {
