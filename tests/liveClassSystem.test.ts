@@ -13,6 +13,7 @@ import {
   createGoogleMeetSpace,
   GoogleMeetApiError,
 } from '../server/googleMeetService.ts';
+import { resetRoomHubForTests } from '../server/liveRoomHub.ts';
 
 // ============================================================================
 // In-Memory Transactional Firestore Test Double matching Admin SDK API
@@ -810,6 +811,112 @@ test('Multi-provider: Google Meet Auto & Manual Link work without Zoom credentia
     assert.equal(manualJoin.data.provider, 'manual');
     assert.equal(manualJoin.data.joinUrl, 'https://meet.google.com/man-ual-lnk');
   } finally {
+    await ctx.close();
+  }
+});
+
+test('Zero-Login Built-in Live Classroom: Sub-Admin creates, Student & Mentor join without Google login, role-enforced room endpoints', async () => {
+  resetRoomHubForTests();
+  const ctx = await startTestApp({ zoomShouldFail: true });
+  try {
+    // 1. Sub-Admin creates builtin live class with ZERO Google OAuth token & Zoom disabled
+    const createRes = await reqJson(ctx.baseUrl, '/', {
+      method: 'POST',
+      headers: {
+        'x-subadmin-code': 'SUB-AI100',
+        'x-device-id': 'subdev-1',
+      },
+      body: JSON.stringify({
+        courseId: 'ai-masterclass',
+        title: 'Zero-Login Live Prompting Workshop',
+        provider: 'builtin',
+        scheduledStartAt: Date.now() + 2 * 60_000,
+        publishImmediately: true,
+      }),
+    });
+    assert.equal(createRes.status, 201);
+    assert.equal(createRes.data.liveClass.provider, 'builtin');
+    assert.equal(createRes.data.liveClass.status, 'published');
+    assert.equal(createRes.data.liveClass.zoomCreated, true);
+    assert.ok(String(createRes.data.liveClass.zoomMeetingId).startsWith('ROOM-'));
+    assert.equal(ctx.getZoomCreateCalls(), 0);
+    const classId = createRes.data.liveClass.id;
+
+    // 2. Enrolled student joins using only course activation key (zero Google login)
+    const studentJoin = await reqJson(ctx.baseUrl, `/${classId}/join`, {
+      method: 'POST',
+      headers: ENROLLED_HEADERS,
+    });
+    assert.equal(studentJoin.status, 200);
+    assert.equal(studentJoin.data.provider, 'builtin');
+    assert.equal(studentJoin.data.participantRole, 'student');
+    assert.equal(studentJoin.data.participantName, 'Aarav Shrestha');
+    assert.ok(studentJoin.data.roomToken);
+    const studentToken = studentJoin.data.roomToken;
+
+    // 3. Sub-Admin mentor joins the same room with mentor role (zero Google login)
+    const mentorJoin = await reqJson(ctx.baseUrl, `/${classId}/join`, {
+      method: 'POST',
+      headers: {
+        'x-subadmin-code': 'SUB-AI100',
+        'x-device-id': 'subdev-1',
+      },
+      body: JSON.stringify({ displayName: 'Mentor Bikash' }),
+    });
+    assert.equal(mentorJoin.status, 200);
+    assert.equal(mentorJoin.data.participantRole, 'mentor');
+    assert.equal(mentorJoin.data.participantName, 'Mentor Bikash');
+    assert.ok(mentorJoin.data.roomToken);
+    const mentorToken = mentorJoin.data.roomToken;
+
+    // 4. Invalid roomToken is rejected (401) across room endpoints
+    const badChat = await reqJson(ctx.baseUrl, `/${classId}/room/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ roomToken: 'invalid.token', peerId: 'p1', text: 'hello' }),
+    });
+    assert.equal(badChat.status, 401);
+
+    const badMedia = await reqJson(ctx.baseUrl, `/${classId}/room/media`, {
+      method: 'POST',
+      body: JSON.stringify({ roomToken: 'invalid.token', peerId: 'p1', handRaised: true }),
+    });
+    assert.equal(badMedia.status, 401);
+
+    const badSseRes = await fetch(`${ctx.baseUrl}/${classId}/room/events?roomToken=invalid.token&peerId=p1`);
+    assert.equal(badSseRes.status, 401);
+
+    // 5. Student can post chat & raise hand, but CANNOT end the class (403)
+    const okChat = await reqJson(ctx.baseUrl, `/${classId}/room/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ roomToken: studentToken, peerId: 'student-p1', text: 'Namaste Sir!' }),
+    });
+    assert.equal(okChat.status, 200);
+    assert.equal(okChat.data.message.text, 'Namaste Sir!');
+    assert.equal(okChat.data.message.role, 'student');
+
+    const okMedia = await reqJson(ctx.baseUrl, `/${classId}/room/media`, {
+      method: 'POST',
+      body: JSON.stringify({ roomToken: studentToken, peerId: 'student-p1', handRaised: true }),
+    });
+    assert.equal(okMedia.status, 200);
+
+    const studentEnd = await reqJson(ctx.baseUrl, `/${classId}/room/end`, {
+      method: 'POST',
+      body: JSON.stringify({ roomToken: studentToken }),
+    });
+    assert.equal(studentEnd.status, 403);
+
+    // 6. Mentor ends the live session cleanly (200) & DB marks class completed
+    const mentorEnd = await reqJson(ctx.baseUrl, `/${classId}/room/end`, {
+      method: 'POST',
+      body: JSON.stringify({ roomToken: mentorToken }),
+    });
+    assert.equal(mentorEnd.status, 200);
+    assert.equal(mentorEnd.data.ended, true);
+    const updatedSnap = await ctx.db.collection('liveClasses').doc(classId).get();
+    assert.equal(updatedSnap.data().status, 'completed');
+  } finally {
+    resetRoomHubForTests();
     await ctx.close();
   }
 });

@@ -35,7 +35,11 @@ export async function createGoogleMeetSpace(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify({
+      config: {
+        accessType: 'OPEN',
+      },
+    }),
   });
 
   const data: any = await res.json().catch(() => ({}));

@@ -189,7 +189,7 @@ export interface PushNotificationItem {
 }
 
 export type LiveClassStatus = 'draft' | 'published' | 'live' | 'completed' | 'cancelled';
-export type LiveClassProvider = 'google_meet' | 'manual' | 'zoom';
+export type LiveClassProvider = 'builtin' | 'google_meet' | 'manual' | 'zoom';
 
 export interface LiveClassItem {
   id: string;
@@ -253,9 +253,14 @@ export interface LiveClassJoinResponse {
   meetingId: string;
   passcode: string;
   scheduledStartAt: number;
+  scheduledEndAt?: number;
   durationMinutes: number;
   registeredCount: number;
   maxCapacity: number;
+  roomToken?: string;
+  participantName?: string;
+  participantRole?: 'mentor' | 'student';
+  instructorName?: string;
 }
 
 export interface LiveClassHealthStatus {

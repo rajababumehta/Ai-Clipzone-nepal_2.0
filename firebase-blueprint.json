@@ -352,7 +352,7 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "instructorName": { "type": "string" },
-        "provider": { "type": "string", "enum": ["google_meet", "manual", "zoom"] },
+        "provider": { "type": "string", "enum": ["builtin", "google_meet", "manual", "zoom"] },
         "scheduledStartAt": { "type": "number" },
         "durationMinutes": { "type": "number" },
         "scheduledEndAt": { "type": "number" },
@@ -400,7 +400,7 @@
       "type": "object",
       "properties": {
         "liveClassId": { "type": "string" },
-        "provider": { "type": "string", "enum": ["google_meet", "manual", "zoom"] },
+        "provider": { "type": "string", "enum": ["builtin", "google_meet", "manual", "zoom"] },
         "zoomMeetingId": { "type": "string" },
         "zoomPasscode": { "type": "string" },
         "zoomJoinUrl": { "type": "string" },

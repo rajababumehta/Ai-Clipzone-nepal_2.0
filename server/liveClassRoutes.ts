@@ -30,6 +30,16 @@ import {
   verifyStudentEnrollment,
   isActivationKeyExpiredServer,
 } from './authAndEnrollment.ts';
+import {
+  endLiveRoom,
+  leaveRoomPeer,
+  mintRoomToken,
+  postRoomChatMessage,
+  relayRoomSignal,
+  subscribeRoomSse,
+  updatePeerMediaState,
+  verifyRoomToken,
+} from './liveRoomHub.ts';
 
 export interface LiveClassRouterDeps {
   getDb?: () => Firestore | null;
@@ -45,11 +55,11 @@ export interface LiveClassRouterDeps {
   createGoogleMeetSpace?: typeof createGoogleMeetSpace;
 }
 
-type ResolvedProvider = 'google_meet' | 'manual' | 'zoom';
+type ResolvedProvider = 'builtin' | 'google_meet' | 'manual' | 'zoom';
 
 function normalizeProvider(raw: unknown, fallback: ResolvedProvider = 'zoom'): ResolvedProvider {
   const val = String(raw || '').trim();
-  if (val === 'google_meet' || val === 'manual' || val === 'zoom') return val;
+  if (val === 'builtin' || val === 'google_meet' || val === 'manual' || val === 'zoom') return val;
   return fallback;
 }
 
@@ -621,7 +631,10 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
         ? String(courseSnap.data()?.title || req.body?.courseTitle || courseId)
         : String(req.body?.courseTitle || courseId);
 
-      // 3. Create meeting via selected provider (Google Meet, Manual Link, or Zoom S2S OAuth)
+      const classRef = db.collection('liveClasses').doc();
+      const classId = classRef.id;
+
+      // 3. Create meeting via selected provider (Built-In Zero-Login Room, Google Meet, Manual Link, or Zoom)
       let meetingResult: {
         meetingId: string;
         joinUrl: string;
@@ -632,7 +645,16 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       } | null = null;
       let providerError = '';
 
-      if (provider === 'google_meet') {
+      if (provider === 'builtin') {
+        const roomUrl = `/?tab=live&classId=${encodeURIComponent(classId)}`;
+        meetingResult = {
+          meetingId: `ROOM-${classId.slice(0, 8).toUpperCase()}`,
+          joinUrl: roomUrl,
+          startUrl: roomUrl,
+          password: '',
+          hostEmail: adminCtx.email || '',
+        };
+      } else if (provider === 'google_meet') {
         try {
           const accessToken = extractGoogleMeetToken(req);
           const space = await createMeetSpaceFn(accessToken);
@@ -690,8 +712,6 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       }
 
       const now = Date.now();
-      const classRef = db.collection('liveClasses').doc();
-      const classId = classRef.id;
       const scheduledEndAt = scheduledStartAt + durationMinutes * 60_000;
       const initialStatus = publishNow && meetingResult ? 'published' : 'draft';
 
@@ -813,7 +833,16 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
           meetSpaceName?: string;
         };
 
-        if (targetProvider === 'google_meet') {
+        if (targetProvider === 'builtin') {
+          const roomUrl = `/?tab=live&classId=${encodeURIComponent(classId)}`;
+          meetingResult = {
+            meetingId: `ROOM-${classId.slice(0, 8).toUpperCase()}`,
+            joinUrl: roomUrl,
+            startUrl: roomUrl,
+            password: '',
+            hostEmail: adminCtx.email || '',
+          };
+        } else if (targetProvider === 'google_meet') {
           const accessToken = extractGoogleMeetToken(req);
           const space = await createMeetSpaceFn(accessToken);
           meetingResult = {
@@ -1425,10 +1454,33 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       }
     }
 
+    const resolvedProvider = normalizeProvider(classData.provider, 'zoom');
+    const participantRole: 'mentor' | 'student' = studentCtx.isAdminBypass ? 'mentor' : 'student';
+    const customName = String(req.body?.displayName || '').trim().slice(0, 60);
+    const participantName =
+      customName ||
+      (participantRole === 'mentor'
+        ? String(classData.instructorName || studentCtx.studentName || 'Mentor')
+        : String(studentCtx.studentName || 'Student'));
+    const scheduledEndAt = Number(
+      classData.scheduledEndAt || Number(classData.scheduledStartAt) + Number(classData.durationMinutes || 40) * 60_000
+    );
+
+    const roomToken =
+      resolvedProvider === 'builtin'
+        ? mintRoomToken({
+            classId,
+            userId: studentCtx.userId,
+            displayName: participantName,
+            role: participantRole,
+            exp: Date.now() + 6 * 60 * 60_000,
+          })
+        : undefined;
+
     res.json({
       success: true,
       liveClassId: classId,
-      provider: normalizeProvider(classData.provider, 'zoom'),
+      provider: resolvedProvider,
       title: classData.title,
       courseTitle: classData.courseTitle,
       joinUrl: sec.zoomJoinUrl,
@@ -1436,14 +1488,139 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       meetingId: sec.zoomMeetingId,
       passcode: sec.zoomPasscode || '',
       scheduledStartAt: Number(classData.scheduledStartAt),
+      scheduledEndAt,
       durationMinutes: Number(classData.durationMinutes || 40),
       registeredCount: finalCount,
       maxCapacity: maxCap,
+      roomToken,
+      participantName,
+      participantRole,
+      instructorName: classData.instructorName || 'AI Clipzone Mentor',
     });
     } catch (err: any) {
       console.error('[LiveClasses] Join error:', err);
       return handleRouteError(res, 'Failed to join live class.', err);
     }
+  });
+
+  // Built-In Zero-Login Live Classroom: SSE Event Stream
+  router.get('/:id/room/events', (req: Request, res: Response) => {
+    const classId = sanitizeId(req.params.id);
+    const token = String(req.query?.roomToken || '').trim();
+    const tokenData = verifyRoomToken(token, classId);
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Invalid or expired live room session.' });
+    }
+
+    const peerId = sanitizeId(String(req.query?.peerId || `${tokenData.role}_${tokenData.userId}`)).slice(0, 80);
+    const camOn = String(req.query?.camOn || '') === '1';
+    const micOn = String(req.query?.micOn || '') === '1';
+
+    subscribeRoomSse({
+      tokenData,
+      peerId,
+      camOn,
+      micOn,
+      res,
+    });
+  });
+
+  // Built-In Live Classroom: WebRTC Signal Relay (Offer / Answer / ICE)
+  router.post('/:id/room/signal', (req: Request, res: Response) => {
+    const classId = sanitizeId(req.params.id);
+    const tokenData = verifyRoomToken(String(req.body?.roomToken || ''), classId);
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Invalid or expired live room session.' });
+    }
+
+    const fromPeerId = sanitizeId(String(req.body?.peerId || '')).slice(0, 80);
+    const toPeerId = sanitizeId(String(req.body?.toPeerId || '')).slice(0, 80);
+    const signal = req.body?.signal;
+    if (!fromPeerId || !toPeerId || !signal || typeof signal !== 'object') {
+      return res.status(400).json({ error: 'Valid peerId, toPeerId, and signal are required.' });
+    }
+
+    const delivered = relayRoomSignal({ classId, fromPeerId, toPeerId, signal });
+    res.json({ success: true, delivered });
+  });
+
+  // Built-In Live Classroom: Media / Hand-Raise State Update
+  router.post('/:id/room/media', (req: Request, res: Response) => {
+    const classId = sanitizeId(req.params.id);
+    const tokenData = verifyRoomToken(String(req.body?.roomToken || ''), classId);
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Invalid or expired live room session.' });
+    }
+
+    const peerId = sanitizeId(String(req.body?.peerId || '')).slice(0, 80);
+    if (!peerId) {
+      return res.status(400).json({ error: 'peerId is required.' });
+    }
+
+    const updated = updatePeerMediaState({
+      classId,
+      peerId,
+      camOn: typeof req.body?.camOn === 'boolean' ? req.body.camOn : undefined,
+      micOn: typeof req.body?.micOn === 'boolean' ? req.body.micOn : undefined,
+      screenSharing: typeof req.body?.screenSharing === 'boolean' ? req.body.screenSharing : undefined,
+      handRaised: typeof req.body?.handRaised === 'boolean' ? req.body.handRaised : undefined,
+    });
+
+    res.json({ success: true, peer: updated });
+  });
+
+  // Built-In Live Classroom: Live Chat Message
+  router.post('/:id/room/chat', (req: Request, res: Response) => {
+    const classId = sanitizeId(req.params.id);
+    const tokenData = verifyRoomToken(String(req.body?.roomToken || ''), classId);
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Invalid or expired live room session.' });
+    }
+
+    const peerId = sanitizeId(String(req.body?.peerId || '')).slice(0, 80);
+    const text = String(req.body?.text || '').trim();
+    if (!peerId || !text) {
+      return res.status(400).json({ error: 'Message text is required.' });
+    }
+
+    const message = postRoomChatMessage({ tokenData, peerId, text });
+    res.json({ success: true, message });
+  });
+
+  // Built-In Live Classroom: Leave Room Cleanly
+  router.post('/:id/room/leave', (req: Request, res: Response) => {
+    const classId = sanitizeId(req.params.id);
+    const tokenData = verifyRoomToken(String(req.body?.roomToken || ''), classId);
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Invalid or expired live room session.' });
+    }
+
+    const peerId = sanitizeId(String(req.body?.peerId || '')).slice(0, 80);
+    if (peerId) {
+      leaveRoomPeer(classId, peerId);
+    }
+    res.json({ success: true });
+  });
+
+  // Built-In Live Classroom: Mentor End Session for Everyone
+  router.post('/:id/room/end', async (req: Request, res: Response) => {
+    const classId = sanitizeId(req.params.id);
+    const tokenData = verifyRoomToken(String(req.body?.roomToken || ''), classId);
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Invalid or expired live room session.' });
+    }
+    if (tokenData.role !== 'mentor') {
+      return res.status(403).json({ error: 'Only the Mentor or Admin can end the live room.' });
+    }
+
+    endLiveRoom(classId, tokenData.displayName);
+    const db = getRequestDb(req);
+    await db
+      .collection('liveClasses')
+      .doc(classId)
+      .set({ status: 'completed', updatedAt: Date.now() }, { merge: true })
+      .catch(() => {});
+    res.json({ success: true, ended: true });
   });
 
   // Automated Reminder Sweep (30m & 5m before class) for Vercel Cron / External Cron / Admin Trigger

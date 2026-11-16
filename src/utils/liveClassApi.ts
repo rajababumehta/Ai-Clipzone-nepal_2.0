@@ -253,9 +253,70 @@ export async function registerForLiveClass(classId: string): Promise<{
   });
 }
 
-export async function joinLiveClass(classId: string): Promise<LiveClassJoinResponse> {
+export async function joinLiveClass(
+  classId: string,
+  displayName?: string
+): Promise<LiveClassJoinResponse> {
   return apiRequest(`/${encodeURIComponent(classId)}/join`, {
     method: 'POST',
+    body: JSON.stringify(displayName ? { displayName } : {}),
+  });
+}
+
+export async function sendRoomSignal(
+  classId: string,
+  payload: { roomToken: string; peerId: string; toPeerId: string; signal: Record<string, unknown> }
+): Promise<{ success: boolean; delivered: boolean }> {
+  return apiRequest(`/${encodeURIComponent(classId)}/room/signal`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateRoomMedia(
+  classId: string,
+  payload: {
+    roomToken: string;
+    peerId: string;
+    camOn?: boolean;
+    micOn?: boolean;
+    screenSharing?: boolean;
+    handRaised?: boolean;
+  }
+): Promise<{ success: boolean }> {
+  return apiRequest(`/${encodeURIComponent(classId)}/room/media`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendRoomChat(
+  classId: string,
+  payload: { roomToken: string; peerId: string; text: string }
+): Promise<{ success: boolean }> {
+  return apiRequest(`/${encodeURIComponent(classId)}/room/chat`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function leaveLiveRoom(
+  classId: string,
+  payload: { roomToken: string; peerId: string }
+): Promise<{ success: boolean }> {
+  return apiRequest(`/${encodeURIComponent(classId)}/room/leave`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function endLiveRoomSession(
+  classId: string,
+  payload: { roomToken: string }
+): Promise<{ success: boolean }> {
+  return apiRequest(`/${encodeURIComponent(classId)}/room/end`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 

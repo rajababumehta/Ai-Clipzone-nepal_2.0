@@ -29,6 +29,7 @@ import {
   Course,
   LiveClassHealthStatus,
   LiveClassItem,
+  LiveClassJoinResponse,
   LiveClassProvider,
   LiveClassRegistration,
 } from '../types';
@@ -39,6 +40,7 @@ import {
   fetchLiveClassHealth,
   fetchLiveClassParticipants,
   fetchLiveClasses,
+  joinLiveClass,
   notifyLiveClass,
   publishLiveClass,
   retryZoomMeeting,
@@ -50,6 +52,7 @@ import {
   initGoogleMeetAuth,
   signInWithGoogleForMeet,
 } from '../utils/googleMeetOAuth';
+import { LiveClassroomModal } from './LiveClassroomModal';
 
 const GoogleSignInButton: React.FC<{
   onClick: () => void;
@@ -149,12 +152,15 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
   const [formReminder5m, setFormReminder5m] = useState(true);
   const [formPublishImmediately, setFormPublishImmediately] = useState(true);
   const [formIdempotencyKey, setFormIdempotencyKey] = useState('');
-  const [formProvider, setFormProvider] = useState<LiveClassProvider>('google_meet');
+  const [formProvider, setFormProvider] = useState<LiveClassProvider>('builtin');
   const [formManualUrl, setFormManualUrl] = useState('');
   const [formManualMeetingId, setFormManualMeetingId] = useState('');
   const [formManualPasscode, setFormManualPasscode] = useState('');
 
-  // Google Meet OAuth session state (in-memory token only)
+  // Active Zero-Login In-App Classroom Modal
+  const [activeLiveRoom, setActiveLiveRoom] = useState<LiveClassJoinResponse | null>(null);
+
+  // Google Meet OAuth session state (optional provider only)
   const [meetConnected, setMeetConnected] = useState(() => Boolean(getMeetAccessToken()));
   const [meetUserEmail, setMeetUserEmail] = useState<string>('');
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
@@ -252,7 +258,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormReminder30m(true);
     setFormReminder5m(true);
     setFormPublishImmediately(true);
-    setFormProvider('google_meet');
+    setFormProvider('builtin');
     setFormManualUrl('');
     setFormManualMeetingId('');
     setFormManualPasscode('');
@@ -273,7 +279,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormJoinWindow(cls.joinWindowMinutesBefore ?? 15);
     setFormReminder30m(cls.sendReminder30m !== false);
     setFormReminder5m(cls.sendReminder5m !== false);
-    setFormProvider(cls.provider === 'manual' ? 'manual' : 'google_meet');
+    setFormProvider(cls.provider === 'manual' ? 'manual' : cls.provider === 'google_meet' ? 'google_meet' : 'builtin');
     setShowForm(true);
   };
 
@@ -353,11 +359,16 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           setSyncErrorBanner({ message: syncIssue });
           showToast(`Class saved as Draft, sync pending: ${syncIssue}`, 'info');
         } else {
-          const providerLabel = formProvider === 'google_meet' ? 'Google Meet' : 'Live Link';
+          const providerLabel =
+            formProvider === 'builtin'
+              ? 'Zero-Login Live Room'
+              : formProvider === 'google_meet'
+              ? 'Google Meet'
+              : 'Live Link';
           showToast(
             publishNow
-              ? `Live class + ${providerLabel} created & published to enrolled students!`
-              : `Draft live class + ${providerLabel} created.`,
+              ? `Live class (${providerLabel}) created & published to enrolled students!`
+              : `Draft live class (${providerLabel}) created.`,
             'success'
           );
         }
@@ -384,9 +395,21 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     await submitClassForm();
   };
 
+  const handleStartBuiltinRoom = async (cls: LiveClassItem) => {
+    setBusyId(cls.id);
+    try {
+      const res = await joinLiveClass(cls.id, formInstructor.trim() || cls.instructorName);
+      setActiveLiveRoom(res);
+    } catch (err: any) {
+      showToast(err?.message || 'Unable to launch live classroom', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleRetryZoom = async (cls: LiveClassItem, overrideProvider?: LiveClassProvider) => {
     const targetProvider: LiveClassProvider =
-      overrideProvider || (cls.provider === 'manual' ? 'manual' : 'google_meet');
+      overrideProvider || (cls.provider === 'manual' ? 'manual' : cls.provider === 'google_meet' ? 'google_meet' : 'builtin');
     if (targetProvider === 'google_meet' && !getMeetAccessToken()) {
       const ok = await handleConnectGoogleMeet();
       if (!ok) return;
@@ -401,7 +424,9 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
       } else {
         setSyncErrorBanner(null);
         showToast(
-          targetProvider === 'google_meet'
+          targetProvider === 'builtin'
+            ? 'Zero-Login Live Room enabled! No Google sign-in required.'
+            : targetProvider === 'google_meet'
             ? 'Google Meet link generated and synced!'
             : 'Meeting synced successfully!',
           'success'
@@ -536,10 +561,10 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           <div>
             <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
               <Video className="w-5 h-5 text-blue-400" />
-              Live Class Management (Google Meet & Manual Link)
+              Live Class Management (Zero-Login Live Room)
             </h3>
             <p className="text-xs text-zinc-400 mt-0.5">
-              1-click Google Meet Space creation or Direct Manual Links (Meet/Zoom) • 80-seat atomic capacity & course-enrolled FCM alerts.
+              Built-in In-App Live Classroom for Mentor & Enrolled Students — zero Google sign-up or external app login needed • 80-seat capacity & automated reminders.
             </p>
           </div>
 
@@ -577,24 +602,10 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
         {health && (
           <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
-              <span
-                className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                  meetConnected
-                    ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-300'
-                    : 'bg-blue-950/50 border-blue-500/30 text-blue-300'
-                }`}
-              >
-                <Video className="w-3.5 h-3.5" />
-                Google Meet: {meetConnected ? `Connected (${meetUserEmail || 'Ready'})` : '1-Click Sign-In Ready'}
+              <span className="px-2.5 py-1 rounded-lg border bg-emerald-950/50 border-emerald-500/30 text-emerald-300 flex items-center gap-1.5">
+                <Radio className="w-3.5 h-3.5" />
+                Live Room: Zero-Login In-App Classroom Ready (No Google Sign-In Required)
               </span>
-              {!meetConnected && (
-                <GoogleSignInButton
-                  compact
-                  onClick={handleConnectGoogleMeet}
-                  disabled={isConnectingGoogle}
-                  label={isConnectingGoogle ? 'Connecting...' : 'Sign in with Google'}
-                />
-              )}
               <span
                 className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
                   health.firebaseAdminConfigured
@@ -674,24 +685,29 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
               <div className="space-y-3 bg-zinc-900/60 border border-zinc-800 rounded-xl p-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                    Live Meeting Provider
+                    Live Classroom Mode
                   </span>
                   <span className="text-[11px] text-emerald-400 font-semibold">
-                    Google Meet requires zero Marketplace setup
+                    Recommended: In-App Room requires zero Google sign-in
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(
                     [
                       {
-                        id: 'google_meet',
-                        title: 'Google Meet (Auto)',
-                        sub: '1-click instant Meet link',
+                        id: 'builtin',
+                        title: 'AI Clipzone Live Room',
+                        sub: 'Zero Google login for Mentor & Students',
                       },
                       {
                         id: 'manual',
                         title: 'Manual Link',
                         sub: 'Paste any Meet / Zoom / Live URL',
+                      },
+                      {
+                        id: 'google_meet',
+                        title: 'Google Meet (Optional)',
+                        sub: 'Requires Mentor Google Sign-In',
                       },
                     ] as const
                   ).map((opt) => (
@@ -986,6 +1002,8 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                 <span>
                   {editingClass
                     ? 'Save Changes'
+                    : formProvider === 'builtin'
+                    ? 'Create Live Class (No Login Room)'
                     : formProvider === 'google_meet'
                     ? 'Create Live Class + Google Meet'
                     : 'Save Live Class + Link'}
@@ -1026,7 +1044,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           <Video className="w-10 h-10 text-zinc-600 mx-auto" />
           <p className="text-sm font-bold text-zinc-300">No live classes found in this view.</p>
           <p className="text-xs text-zinc-500">
-            Click &ldquo;Create Live Class&rdquo; to schedule a Google Meet or Manual Link session for any course.
+            Click &ldquo;Create Live Class&rdquo; to launch a Zero-Login In-App Live Room or paste any custom link.
           </p>
         </div>
       ) : (
@@ -1071,7 +1089,9 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                       {cls.zoomCreated ? (
                         <span className="text-[11px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/25 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" />
-                          {clsProvider === 'google_meet'
+                          {clsProvider === 'builtin'
+                            ? 'Zero-Login Live Room Ready'
+                            : clsProvider === 'google_meet'
                             ? 'Google Meet Ready'
                             : clsProvider === 'manual'
                             ? 'Manual Link Ready'
@@ -1111,12 +1131,16 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                     <div className="bg-zinc-950/90 border border-zinc-800 rounded-xl p-3 text-xs space-y-2 shrink-0 min-w-[260px]">
                       <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500">
                         <span className="flex items-center gap-1">
-                          {clsProvider === 'manual' ? (
+                          {clsProvider === 'builtin' ? (
+                            <Radio className="w-3 h-3 text-emerald-400" />
+                          ) : clsProvider === 'manual' ? (
                             <Link2 className="w-3 h-3 text-blue-400" />
                           ) : (
                             <Lock className="w-3 h-3 text-blue-400" />
                           )}
-                          {clsProvider === 'google_meet'
+                          {clsProvider === 'builtin'
+                            ? 'In-App Classroom'
+                            : clsProvider === 'google_meet'
                             ? 'Google Meet Details'
                             : clsProvider === 'manual'
                             ? 'Live Link Details'
@@ -1125,7 +1149,11 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-zinc-400">
-                          {clsProvider === 'google_meet' ? 'Meet Code:' : 'Meeting ID:'}
+                          {clsProvider === 'builtin'
+                            ? 'Room Code:'
+                            : clsProvider === 'google_meet'
+                            ? 'Meet Code:'
+                            : 'Meeting ID:'}
                         </span>
                         <button
                           type="button"
@@ -1140,6 +1168,28 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                           )}
                         </button>
                       </div>
+                      {clsProvider === 'builtin' && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-zinc-400">Student Link:</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCopy(
+                                `link-${cls.id}`,
+                                `${window.location.origin}/?tab=live&classId=${cls.id}`
+                              )
+                            }
+                            className="font-bold text-blue-300 hover:text-blue-200 flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedText === `link-${cls.id}` ? 'Copied!' : 'Copy Direct Link'}
+                            {copiedText === `link-${cls.id}` ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                      )}
                       {cls.zoomPasscode && (
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-zinc-400">Passcode:</span>
@@ -1157,7 +1207,17 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                           </button>
                         </div>
                       )}
-                      {cls.zoomStartUrl && (
+                      {clsProvider === 'builtin' ? (
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleStartBuiltinRoom(cls)}
+                          className="mt-1 w-full py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white font-black text-[11px] flex items-center justify-center gap-1.5 shadow transition cursor-pointer disabled:opacity-60"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          <span>{isBusy ? 'Opening Room...' : 'Start / Join Live Room'}</span>
+                        </button>
+                      ) : cls.zoomStartUrl ? (
                         <a
                           href={cls.zoomStartUrl}
                           target="_blank"
@@ -1171,7 +1231,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                             ? 'Open Meeting Link'
                             : 'Start Meeting as Host'}
                         </a>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -1180,6 +1240,15 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                   <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <span>Sync Issue: {cls.zoomError}</span>
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleRetryZoom(cls, 'builtin')}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                      >
+                        <Radio className="w-3 h-3" />
+                        Switch to Zero-Login Room
+                      </button>
                       <button
                         type="button"
                         disabled={isBusy}
@@ -1423,6 +1492,17 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {activeLiveRoom && (
+        <LiveClassroomModal
+          session={activeLiveRoom}
+          onClose={() => {
+            setActiveLiveRoom(null);
+            void loadData();
+          }}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 };

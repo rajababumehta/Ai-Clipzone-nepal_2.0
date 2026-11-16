@@ -32,6 +32,7 @@ import {
   registerForLiveClass,
 } from '../utils/liveClassApi';
 import { getNotificationPermission, isNotificationSupported } from '../utils/notifications';
+import { LiveClassroomModal } from './LiveClassroomModal';
 
 interface StudentLiveClassesViewProps {
   courses: Course[];
@@ -90,6 +91,7 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [joinSessionModal, setJoinSessionModal] = useState<LiveClassJoinResponse | null>(null);
+  const [activeLiveRoom, setActiveLiveRoom] = useState<LiveClassJoinResponse | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const notifPermission = isNotificationSupported() ? getNotificationPermission() : 'denied';
@@ -225,7 +227,11 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
     setBusyId(cls.id);
     try {
       const res = await joinLiveClass(cls.id);
-      setJoinSessionModal(res);
+      if ((res.provider === 'builtin' || cls.provider === 'builtin') && res.roomToken) {
+        setActiveLiveRoom(res);
+      } else {
+        setJoinSessionModal(res);
+      }
       await loadClasses();
     } catch (err: any) {
       showToast(err?.message || 'Cannot join live session right now', 'error');
@@ -389,6 +395,8 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
                   <span>
                     {isFull && !cls.isRegistered
                       ? `Class Full (${maxCap}/${maxCap})`
+                      : cls.provider === 'builtin'
+                      ? 'Join Live Room (No Login)'
                       : cls.provider === 'google_meet'
                       ? 'Join Google Meet'
                       : cls.provider === 'manual'
@@ -725,6 +733,17 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {activeLiveRoom && (
+        <LiveClassroomModal
+          session={activeLiveRoom}
+          onClose={() => {
+            setActiveLiveRoom(null);
+            void loadClasses();
+          }}
+          showToast={showToast}
+        />
+      )}
     </section>
   );
 };
