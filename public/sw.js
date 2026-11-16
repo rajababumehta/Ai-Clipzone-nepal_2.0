@@ -1,5 +1,5 @@
 // Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v30';
+const CACHE_NAME = 'aiclipzone-pwa-v31';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -87,10 +87,15 @@ self.addEventListener('fetch', (event) => {
   if (isNavigation) {
     event.respondWith(
       fetch(event.request)
-        .then((networkResponse) => {
+        .then(async (networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+            return networkResponse;
+          }
+          if (networkResponse && networkResponse.status === 404) {
+            const fallback = (await caches.match('/')) || (await caches.match('/index.html'));
+            if (fallback) return fallback;
           }
           return networkResponse;
         })

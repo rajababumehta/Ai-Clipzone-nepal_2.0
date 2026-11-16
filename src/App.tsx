@@ -3571,7 +3571,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'live' | 'ask' | 'account'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === 'live') return 'live';
+      const path = window.location.pathname.replace(/\/+$/, '');
+      if (params.get('tab') === 'live' || path === '/live') return 'live';
     } catch {}
     return 'home';
   });
@@ -3942,7 +3943,8 @@ export default function App() {
     const syncUrlParams = () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        if (params.get('tab') === 'live') {
+        const path = window.location.pathname.replace(/\/+$/, '');
+        if (params.get('tab') === 'live' || path === '/live') {
           setCurrentView('live');
           const cid = params.get('classId');
           if (cid) setFocusedLiveClassId(cid);
@@ -8597,7 +8599,7 @@ export default function App() {
         unreadIds={unreadNotifIds}
         showToast={showToast}
         onNotificationClick={(notif) => {
-          if (notif.liveClassId || (notif.url && notif.url.includes('tab=live'))) {
+          if (notif.liveClassId || (notif.url && (notif.url.includes('tab=live') || notif.url.includes('/live')))) {
             setShowNotifCenterModal(false);
             setCurrentView('live');
             if (notif.liveClassId) {
