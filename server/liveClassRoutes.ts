@@ -613,6 +613,12 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
 
       // 2. Verify course exists in Firestore `courses` (or accept provided title if fallback)
       const courseSnap = await db.collection('courses').doc(courseId).get();
+      if (adminCtx.role === 'sub_admin' && courseSnap.exists && !courseSnap.data()?.hasLiveSessions) {
+        return res.status(403).json({
+          error: 'Live Classes are not enabled for this course by Main Admin.',
+          code: 'LIVE_NOT_ENABLED_BY_ADMIN',
+        });
+      }
       const courseTitle = courseSnap.exists
         ? String(courseSnap.data()?.title || req.body?.courseTitle || courseId)
         : String(req.body?.courseTitle || courseId);

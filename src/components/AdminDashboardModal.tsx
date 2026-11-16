@@ -148,6 +148,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     ? allActivationKeys
     : allActivationKeys.filter(k => k.courseId === assignedCourseId);
   const assignedCourse = isSubAdmin ? courses.find(c => c.id === assignedCourseId) : undefined;
+  const canManageLiveClasses = isMainAdmin || Boolean(assignedCourse?.hasLiveSessions);
 
   const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'liveclasses' | 'notifications' | 'ask'>(initialTab);
 
@@ -233,9 +234,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Enforce role-based activeTab and assigned course lock
   useEffect(() => {
     if (isSubAdmin) {
-      if (initialTab && ['keys', 'liveclasses', 'courses', 'qr', 'ask'].includes(initialTab)) {
+      const allowedTabs = canManageLiveClasses
+        ? ['keys', 'liveclasses', 'courses', 'qr', 'ask']
+        : ['keys', 'courses', 'qr', 'ask'];
+      if (initialTab && allowedTabs.includes(initialTab)) {
         setActiveTab(initialTab);
-      } else if (!['keys', 'liveclasses', 'courses', 'qr', 'ask'].includes(activeTab)) {
+      } else if (!allowedTabs.includes(activeTab)) {
         setActiveTab('keys');
       }
       if (assignedCourseId) {
@@ -245,7 +249,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     } else if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab, isOpen, isSubAdmin, assignedCourseId]);
+  }, [initialTab, isOpen, isSubAdmin, assignedCourseId, canManageLiveClasses]);
 
   // Keys Tab states
   const [genSelectedCourseId, setGenSelectedCourseId] = useState(assignedCourseId || '');
@@ -995,17 +999,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             {isMainAdmin ? `📚 Course Catalog (${visibleCourses.length})` : '📚 My Course Details'}
           </button>
 
-          <button
-            onClick={() => setActiveTab('liveclasses')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'liveclasses'
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md font-bold'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-            🔴 Live Classes (Zoom)
-          </button>
+          {canManageLiveClasses && (
+            <button
+              onClick={() => setActiveTab('liveclasses')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'liveclasses'
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md font-bold'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+              🔴 Live Classes
+            </button>
+          )}
 
           {isMainAdmin && (
             <button
@@ -2994,6 +3000,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           {course.hasLiveSessions && (
                             <span className="text-red-700 bg-red-50 text-[10px] font-black px-1.5 py-0.5 rounded border border-red-200">
                               🔴 Live Included
+                              {course.liveStartingDate ? ` • Start: ${course.liveStartingDate}` : ''}
+                              {course.admissionCloseDate ? ` • Close: ${course.admissionCloseDate}` : ''}
                             </span>
                           )}
                         </div>
@@ -3041,7 +3049,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           )}
 
-          {activeTab === 'liveclasses' && (
+          {canManageLiveClasses && activeTab === 'liveclasses' && (
             <AdminLiveClassesTab
               courses={courses}
               allActivationKeys={allActivationKeys}

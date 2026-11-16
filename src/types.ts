@@ -23,6 +23,8 @@ export interface Course {
   isPopular?: boolean;
   popularText?: string;
   hasLiveSessions?: boolean;
+  liveStartingDate?: string;
+  admissionCloseDate?: string;
   order?: number;
   language?: string;
   videos: CourseVideo[];

@@ -173,7 +173,15 @@
         },
         "hasLiveSessions": {
           "type": "boolean",
-          "description": "Whether Zoom live classes are included in this course"
+          "description": "Whether live classes are included in this course"
+        },
+        "liveStartingDate": {
+          "type": "string",
+          "description": "Course live batch starting date (YYYY-MM-DD) when live sessions are included"
+        },
+        "admissionCloseDate": {
+          "type": "string",
+          "description": "Admission close date (YYYY-MM-DD) when live sessions are included"
         },
         "videos": {
           "type": "array",

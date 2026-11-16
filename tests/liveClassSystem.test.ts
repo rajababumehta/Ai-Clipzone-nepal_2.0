@@ -180,8 +180,15 @@ async function startTestApp(opts: {
     status: 'active',
     activeDeviceId: 'subdev-1',
   });
-  await db.collection('courses').doc('ai-masterclass').set({ id: 'ai-masterclass', title: 'AI Master Class' });
-  await db.collection('courses').doc('youtube-blueprint').set({ id: 'youtube-blueprint', title: 'YouTube Blueprint' });
+  await db.collection('sub_admins').doc('SUB-YT200').set({
+    code: 'SUB-YT200',
+    name: 'Course YT SubAdmin',
+    courseId: 'youtube-blueprint',
+    status: 'active',
+    activeDeviceId: 'subdev-2',
+  });
+  await db.collection('courses').doc('ai-masterclass').set({ id: 'ai-masterclass', title: 'AI Master Class', hasLiveSessions: true });
+  await db.collection('courses').doc('youtube-blueprint').set({ id: 'youtube-blueprint', title: 'YouTube Blueprint', hasLiveSessions: false });
 
   // Enrolled student for ai-masterclass (with FCM token)
   await db.collection('activation_keys').doc('ENROLLED1').set({
@@ -552,6 +559,22 @@ test('Scenario 8 & 10: Duplicate notifications prevented & automated 30m/5m remi
       }),
     });
     assert.equal(crossCourseRes.status, 403);
+
+    // Sub-Admin for youtube-blueprint (where Main Admin did NOT enable hasLiveSessions) -> 403 Forbidden
+    const disabledLiveRes = await reqJson(ctx.baseUrl, '/', {
+      method: 'POST',
+      headers: {
+        'x-subadmin-code': 'SUB-YT200',
+        'x-device-id': 'subdev-2',
+      },
+      body: JSON.stringify({
+        courseId: 'youtube-blueprint',
+        title: 'Unauthorized Live On Non-Live Course',
+        scheduledStartAt: Date.now() + 25 * 60_000,
+      }),
+    });
+    assert.equal(disabledLiveRes.status, 403);
+    assert.equal(disabledLiveRes.data.code, 'LIVE_NOT_ENABLED_BY_ADMIN');
 
     // Admin creates & publishes class starting in 28 minutes (inside 30m reminder window)
     const createRes = await reqJson(ctx.baseUrl, '/', {

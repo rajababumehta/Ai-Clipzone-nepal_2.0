@@ -797,6 +797,8 @@ export default function App() {
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
   const [formHasLiveSessions, setFormHasLiveSessions] = useState(false);
+  const [formLiveStartingDate, setFormLiveStartingDate] = useState('');
+  const [formAdmissionCloseDate, setFormAdmissionCloseDate] = useState('');
   const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string; chapterTitle?: string }[]>([]);
@@ -4319,6 +4321,8 @@ export default function App() {
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
     setFormHasLiveSessions(Boolean(course.hasLiveSessions));
+    setFormLiveStartingDate(course.liveStartingDate || '');
+    setFormAdmissionCloseDate(course.admissionCloseDate || '');
     setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
@@ -4342,6 +4346,8 @@ export default function App() {
     setFormIsPopular(false);
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
     setFormHasLiveSessions(false);
+    setFormLiveStartingDate('');
+    setFormAdmissionCloseDate('');
     setFormLanguage('Hindi & Nepali');
     setFormLearnText('');
     setFormVideos([]);
@@ -4362,6 +4368,10 @@ export default function App() {
     }
     if (!formTitle.trim() || !formPrice.trim() || !formImage.trim()) {
       showToast('Please fill in all required fields (Title, Price, Image URL)', 'error');
+      return;
+    }
+    if (isMainAdmin && formHasLiveSessions && (!formLiveStartingDate.trim() || !formAdmissionCloseDate.trim())) {
+      showToast('Live Class समावेश गर्दा Starting Date र Admission Close Date दुवै राख्नुहोस्।', 'error');
       return;
     }
 
@@ -4394,7 +4404,13 @@ export default function App() {
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
-      hasLiveSessions: formHasLiveSessions,
+      hasLiveSessions: isMainAdmin ? formHasLiveSessions : Boolean(editingCourse?.hasLiveSessions),
+      liveStartingDate: isMainAdmin
+        ? (formHasLiveSessions ? formLiveStartingDate.trim() || undefined : undefined)
+        : editingCourse?.liveStartingDate,
+      admissionCloseDate: isMainAdmin
+        ? (formHasLiveSessions ? formAdmissionCloseDate.trim() || undefined : undefined)
+        : editingCourse?.admissionCloseDate,
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos,
@@ -6209,10 +6225,7 @@ export default function App() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                        <span className="bg-zinc-950/85 backdrop-blur-md text-zinc-300 text-xs font-semibold px-3 py-1 rounded-lg border border-zinc-750">
-                          Lifetime Access
-                        </span>
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-end">
                         <span className="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
                           Instant Delivery
                         </span>
@@ -6270,9 +6283,21 @@ export default function App() {
                             📜 Certificate
                           </span>
                           {course.hasLiveSessions && (
-                            <span className="bg-rose-950/60 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/30 flex items-center gap-1">
-                              🔴 Live Sessions Included
-                            </span>
+                            <>
+                              <span className="bg-rose-950/60 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/30 flex items-center gap-1">
+                                🔴 Live Sessions Included
+                              </span>
+                              {course.liveStartingDate && (
+                                <span className="bg-emerald-950/50 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded-xl border border-emerald-500/30">
+                                  📅 Starts: {course.liveStartingDate}
+                                </span>
+                              )}
+                              {course.admissionCloseDate && (
+                                <span className="bg-amber-950/50 text-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-xl border border-amber-500/30">
+                                  ⏳ Admission Close: {course.admissionCloseDate}
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
 
@@ -7805,25 +7830,56 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Live Session Included Toggle */}
-                <div className="bg-zinc-900 p-3.5 rounded-xl border border-zinc-800">
-                  <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-200 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={formHasLiveSessions}
-                      onChange={(e) => setFormHasLiveSessions(e.target.checked)}
-                      className="rounded border-zinc-700 text-rose-600 focus:ring-rose-500 w-4 h-4 bg-black mt-0.5 shrink-0"
-                    />
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 text-white font-extrabold">
-                        <span>🔴 Live Session Included (Zoom Live Classes)</span>
+                {/* Live Session Included Toggle (MAIN ADMIN ONLY) */}
+                {isMainAdmin && (
+                  <div className="bg-zinc-900 p-3.5 rounded-xl border border-zinc-800 space-y-3">
+                    <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={formHasLiveSessions}
+                        onChange={(e) => setFormHasLiveSessions(e.target.checked)}
+                        className="rounded border-zinc-700 text-rose-600 focus:ring-rose-500 w-4 h-4 bg-black mt-0.5 shrink-0"
+                      />
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-white font-extrabold">
+                          <span>🔴 Live Session Included (Google Meet / Live Classes)</span>
+                        </div>
+                        <p className="text-[11px] font-medium text-zinc-400 leading-relaxed">
+                          Enable this if this course includes Live Classes. Only courses with this option enabled will show the Live tab to students and Sub-Admins.
+                        </p>
                       </div>
-                      <p className="text-[11px] font-medium text-zinc-400 leading-relaxed">
-                        Enable this if this course includes Live Zoom Classes. The Live tab and Live Class sessions will only be shown to students who activate a course with Live Sessions included.
-                      </p>
-                    </div>
-                  </label>
-                </div>
+                    </label>
+
+                    {formHasLiveSessions && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-zinc-800">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-emerald-400 mb-1.5">
+                            Live Class Starting Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={formLiveStartingDate}
+                            onChange={(e) => setFormLiveStartingDate(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold text-white transition outline-hidden"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-amber-400 mb-1.5">
+                            Admission Close Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={formAdmissionCloseDate}
+                            onChange={(e) => setFormAdmissionCloseDate(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-amber-500 rounded-xl px-3.5 py-2 text-xs font-semibold text-white transition outline-hidden"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* What You Learn (Newline separated) */}
                 <div>
