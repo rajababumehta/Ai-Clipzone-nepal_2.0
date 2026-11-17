@@ -83,7 +83,6 @@ import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
-import { QrCodeScannerPanel } from './components/QrCodeScannerPanel';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 
@@ -3156,11 +3155,14 @@ export default function App() {
     }
     const existingCourse = courses.find(c => c.id === updatedCourse.id);
     const safeCourse: Course = isMainAdmin
-      ? updatedCourse
+      ? {
+          ...updatedCourse,
+          includeCertificate: updatedCourse.includeLive ? false : updatedCourse.includeCertificate,
+        }
       : {
           ...updatedCourse,
           includeLive: existingCourse?.includeLive,
-          includeCertificate: existingCourse?.includeCertificate,
+          includeCertificate: existingCourse?.includeLive ? false : existingCourse?.includeCertificate,
         };
     const cleaned = cleanUndefined(safeCourse);
     setCourses(prev => {
@@ -3564,28 +3566,6 @@ export default function App() {
   const [openDetailChapters, setOpenDetailChapters] = useState<Record<string, boolean>>({});
   const [activationCodeInput, setActivationCodeInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
-  const [qrScannerContext, setQrScannerContext] = useState<'modal' | 'account' | 'renew' | 'classroom' | null>(null);
-
-  useEffect(() => {
-    if (!showCodeInputModal && qrScannerContext === 'modal') {
-      setQrScannerContext(null);
-    }
-  }, [showCodeInputModal, qrScannerContext]);
-
-  const handleQrCodeScanned = useCallback((rawDecodedText: string) => {
-    let candidate = String(rawDecodedText || '').trim();
-    if (/^https?:\/\//i.test(candidate)) {
-      try {
-        const u = new URL(candidate);
-        const paramCode = u.searchParams.get('code') || u.searchParams.get('key') || u.searchParams.get('activation');
-        if (paramCode) candidate = paramCode;
-      } catch {}
-    }
-    const cleaned = extractAndCleanCode(candidate) || candidate.toUpperCase();
-    setActivationCodeInput(cleaned);
-    setQrScannerContext(null);
-    showToast(`📷 QR कोड स्क्यान भई पेस्ट गरियो: ${cleaned}`, 'success');
-  }, [showToast]);
 
   // Reusable clipboard paste handler for course activation code
   const handlePasteCodeToInput = useCallback(async (targetSetter?: (val: string) => void) => {
@@ -3886,6 +3866,20 @@ export default function App() {
     [isSubAdmin, subAdminSession?.courseId, courses]
   );
   const canSubAdminAccessLive = Boolean(isSubAdmin && subAdminAssignedCourse?.includeLive === true);
+  const hasStudentLiveCourse = Boolean(
+    !isUserAdminSession &&
+    courses.some((c) => activeCourseIds.includes(c.id) && c.includeLive === true)
+  );
+  const canShowLiveNav = Boolean(canSubAdminAccessLive || hasStudentLiveCourse);
+  const hasActiveLiveNow = useMemo(() => {
+    if (canSubAdminAccessLive && subAdminSession?.courseId) {
+      return liveSessions.some((s) => s.courseId === subAdminSession.courseId && s.status === 'live');
+    }
+    if (hasStudentLiveCourse) {
+      return liveSessions.some((s) => activeCourseIds.includes(s.courseId) && s.status === 'live');
+    }
+    return false;
+  }, [canSubAdminAccessLive, subAdminSession?.courseId, hasStudentLiveCourse, liveSessions, activeCourseIds]);
   const canEditCourse = useCallback(
     (courseId: string) => isMainAdmin || (isSubAdmin && subAdminSession?.courseId === courseId),
     [isMainAdmin, isSubAdmin, subAdminSession?.courseId]
@@ -4432,7 +4426,7 @@ export default function App() {
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
     setFormIncludeLive(Boolean(course.includeLive));
-    setFormIncludeCertificate(course.includeCertificate !== false);
+    setFormIncludeCertificate(course.includeLive ? false : course.includeCertificate !== false);
     setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
@@ -4505,13 +4499,20 @@ export default function App() {
       price: formPrice,
       amount: Number(formAmount) || 299,
       message: formMessage || `I want to buy ${formTitle}`,
-      learn: learnArray.length > 0 ? learnArray : ['Interactive AI Learning', 'Certificate of Completion Included', 'Lifetime Updates Access'],
+      learn:
+        learnArray.length > 0
+          ? learnArray
+          : formIncludeLive
+          ? ['Interactive AI Learning', 'Live Interactive Zoom Sessions', 'Practical Step-by-Step Training']
+          : ['Interactive AI Learning', 'Certificate of Completion Included', 'Practical Step-by-Step Training'],
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
-      // Strictly Main-Admin-only editable flags: Sub-Admins preserve existing values unchanged
+      // Strictly Main-Admin-only editable flags: Live courses NEVER include certificates
       includeLive: isMainAdmin ? formIncludeLive : Boolean(editingCourse?.includeLive),
-      includeCertificate: isMainAdmin ? formIncludeCertificate : (editingCourse?.includeCertificate ?? true),
+      includeCertificate: isMainAdmin
+        ? (formIncludeLive ? false : formIncludeCertificate)
+        : (editingCourse?.includeLive ? false : (editingCourse?.includeCertificate ?? true)),
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos,
@@ -5406,42 +5407,20 @@ export default function App() {
 
                 <form onSubmit={handleClaimActivationCode} className="space-y-4 pt-1">
                   <div className="space-y-2 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase text-blue-400 tracking-wider">
                         Secret Activation Code (सेक्रेट कोड) *
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setQrScannerContext((prev) => (prev === 'account' ? null : 'account'))}
-                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95 ${
-                            qrScannerContext === 'account'
-                              ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                          }`}
-                          title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Scan QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePasteCodeToInput()}
-                          className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
-                          title="Clipboard बाट कोड Paste गर्नुहोस्"
-                        >
-                          <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
-                          <span>Paste</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
+                        <span>📋 Paste Code</span>
+                      </button>
                     </div>
-
-                    {qrScannerContext === 'account' && (
-                      <QrCodeScannerPanel
-                        onScanSuccess={handleQrCodeScanned}
-                        onClose={() => setQrScannerContext(null)}
-                      />
-                    )}
 
                     <div className="relative flex items-center">
                       <input 
@@ -6237,42 +6216,20 @@ export default function App() {
 
                   {/* Instant Reactivation Form */}
                   <form onSubmit={handleClaimActivationCode} className="space-y-3 pt-2 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase tracking-wider text-zinc-300">
                         नयाँ सेक्रेट कोड राख्नुहोस् (Enter New Secret Code)
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setQrScannerContext((prev) => (prev === 'renew' ? null : 'renew'))}
-                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer active:scale-95 ${
-                            qrScannerContext === 'renew'
-                              ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                          }`}
-                          title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Scan QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePasteCodeToInput()}
-                          className="text-[11px] font-extrabold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer active:scale-95"
-                          title="Clipboard बाट कोड Paste गर्नुहोस्"
-                        >
-                          <ClipboardPaste className="w-3.5 h-3.5" />
-                          <span>Paste</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>📋 Paste</span>
+                      </button>
                     </div>
-
-                    {qrScannerContext === 'renew' && (
-                      <QrCodeScannerPanel
-                        onScanSuccess={handleQrCodeScanned}
-                        onClose={() => setQrScannerContext(null)}
-                      />
-                    )}
 
                     <div className="relative flex items-center">
                       <input 
@@ -6354,42 +6311,20 @@ export default function App() {
                   </div>
 
                   <form onSubmit={handleClaimActivationCode} className="space-y-3 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
                         Secret Activation Code (सेक्रेट कोड) *
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setQrScannerContext((prev) => (prev === 'classroom' ? null : 'classroom'))}
-                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer active:scale-95 ${
-                            qrScannerContext === 'classroom'
-                              ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                          }`}
-                          title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Scan QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePasteCodeToInput()}
-                          className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer active:scale-95"
-                          title="Clipboard बाट कोड Paste गर्नुहोस्"
-                        >
-                          <ClipboardPaste className="w-3.5 h-3.5" />
-                          <span>Paste</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>📋 Paste</span>
+                      </button>
                     </div>
-
-                    {qrScannerContext === 'classroom' && (
-                      <QrCodeScannerPanel
-                        onScanSuccess={handleQrCodeScanned}
-                        onClose={() => setQrScannerContext(null)}
-                      />
-                    )}
 
                     <div className="relative flex items-center">
                       <input 
@@ -6531,10 +6466,7 @@ export default function App() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                        <span className="bg-zinc-950/85 backdrop-blur-md text-zinc-300 text-xs font-semibold px-3 py-1 rounded-lg border border-zinc-750">
-                          Lifetime Access
-                        </span>
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-end">
                         <span className="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
                           Instant Delivery
                         </span>
@@ -7360,17 +7292,14 @@ export default function App() {
             />
 
             {/* Modal Box */}
-              <motion.div
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-black max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-zinc-800 text-zinc-200 max-h-[92vh] overflow-y-auto"
+              className="bg-black max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-zinc-800 text-zinc-200"
             >
               <button 
-                onClick={() => {
-                  setQrScannerContext(null);
-                  setShowCodeInputModal(false);
-                }}
+                onClick={() => setShowCodeInputModal(false)}
                 className="absolute top-5 right-5 text-zinc-400 hover:text-white transition cursor-pointer p-1 rounded-full hover:bg-zinc-800"
               >
                 <X className="w-5 h-5" />
@@ -7384,54 +7313,31 @@ export default function App() {
                 Add New Course to Student ID
               </h3>
               <p className="text-xs text-zinc-400 mt-1.5 text-center font-medium">
-                तपाईंसँग भएको सेक्रेट कोड (CLIP-XXXXXX) यहाँ राखी वा QR स्क्यान गरी आफ्नो एकाउन्टमा नयाँ कोर्स जोड्नुहोस्।
+                तपाईंसँग भएको सेक्रेट कोड (CLIP-XXXXXX) यहाँ राखी आफ्नो यही एकाउन्टमा नयाँ कोर्स जोड्नुहोस्।
               </p>
 
               <form 
                 onSubmit={async (e) => {
-                  setQrScannerContext(null);
                   await handleClaimActivationCode(e);
                   setShowCodeInputModal(false);
                 }} 
                 className="mt-6 space-y-4 text-left"
               >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
-                      Secret Activation Code *
+                      Secret Activation Code (सेक्रेट कोड) *
                     </label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQrScannerContext((prev) => (prev === 'modal' ? null : 'modal'))}
-                        className={`text-[11px] font-extrabold px-3 py-1 rounded-xl border transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
-                          qrScannerContext === 'modal'
-                            ? 'bg-emerald-600 text-white border-emerald-500'
-                            : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                        }`}
-                        title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        <span>{qrScannerContext === 'modal' ? 'Close QR' : 'Scan QR'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePasteCodeToInput()}
-                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                        title="Clipboard बाट कोड Paste गर्नुहोस्"
-                      >
-                        <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Paste</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePasteCodeToInput()}
+                      className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                      title="Clipboard बाट कोड Paste गर्नुहोस्"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
+                      <span>📋 Paste Code</span>
+                    </button>
                   </div>
-
-                  {qrScannerContext === 'modal' && (
-                    <QrCodeScannerPanel
-                      onScanSuccess={handleQrCodeScanned}
-                      onClose={() => setQrScannerContext(null)}
-                    />
-                  )}
 
                   <div className="relative flex items-center">
                     <input 
@@ -7481,7 +7387,7 @@ export default function App() {
                   </div>
 
                   <p className="text-[11px] text-zinc-400 font-medium">
-                    💡 सजिलै <strong>Scan QR</strong> बाट स्क्यान गर्नुहोस्, <strong>Paste</strong> थिच्नुहोस् वा कोड टाइप गर्नुहोस्।
+                    💡 सजिलै <strong>Paste</strong> बटन थिच्नुहोस् वा आफ्नो कोड टाइप गर्नुहोस्।
                   </p>
                 </div>
 
@@ -8196,28 +8102,37 @@ export default function App() {
                       <input
                         type="checkbox"
                         checked={formIncludeLive}
-                        onChange={(e) => setFormIncludeLive(e.target.checked)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFormIncludeLive(checked);
+                          if (checked) {
+                            setFormIncludeCertificate(false);
+                          }
+                        }}
                         className="rounded border-zinc-700 text-rose-600 focus:ring-rose-500 w-4 h-4 bg-black mt-0.5"
                       />
                       <div>
                         <span>🎥 Include Live Session (Zoom Live Class)</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          सक्रिय विद्यार्थीहरूलाई Course Section मा Certificate को सट्टा Live Session देखा पर्नेछ र Sub-Admin लाई Live मेनु खुल्नेछ।
+                          सक्रिय विद्यार्थी र Sub-Admin लाई Live मेनु देखा पर्नेछ (Live कोर्षमा Certificate हुँदैन)।
                         </span>
                       </div>
                     </label>
 
-                    <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-100 cursor-pointer select-none pt-1 border-t border-zinc-800">
+                    <label className={`flex items-start gap-2.5 text-xs font-bold select-none pt-1 border-t border-zinc-800 ${formIncludeLive ? 'text-zinc-500 cursor-not-allowed opacity-60' : 'text-zinc-100 cursor-pointer'}`}>
                       <input
                         type="checkbox"
-                        checked={formIncludeCertificate}
+                        disabled={formIncludeLive}
+                        checked={formIncludeLive ? false : formIncludeCertificate}
                         onChange={(e) => setFormIncludeCertificate(e.target.checked)}
-                        className="rounded border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 bg-black mt-0.5"
+                        className="rounded border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 bg-black mt-0.5 disabled:opacity-40"
                       />
                       <div>
                         <span>📜 Include Course Certificate</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          Live Session सक्रिय नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।
+                          {formIncludeLive
+                            ? 'Live Class समावेश भएको कोर्षमा Certificate विकल्प स्वतः बन्द रहन्छ।'
+                            : 'Live Session नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।'}
                         </span>
                       </div>
                     </label>
@@ -9018,35 +8933,52 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-              currentView === 'classroom' || currentView === 'course-live'
+              currentView === 'classroom'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
             <div className="relative flex items-center justify-center shrink-0">
-              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' || currentView === 'course-live' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 2b. Live Menu - STRICTLY ONLY for Sub-Admins whose assigned course includes Live (NEVER shown to regular users) */}
-          {canSubAdminAccessLive && (
+          {/* 2b. Live Menu - Shown to Sub-Admins assigned a Live course AND to Students enrolled in a Live course */}
+          {canShowLiveNav && (
             <button
               id="app-nav-live"
               onClick={() => {
                 setShowProfileModal(false);
-                setCurrentView('live');
+                if (canSubAdminAccessLive) {
+                  setCurrentView('live');
+                } else {
+                  const activeLiveCourses = courses.filter(
+                    (c) => activeCourseIds.includes(c.id) && c.includeLive === true
+                  );
+                  const preferredCourse =
+                    activeLiveCourses.find((c) => c.id === selectedLiveCourseId) ||
+                    activeLiveCourses.find((c) => c.id === selectedClassroomCourseId) ||
+                    activeLiveCourses[0];
+                  if (preferredCourse) {
+                    setSelectedLiveCourseId(preferredCourse.id);
+                  }
+                  setCurrentView('course-live');
+                }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-                currentView === 'live'
+                (canSubAdminAccessLive && currentView === 'live') || (hasStudentLiveCourse && currentView === 'course-live')
                   ? 'text-rose-400 font-bold bg-rose-500/10 md:bg-rose-600/15 md:border md:border-rose-500/40 md:shadow-md md:shadow-rose-500/15'
                   : 'text-zinc-400 hover:text-rose-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
               }`}
             >
               <div className="relative flex items-center justify-center shrink-0">
-                <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'live' ? 'stroke-[2.5] text-rose-400' : 'stroke-[1.8]'}`} />
+                <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${((canSubAdminAccessLive && currentView === 'live') || (hasStudentLiveCourse && currentView === 'course-live')) ? 'stroke-[2.5] text-rose-400' : 'stroke-[1.8]'}`} />
+                {hasActiveLiveNow && (
+                  <span className="w-2 h-2 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
+                )}
               </div>
               <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Live</span>
             </button>
