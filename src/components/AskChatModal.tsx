@@ -45,12 +45,13 @@ import {
   query, 
   orderBy,
   increment,
-  limit
+  limit,
+  where
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth, getSubAdminPublicProfileId, reportFirestoreNonFatal, OperationType } from '../firebase';
 import { VerifiedBadge } from './VerifiedBadge';
 import { cleanLegacyLogoUrl } from '../data';
-import { Course, SubAdminAccount, SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
+import { Course, SubAdminAccount, SubAdminPublicProfile, SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
 
 interface AskChatModalProps {
   isOpen: boolean;
@@ -65,7 +66,7 @@ interface AskChatModalProps {
   isAdmin?: boolean;
   adminRole?: 'main_admin' | 'sub_admin';
   subAdminSession?: SubAdminAccount | null;
-  subAdmins?: SubAdminAccount[];
+  subAdmins?: (SubAdminAccount | SubAdminPublicProfile)[];
   courses?: Course[];
   activeCourseIds?: string[];
   allActivationKeys?: any[];
@@ -247,15 +248,21 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   }, [isAdmin, currentUserId, studentName, initialStudentName, userEmail, allActivationKeys]);
 
   // --------------------------------------------------------------------------
-  // STUDENT ROUTING TO ASSIGNED COURSE SUB-ADMIN (NEVER TO MAIN ADMIN)
+  // STUDENT ROUTING TO ASSIGNED COURSE SUB-ADMIN (NEVER TO MAIN ADMIN OR RAW SUB CODE)
   // --------------------------------------------------------------------------
+  const resolveSubProfileId = (sub: SubAdminAccount | SubAdminPublicProfile): string => {
+    if ('publicProfileId' in sub && sub.publicProfileId) return sub.publicProfileId;
+    if ('code' in sub && sub.code) return getSubAdminPublicProfileId(sub.code);
+    return sub.id;
+  };
+
   const studentSubAdminTargets = useMemo(() => {
     if (isAdmin) return [];
     const activeSubs = (subAdmins || []).filter(s => s.status === 'active');
     if (activeSubs.length === 0) return [];
 
-    const targets: { courseId: string; courseTitle: string; courseWhatsapp?: string; subAdmin: SubAdminAccount }[] = [];
-    const seenSubCodes = new Set<string>();
+    const targets: { courseId: string; courseTitle: string; courseWhatsapp?: string; profileId: string; subAdmin: SubAdminAccount | SubAdminPublicProfile }[] = [];
+    const seenProfileIds = new Set<string>();
 
     const checkCourseList = activeCourseIds.includes('course-all')
       ? courses
@@ -265,14 +272,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       const matchedSub = activeSubs.find(
         s => s.courseId === crs.id || s.courseTitle.trim().toLowerCase() === crs.title.trim().toLowerCase()
       );
-      if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
-        seenSubCodes.add(matchedSub.code);
-        targets.push({
-          courseId: crs.id,
-          courseTitle: crs.title,
-          courseWhatsapp: crs.paymentConfig?.whatsappNumber,
-          subAdmin: matchedSub
-        });
+      if (matchedSub) {
+        const pid = resolveSubProfileId(matchedSub);
+        if (!seenProfileIds.has(pid)) {
+          seenProfileIds.add(pid);
+          targets.push({
+            courseId: crs.id,
+            courseTitle: crs.title,
+            courseWhatsapp: crs.paymentConfig?.whatsappNumber,
+            profileId: pid,
+            subAdmin: matchedSub
+          });
+        }
       }
     });
 
@@ -280,13 +291,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     activeCourseIds.forEach((cid) => {
       if (cid === 'course-all') return;
       const matchedSub = activeSubs.find(s => s.courseId === cid);
-      if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
-        seenSubCodes.add(matchedSub.code);
-        targets.push({
-          courseId: cid,
-          courseTitle: matchedSub.courseTitle,
-          subAdmin: matchedSub
-        });
+      if (matchedSub) {
+        const pid = resolveSubProfileId(matchedSub);
+        if (!seenProfileIds.has(pid)) {
+          seenProfileIds.add(pid);
+          targets.push({
+            courseId: cid,
+            courseTitle: matchedSub.courseTitle,
+            profileId: pid,
+            subAdmin: matchedSub
+          });
+        }
       }
     });
 
@@ -297,9 +312,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
   useEffect(() => {
     if (!isAdmin && studentSubAdminTargets.length > 0) {
-      const stillValid = studentSubAdminTargets.some(t => t.subAdmin.code === selectedStudentSubCode);
+      const stillValid = studentSubAdminTargets.some(t => t.profileId === selectedStudentSubCode);
       if (!stillValid) {
-        setSelectedStudentSubCode(studentSubAdminTargets[0].subAdmin.code);
+        setSelectedStudentSubCode(studentSubAdminTargets[0].profileId);
       }
     } else {
       setSelectedStudentSubCode('');
@@ -308,13 +323,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
   const activeStudentTarget = useMemo(() => {
     if (studentSubAdminTargets.length === 0) return null;
-    return studentSubAdminTargets.find(t => t.subAdmin.code === selectedStudentSubCode) || studentSubAdminTargets[0];
+    return studentSubAdminTargets.find(t => t.profileId === selectedStudentSubCode) || studentSubAdminTargets[0];
   }, [studentSubAdminTargets, selectedStudentSubCode]);
 
   const studentConvId = useMemo(() => {
     const uid = effectiveUserId || currentUserId;
     if (!uid || !activeStudentTarget) return '';
-    return `substudent__${activeStudentTarget.subAdmin.code}__${uid}`;
+    return `substudent__${activeStudentTarget.profileId}__${uid}`;
   }, [effectiveUserId, currentUserId, activeStudentTarget]);
 
   // --------------------------------------------------------------------------
@@ -350,15 +365,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
   }, [studentConvId]);
 
-  // Sync student avatar to Sub-Admin conversation in Firestore
+  // Sync student avatar to existing Sub-Admin conversation in Firestore
   useEffect(() => {
     const effectivePhoto = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
     if (!isAdmin && studentConvId && effectivePhoto) {
       try {
-        setDoc(doc(db, 'support_conversations', studentConvId), {
+        updateDoc(doc(db, 'support_conversations', studentConvId), {
           userAvatar: effectivePhoto,
           updatedAt: Date.now()
-        }, { merge: true }).catch(() => {});
+        }).catch(() => {});
       } catch (e) {}
     }
   }, [isOpen, isAdmin, studentConvId, studentAvatar]);
@@ -474,33 +489,34 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
   // ==========================================================================
   // 2. ADMIN / SUB-ADMIN MODE: Role-isolated Messenger Listener
-  //    - Main Admin: All Sub-Admins ONLY (never student chats)
-  //    - Sub-Admin: Official Main Admin (pinned top) + ONLY course students
+  //    - Main Admin: All Sub-Admins ONLY (never student chats, scoped query)
+  //    - Sub-Admin: Official Main Admin (direct doc) + ONLY assigned course students (scoped query)
   // ==========================================================================
   useEffect(() => {
     if (!isOpen || !isAdmin) return;
 
     setIsLoadingAdminConvs(true);
     const convsRef = collection(db, 'support_conversations');
-    const q = query(convsRef, orderBy('lastMessageAt', 'desc'), limit(300));
     const normTitle = (t?: string) => (t || '').trim().toLowerCase();
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        if (isMainAdminMode) {
+    if (isMainAdminMode) {
+      const qMain = query(convsRef, where('channelType', '==', 'subadmin_mainadmin'), limit(150));
+      const unsubscribe = onSnapshot(
+        qMain,
+        (snapshot) => {
           const subDocMap = new Map<string, any>();
           snapshot.forEach((docSnap) => {
             const d = docSnap.data();
-            if (d.channelType === 'subadmin_mainadmin' || docSnap.id.startsWith('subadmin_main__')) {
-              const code = d.subAdminCode || docSnap.id.replace('subadmin_main__', '');
+            const code = d.subAdminCode || docSnap.id.replace('subadmin_main__', '');
+            if (code) {
               subDocMap.set(code, { id: docSnap.id, ...d });
             }
           });
 
           const list: SupportConversation[] = [];
           const seen = new Set<string>();
-          (subAdmins || []).forEach((sub) => {
+          (subAdmins || []).forEach((rawSub) => {
+            const sub = rawSub as SubAdminAccount;
             if (!sub.code) return;
             seen.add(sub.code);
             const remote = subDocMap.get(sub.code);
@@ -568,217 +584,252 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           if (!selectedAdminConvId && list.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
             setSelectedAdminConvId(list[0].id);
           }
-          return;
+        },
+        (err) => {
+          reportFirestoreNonFatal(err, OperationType.LIST, 'support_conversations');
+          setIsLoadingAdminConvs(false);
         }
+      );
+      return () => unsubscribe();
+    }
 
-        if (isSubAdminMode && subAdminSession) {
-          const officialThreadId = `subadmin_main__${subAdminSession.code}`;
-          let officialRemote: any = null;
-          const studentContactMap = new Map<string, SupportConversation>();
+    if (isSubAdminMode && subAdminSession) {
+      const officialThreadId = `subadmin_main__${subAdminSession.code}`;
+      const mySubProfileId = getSubAdminPublicProfileId(subAdminSession.code);
+      let latestOfficialRemote: any = null;
+      let latestStudentDocs: { id: string; data: any }[] = [];
 
-          const assignedCourseObj = courses.find(c => c.id === subAdminSession.courseId);
-          const assignedTitleNorm = normTitle(subAdminSession.courseTitle || assignedCourseObj?.title);
+      const rebuildSubAdminList = () => {
+        const studentContactMap = new Map<string, SupportConversation>();
+        const assignedCourseObj = courses.find(c => c.id === subAdminSession.courseId);
+        const assignedTitleNorm = normTitle(subAdminSession.courseTitle || assignedCourseObj?.title);
 
-          const isKeyForThisSubCourse = (k: any) => {
-            if (!k) return false;
-            if (k.courseId && k.courseId === subAdminSession.courseId) return true;
-            if (assignedTitleNorm && normTitle(k.courseTitle) === assignedTitleNorm) return true;
-            return false;
-          };
+        const isKeyForThisSubCourse = (k: any) => {
+          if (!k) return false;
+          if (k.courseId && k.courseId === subAdminSession.courseId) return true;
+          if (assignedTitleNorm && normTitle(k.courseTitle) === assignedTitleNorm) return true;
+          return false;
+        };
 
-          const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
-            const cName = cleanRealName(name).toLowerCase();
-            if (cName) return `name_${cName}`;
-            if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
-            if (code) return `code_${code.toLowerCase()}`;
-            return `uid_${uid}`;
-          };
+        const getStudentKey = (name: string, email: string, uid: string, code?: string) => {
+          const cName = cleanRealName(name).toLowerCase();
+          if (cName) return `name_${cName}`;
+          if (email && email.includes('@')) return `email_${email.toLowerCase()}`;
+          if (code) return `code_${code.toLowerCase()}`;
+          return `uid_${uid}`;
+        };
 
-          snapshot.forEach((docSnap) => {
-            const d = docSnap.data();
-            if (docSnap.id === officialThreadId || (d.channelType === 'subadmin_mainadmin' && d.subAdminCode === subAdminSession.code)) {
-              officialRemote = { id: docSnap.id, ...d };
-              return;
-            }
+        latestStudentDocs.forEach(({ id: docId, data: d }) => {
+          if (docId === officialThreadId || d.channelType === 'subadmin_mainadmin') return;
 
-            const belongsToSub =
-              (d.channelType === 'student_subadmin' &&
-                (d.subAdminCode === subAdminSession.code ||
-                  d.courseId === subAdminSession.courseId ||
-                  (assignedTitleNorm && normTitle(d.activeCourse) === assignedTitleNorm))) ||
-              docSnap.id.startsWith(`substudent__${subAdminSession.code}__`);
+          const belongsToSub =
+            d.channelType === 'student_subadmin' ||
+            docId.startsWith(`substudent__${mySubProfileId}__`) ||
+            docId.startsWith(`substudent__${subAdminSession.code}__`);
 
-            if (!belongsToSub) return;
+          if (!belongsToSub) return;
 
-            const rawStudentId = d.userId || docSnap.id.replace(`substudent__${subAdminSession.code}__`, '');
-            const convRealName = cleanRealName(d.userName);
+          const rawStudentId =
+            d.userId ||
+            docId
+              .replace(`substudent__${mySubProfileId}__`, '')
+              .replace(`substudent__${subAdminSession.code}__`, '');
+          const convRealName = cleanRealName(d.userName);
 
-            const matchedKey = Array.isArray(allActivationKeys)
-              ? allActivationKeys.find((k: any) => {
-                  if (!isKeyForThisSubCourse(k)) return false;
-                  if (k.claimedByUid && k.claimedByUid === rawStudentId) return true;
-                  if (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()) return true;
-                  const kName = cleanRealName(k.studentName) || cleanRealName(k.claimedByName);
-                  if (kName && convRealName && kName.toLowerCase() === convRealName.toLowerCase()) return true;
-                  return false;
-                })
-              : undefined;
+          const matchedKey = Array.isArray(allActivationKeys)
+            ? allActivationKeys.find((k: any) => {
+                if (!isKeyForThisSubCourse(k)) return false;
+                if (k.claimedByUid && k.claimedByUid === rawStudentId) return true;
+                if (k.claimedByEmail && d.userEmail && k.claimedByEmail.toLowerCase() === d.userEmail.toLowerCase()) return true;
+                const kName = cleanRealName(k.studentName) || cleanRealName(k.claimedByName);
+                if (kName && convRealName && kName.toLowerCase() === convRealName.toLowerCase()) return true;
+                return false;
+              })
+            : undefined;
 
-            let resolvedName = convRealName;
-            if (!resolvedName && matchedKey) {
-              resolvedName = cleanRealName(matchedKey.claimedByName) || cleanRealName(matchedKey.studentName);
-            }
-            if (!resolvedName && d.userEmail) {
-              const ep = d.userEmail.split('@')[0];
-              resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
-            }
-            if (!resolvedName) resolvedName = 'Student';
-
-            const courseTitle = subAdminSession.courseTitle || d.activeCourse || matchedKey?.courseTitle || 'Course';
-
-            // Resolve newest saved student avatar between Firestore conversation doc and activation key
-            const keyAvatar = matchedKey?.studentAvatar || '';
-            const convAvatar = d.userAvatar || '';
-            const resolvedAvatar =
-              (matchedKey?.studentAvatarUpdatedAt || 0) >= (d.updatedAt || 0)
-                ? keyAvatar || convAvatar
-                : convAvatar || keyAvatar;
-
-            const convObj: SupportConversation = {
-              id: docSnap.id,
-              userId: rawStudentId,
-              userName: resolvedName,
-              userEmail: d.userEmail || matchedKey?.claimedByEmail || '',
-              userPhone: d.userPhone || '',
-              userAvatar: resolvedAvatar,
-              channelType: 'student_subadmin',
-              subAdminCode: subAdminSession.code,
-              subAdminName: subAdminSession.name,
-              courseId: subAdminSession.courseId,
-              activeCourse: courseTitle,
-              purchasedCourses: [courseTitle],
-              lastMessage: d.lastMessage || '',
-              lastMessageAt: d.lastMessageAt || Date.now(),
-              lastSender: d.lastSender || 'user',
-              unreadAdminCount: d.unreadAdminCount || 0,
-              unreadUserCount: d.unreadUserCount || 0,
-              createdAt: d.createdAt || Date.now(),
-              updatedAt: d.updatedAt || Date.now(),
-              clearedByUserAt: d.clearedByUserAt || 0,
-              clearedByAdminAt: d.clearedByAdminAt || 0
-            };
-
-            const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', rawStudentId, matchedKey?.code);
-            const existing = studentContactMap.get(dedupKey);
-            if (!existing) {
-              studentContactMap.set(dedupKey, convObj);
-            } else {
-              const newerIsCurrent = (convObj.lastMessageAt || 0) >= (existing.lastMessageAt || 0);
-              const bestAvatar = newerIsCurrent
-                ? convObj.userAvatar || existing.userAvatar || ''
-                : existing.userAvatar || convObj.userAvatar || '';
-              studentContactMap.set(
-                dedupKey,
-                newerIsCurrent
-                  ? { ...existing, ...convObj, userAvatar: bestAvatar }
-                  : { ...convObj, ...existing, userAvatar: bestAvatar }
-              );
-            }
-          });
-
-          if (Array.isArray(allActivationKeys)) {
-            allActivationKeys.forEach((key: any) => {
-              const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
-              if (!isUsed || !isKeyForThisSubCourse(key)) return;
-              const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
-              if (!buyerId) return;
-
-              const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || 'Student';
-              const dedupKey = getStudentKey(keyRealName, key.claimedByEmail || '', buyerId, key.code || key.id);
-              const courseTitle = subAdminSession.courseTitle || key.courseTitle || 'Course';
-              const canonicalConvId = `substudent__${subAdminSession.code}__${buyerId}`;
-
-              const existing = studentContactMap.get(dedupKey);
-              if (!existing) {
-                studentContactMap.set(dedupKey, {
-                  id: canonicalConvId,
-                  userId: buyerId,
-                  userName: keyRealName,
-                  userEmail: key.claimedByEmail || '',
-                  userPhone: '',
-                  userAvatar: key.studentAvatar || '',
-                  channelType: 'student_subadmin',
-                  subAdminCode: subAdminSession.code,
-                  subAdminName: subAdminSession.name,
-                  courseId: subAdminSession.courseId,
-                  activeCourse: courseTitle,
-                  purchasedCourses: [courseTitle],
-                  lastMessage: `Activated: ${key.code || key.id}`,
-                  lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
-                  lastSender: 'system',
-                  unreadAdminCount: 0,
-                  unreadUserCount: 0,
-                  createdAt: key.createdAt || Date.now(),
-                  updatedAt: key.claimedAt || Date.now(),
-                  clearedByUserAt: 0,
-                  clearedByAdminAt: 0
-                });
-              } else {
-                if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
-                  existing.userName = keyRealName;
-                }
-                if (key.studentAvatar && (!existing.userAvatar || (key.studentAvatarUpdatedAt || 0) >= (existing.updatedAt || 0))) {
-                  existing.userAvatar = key.studentAvatar;
-                }
-              }
-            });
+          let resolvedName = convRealName;
+          if (!resolvedName && matchedKey) {
+            resolvedName = cleanRealName(matchedKey.claimedByName) || cleanRealName(matchedKey.studentName);
           }
+          if (!resolvedName && d.userEmail) {
+            const ep = d.userEmail.split('@')[0];
+            resolvedName = ep.charAt(0).toUpperCase() + ep.slice(1);
+          }
+          if (!resolvedName) resolvedName = 'Student';
 
-          const officialConv: SupportConversation = {
-            id: officialThreadId,
-            userId: 'MAIN_OFFICIAL_ADMIN',
-            userName: brandName,
-            userEmail: '',
-            userAvatar: officialLogoUrl,
-            channelType: 'subadmin_mainadmin',
+          const courseTitle = subAdminSession.courseTitle || d.activeCourse || matchedKey?.courseTitle || 'Course';
+          const keyAvatar = matchedKey?.studentAvatar || '';
+          const convAvatar = d.userAvatar || '';
+          const resolvedAvatar =
+            (matchedKey?.studentAvatarUpdatedAt || 0) >= (d.updatedAt || 0)
+              ? keyAvatar || convAvatar
+              : convAvatar || keyAvatar;
+
+          const convObj: SupportConversation = {
+            id: docId,
+            userId: rawStudentId,
+            userName: resolvedName,
+            userEmail: d.userEmail || matchedKey?.claimedByEmail || '',
+            userPhone: d.userPhone || '',
+            userAvatar: resolvedAvatar,
+            channelType: 'student_subadmin',
             subAdminCode: subAdminSession.code,
             subAdminName: subAdminSession.name,
             courseId: subAdminSession.courseId,
-            activeCourse: '',
-            purchasedCourses: [],
-            lastMessage: officialRemote?.lastMessage || `${brandName} सँग कुराकानी गर्नुहोस्`,
-            lastMessageAt: officialRemote?.lastMessageAt || Date.now(),
-            lastSender: officialRemote?.lastSender || 'system',
-            unreadAdminCount: officialRemote?.unreadAdminCount || 0,
-            unreadUserCount: officialRemote?.unreadUserCount || 0,
-            createdAt: officialRemote?.createdAt || Date.now(),
-            updatedAt: officialRemote?.updatedAt || Date.now(),
-            clearedByUserAt: officialRemote?.clearedByUserAt || 0,
-            clearedByAdminAt: officialRemote?.clearedByAdminAt || 0
+            activeCourse: courseTitle,
+            purchasedCourses: [courseTitle],
+            lastMessage: d.lastMessage || '',
+            lastMessageAt: d.lastMessageAt || Date.now(),
+            lastSender: d.lastSender || 'user',
+            unreadAdminCount: d.unreadAdminCount || 0,
+            unreadUserCount: d.unreadUserCount || 0,
+            createdAt: d.createdAt || Date.now(),
+            updatedAt: d.updatedAt || Date.now(),
+            clearedByUserAt: d.clearedByUserAt || 0,
+            clearedByAdminAt: d.clearedByAdminAt || 0
           };
 
-          const studentsList = Array.from(studentContactMap.values());
-          studentsList.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
-
-          const combined = [officialConv, ...studentsList];
-          setAdminConversations(combined);
-          setIsLoadingAdminConvs(false);
-          if (!selectedAdminConvId && combined.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-            setSelectedAdminConvId(combined[0].id);
+          const dedupKey = getStudentKey(resolvedName, convObj.userEmail || '', rawStudentId, matchedKey?.code);
+          const existing = studentContactMap.get(dedupKey);
+          if (!existing) {
+            studentContactMap.set(dedupKey, convObj);
+          } else {
+            const newerIsCurrent = (convObj.lastMessageAt || 0) >= (existing.lastMessageAt || 0);
+            const bestAvatar = newerIsCurrent
+              ? convObj.userAvatar || existing.userAvatar || ''
+              : existing.userAvatar || convObj.userAvatar || '';
+            studentContactMap.set(
+              dedupKey,
+              newerIsCurrent
+                ? { ...existing, ...convObj, userAvatar: bestAvatar }
+                : { ...convObj, ...existing, userAvatar: bestAvatar }
+            );
           }
-          return;
+        });
+
+        if (Array.isArray(allActivationKeys)) {
+          allActivationKeys.forEach((key: any) => {
+            const isUsed = key.status === 'used' || Boolean(key.claimedAt) || Boolean(key.activeDeviceId);
+            if (!isUsed || !isKeyForThisSubCourse(key)) return;
+            const buyerId = key.claimedByUid || (key.claimedByEmail ? `email_${key.claimedByEmail}` : null);
+            if (!buyerId) return;
+
+            const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || 'Student';
+            const dedupKey = getStudentKey(keyRealName, key.claimedByEmail || '', buyerId, key.code || key.id);
+            const courseTitle = subAdminSession.courseTitle || key.courseTitle || 'Course';
+            const canonicalConvId = `substudent__${mySubProfileId}__${buyerId}`;
+
+            const existing = studentContactMap.get(dedupKey);
+            if (!existing) {
+              studentContactMap.set(dedupKey, {
+                id: canonicalConvId,
+                userId: buyerId,
+                userName: keyRealName,
+                userEmail: key.claimedByEmail || '',
+                userPhone: '',
+                userAvatar: key.studentAvatar || '',
+                channelType: 'student_subadmin',
+                subAdminCode: subAdminSession.code,
+                subAdminName: subAdminSession.name,
+                courseId: subAdminSession.courseId,
+                activeCourse: courseTitle,
+                purchasedCourses: [courseTitle],
+                lastMessage: `Activated: ${key.code || key.id}`,
+                lastMessageAt: key.claimedAt || key.createdAt || Date.now(),
+                lastSender: 'system',
+                unreadAdminCount: 0,
+                unreadUserCount: 0,
+                createdAt: key.createdAt || Date.now(),
+                updatedAt: key.claimedAt || Date.now(),
+                clearedByUserAt: 0,
+                clearedByAdminAt: 0
+              });
+            } else {
+              if (!cleanRealName(existing.userName) || existing.userName === 'Student') {
+                existing.userName = keyRealName;
+              }
+              if (key.studentAvatar && (!existing.userAvatar || (key.studentAvatarUpdatedAt || 0) >= (existing.updatedAt || 0))) {
+                existing.userAvatar = key.studentAvatar;
+              }
+            }
+          });
         }
 
-        setAdminConversations([]);
-        setIsLoadingAdminConvs(false);
-      },
-      (err) => {
-        console.warn('Could not load admin support conversations:', err);
-        setIsLoadingAdminConvs(false);
-      }
-    );
+        const officialConv: SupportConversation = {
+          id: officialThreadId,
+          userId: 'MAIN_OFFICIAL_ADMIN',
+          userName: brandName,
+          userEmail: '',
+          userAvatar: officialLogoUrl,
+          channelType: 'subadmin_mainadmin',
+          subAdminCode: subAdminSession.code,
+          subAdminName: subAdminSession.name,
+          courseId: subAdminSession.courseId,
+          activeCourse: '',
+          purchasedCourses: [],
+          lastMessage: latestOfficialRemote?.lastMessage || `${brandName} सँग कुराकानी गर्नुहोस्`,
+          lastMessageAt: latestOfficialRemote?.lastMessageAt || Date.now(),
+          lastSender: latestOfficialRemote?.lastSender || 'system',
+          unreadAdminCount: latestOfficialRemote?.unreadAdminCount || 0,
+          unreadUserCount: latestOfficialRemote?.unreadUserCount || 0,
+          createdAt: latestOfficialRemote?.createdAt || Date.now(),
+          updatedAt: latestOfficialRemote?.updatedAt || Date.now(),
+          clearedByUserAt: latestOfficialRemote?.clearedByUserAt || 0,
+          clearedByAdminAt: latestOfficialRemote?.clearedByAdminAt || 0
+        };
 
-    return () => unsubscribe();
+        const studentsList = Array.from(studentContactMap.values());
+        studentsList.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
+        const combined = [officialConv, ...studentsList];
+        setAdminConversations(combined);
+        setIsLoadingAdminConvs(false);
+        if (!selectedAdminConvId && combined.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+          setSelectedAdminConvId(combined[0].id);
+        }
+      };
+
+      const unsubOfficial = onSnapshot(
+        doc(db, 'support_conversations', officialThreadId),
+        (docSnap) => {
+          latestOfficialRemote = docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+          rebuildSubAdminList();
+        },
+        (err) => {
+          reportFirestoreNonFatal(err, OperationType.GET, `support_conversations/${officialThreadId}`);
+          rebuildSubAdminList();
+        }
+      );
+
+      const subUid = subAdminSession.activeUid || auth.currentUser?.uid || '';
+      let unsubStudents = () => {};
+      if (subUid) {
+        const qSubStudents = query(
+          convsRef,
+          where('subAdminUid', '==', subUid),
+          limit(150)
+        );
+        unsubStudents = onSnapshot(
+          qSubStudents,
+          (snapshot) => {
+            latestStudentDocs = snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
+            rebuildSubAdminList();
+          },
+          (err) => {
+            reportFirestoreNonFatal(err, OperationType.LIST, 'support_conversations');
+            setIsLoadingAdminConvs(false);
+          }
+        );
+      }
+
+      return () => {
+        unsubOfficial();
+        unsubStudents();
+      };
+    }
+
+    setAdminConversations([]);
+    setIsLoadingAdminConvs(false);
   }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, selectedAdminConvId, brandName, officialLogoUrl]);
 
   // ==========================================================================
@@ -1061,22 +1112,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
     try {
       const effectiveAvatar = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
-      const messagesRef = collection(db, 'support_conversations', studentConvId, 'messages');
-      await addDoc(messagesRef, {
-        conversationId: studentConvId,
-        sender: 'user',
-        senderName: finalStudentName,
-        senderAvatar: effectiveAvatar || undefined,
-        text,
-        timestamp: now,
-        isSeen: false,
-        status: 'sent',
-        attachmentType: attachmentToSend?.type || undefined,
-        attachmentUrl: attachmentToSend?.url || undefined,
-        attachmentName: attachmentToSend?.name || undefined,
-        attachmentSize: attachmentToSend?.size || undefined
-      });
-
       const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
       const convRef = doc(db, 'support_conversations', studentConvId);
@@ -1085,11 +1120,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         {
           id: studentConvId,
           userId: targetUid,
+          ownerUid: auth.currentUser?.uid || targetUid,
           userName: finalStudentName,
           userEmail: userEmail || '',
-          userAvatar: effectiveAvatar || undefined,
+          ...(effectiveAvatar ? { userAvatar: effectiveAvatar } : {}),
           channelType: 'student_subadmin',
-          subAdminCode: activeStudentTarget.subAdmin.code,
+          subAdminProfileId: activeStudentTarget.profileId,
+          ...(activeStudentTarget.subAdmin.activeUid ? { subAdminUid: activeStudentTarget.subAdmin.activeUid } : {}),
           subAdminName: activeStudentTarget.subAdmin.name,
           courseId: activeStudentTarget.courseId,
           activeCourse: activeStudentTarget.courseTitle || activeCourseName || '',
@@ -1102,6 +1139,22 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         },
         { merge: true }
       );
+
+      const messagesRef = collection(db, 'support_conversations', studentConvId, 'messages');
+      await addDoc(messagesRef, {
+        conversationId: studentConvId,
+        sender: 'user',
+        senderName: finalStudentName,
+        ...(effectiveAvatar ? { senderAvatar: effectiveAvatar } : {}),
+        text,
+        timestamp: now,
+        isSeen: false,
+        status: 'sent',
+        ...(attachmentToSend?.type ? { attachmentType: attachmentToSend.type } : {}),
+        ...(attachmentToSend?.url ? { attachmentUrl: attachmentToSend.url } : {}),
+        ...(attachmentToSend?.name ? { attachmentName: attachmentToSend.name } : {}),
+        ...(attachmentToSend?.size ? { attachmentSize: attachmentToSend.size } : {})
+      });
     } catch (error) {
       console.error('Failed to send student message:', error);
       showToast?.('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
@@ -1135,22 +1188,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     const senderPhoto = isSubAdminMode && subAdminSession ? subAdminSession.avatarUrl || '' : officialLogoUrl;
 
     try {
-      const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
-      await addDoc(messagesRef, {
-        conversationId: selectedAdminConvId,
-        sender: msgSender,
-        senderName: senderLabel,
-        senderAvatar: senderPhoto || undefined,
-        text,
-        timestamp: now,
-        isSeen: false,
-        status: 'sent',
-        attachmentType: attachmentToSend?.type || undefined,
-        attachmentUrl: attachmentToSend?.url || undefined,
-        attachmentName: attachmentToSend?.name || undefined,
-        attachmentSize: attachmentToSend?.size || undefined
-      });
-
       const summaryText = text || (attachmentToSend?.type === 'image' ? 'Photo' : attachmentToSend?.name || 'Document');
 
       let realUserName = cleanRealName(targetConv?.userName);
@@ -1172,6 +1209,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       if (isSubViewingMainAdmin && subAdminSession) {
         convPayload.channelType = 'subadmin_mainadmin';
         convPayload.subAdminCode = subAdminSession.code;
+        if (auth.currentUser?.uid || subAdminSession.activeUid) {
+          convPayload.subAdminUid = auth.currentUser?.uid || subAdminSession.activeUid;
+        }
         convPayload.subAdminName = subAdminSession.name;
         convPayload.courseId = subAdminSession.courseId;
         convPayload.activeCourse = subAdminSession.courseTitle;
@@ -1194,12 +1234,16 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);
       } else if (isSubAdminMode && subAdminSession) {
+        const myProfileId = getSubAdminPublicProfileId(subAdminSession.code);
         convPayload.channelType = 'student_subadmin';
-        convPayload.subAdminCode = subAdminSession.code;
+        convPayload.subAdminProfileId = myProfileId;
+        if (auth.currentUser?.uid || subAdminSession.activeUid) {
+          convPayload.subAdminUid = auth.currentUser?.uid || subAdminSession.activeUid;
+        }
         convPayload.subAdminName = subAdminSession.name;
         convPayload.courseId = subAdminSession.courseId;
         convPayload.activeCourse = subAdminSession.courseTitle;
-        convPayload.userId = targetConv?.userId || selectedAdminConvId.replace(`substudent__${subAdminSession.code}__`, '');
+        convPayload.userId = targetConv?.userId || selectedAdminConvId.replace(`substudent__${myProfileId}__`, '').replace(`substudent__${subAdminSession.code}__`, '');
         convPayload.userName = realUserName;
         convPayload.userEmail = targetConv?.userEmail || '';
         if (targetConv?.userAvatar) {
@@ -1211,6 +1255,22 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       }
 
       await setDoc(convRef, convPayload, { merge: true });
+
+      const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
+      await addDoc(messagesRef, {
+        conversationId: selectedAdminConvId,
+        sender: msgSender,
+        senderName: senderLabel,
+        ...(senderPhoto ? { senderAvatar: senderPhoto } : {}),
+        text,
+        timestamp: now,
+        isSeen: false,
+        status: 'sent',
+        ...(attachmentToSend?.type ? { attachmentType: attachmentToSend.type } : {}),
+        ...(attachmentToSend?.url ? { attachmentUrl: attachmentToSend.url } : {}),
+        ...(attachmentToSend?.name ? { attachmentName: attachmentToSend.name } : {}),
+        ...(attachmentToSend?.size ? { attachmentSize: attachmentToSend.size } : {})
+      });
     } catch (error) {
       console.error('Failed to send reply:', error);
       showToast?.('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
@@ -2070,7 +2130,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </span>
                       <VerifiedBadge
                         variant={
-                          !activeStudentTarget || activeStudentTarget.subAdmin.code === 'MAIN_ADMIN'
+                          !activeStudentTarget ||
+                          ('code' in activeStudentTarget.subAdmin && activeStudentTarget.subAdmin.code === 'MAIN_ADMIN')
                             ? 'main_admin'
                             : 'sub_admin'
                         }
@@ -2180,12 +2241,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               {hasActivatedCourse && studentSubAdminTargets.length > 1 && (
                 <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
                   {studentSubAdminTargets.map((target) => {
-                    const isActiveTarget = target.subAdmin.code === activeStudentTarget?.subAdmin.code;
+                    const isActiveTarget = target.profileId === activeStudentTarget?.profileId;
                     return (
                       <button
-                        key={target.subAdmin.code}
+                        key={target.profileId}
                         type="button"
-                        onClick={() => setSelectedStudentSubCode(target.subAdmin.code)}
+                        onClick={() => setSelectedStudentSubCode(target.profileId)}
                         className={`pl-1.5 pr-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition inline-flex items-center gap-2 border ${
                           isActiveTarget
                             ? 'bg-[#00a884] text-black border-[#00a884] shadow-sm'
@@ -2203,7 +2264,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         />
                         <span>{target.subAdmin.name}</span>
                         <VerifiedBadge
-                          variant={target.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
+                          variant={'code' in target.subAdmin && target.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
                           className="w-3.5 h-3.5"
                         />
                       </button>
@@ -2298,7 +2359,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <h4 className="text-[#e9edef] font-bold text-base inline-flex items-center justify-center gap-1.5">
                             <span>{activeStudentTarget.subAdmin.name}</span>
                             <VerifiedBadge
-                              variant={activeStudentTarget.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
+                              variant={
+                                'code' in activeStudentTarget.subAdmin && activeStudentTarget.subAdmin.code === 'MAIN_ADMIN'
+                                  ? 'main_admin'
+                                  : 'sub_admin'
+                              }
                               className="w-4 h-4"
                             />
                           </h4>

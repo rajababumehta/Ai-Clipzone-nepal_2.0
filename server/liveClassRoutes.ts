@@ -204,22 +204,22 @@ export async function dispatchLiveClassNotifications(params: {
 
   if (messaging) {
     try {
-      const fcmSnap = await db.collection('fcmTokens').get();
+      const targetCourseId = String(classData.courseId || '').trim();
+      const filterCourses = targetCourseId && targetCourseId !== 'course-all'
+        ? [targetCourseId, 'course-all']
+        : ['course-all'];
+      const fcmSnap = await db
+        .collection('fcmTokens')
+        .where('enrolledCourseIds', 'array-contains-any', filterCourses)
+        .limit(1000)
+        .get();
       const targetTokens: { docId: string; token: string }[] = [];
 
       for (const docSnap of fcmSnap.docs) {
         const d = docSnap.data() as Record<string, any>;
         const token = typeof d.token === 'string' ? d.token.trim() : '';
         if (!token) continue;
-
-        const enrolledCourses: string[] = Array.isArray(d.enrolledCourseIds) ? d.enrolledCourseIds : [];
-        const hasCourse =
-          enrolledCourses.includes('course-all') ||
-          enrolledCourses.includes(String(classData.courseId));
-
-        if (hasCourse) {
-          targetTokens.push({ docId: docSnap.id, token });
-        }
+        targetTokens.push({ docId: docSnap.id, token });
       }
 
       tokenCount = targetTokens.length;

@@ -70,10 +70,11 @@ import {
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
-import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
-import { db, auth } from './firebase';
+import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, SubAdminPublicProfile, LiveSession, CourseProgressRecord } from './types';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { db, auth, testConnection, ensureFirebaseSignedIn, getSubAdminPublicProfileId, OperationType, handleFirestoreError, reportFirestoreNonFatal } from './firebase';
+import { safeJsonParse, safeStorageGet, safeStorageSet, safeStorageSetBoundedArray } from './utils/safeStorage';
 import { CertificateModal } from './components/CertificateModal';
 import { ImageAdjustModal } from './components/ImageAdjustModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
@@ -85,53 +86,6 @@ import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error Details:', JSON.stringify(errInfo, null, 2));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 function cleanUndefined<T extends object>(obj: T): T {
   const clean: any = {};
@@ -317,7 +271,17 @@ export default function App() {
     } catch {}
     return [];
   });
-  const [activeSubAdmins, setActiveSubAdmins] = useState<SubAdminAccount[]>([]);
+  const [activeSubAdmins, setActiveSubAdmins] = useState<SubAdminPublicProfile[]>([]);
+  const [lastAdminKeyDoc, setLastAdminKeyDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMoreAdminKeys, setHasMoreAdminKeys] = useState<boolean>(false);
+  const [isLoadingMoreKeys, setIsLoadingMoreKeys] = useState<boolean>(false);
+  const [courseProgressMap, setCourseProgressMap] = useState<Record<string, CourseProgressRecord>>(() => {
+    const savedUid = safeStorageGet('clipzone_student_uid', '');
+    return safeJsonParse<Record<string, CourseProgressRecord>>(
+      safeStorageGet(`clipzone_user_progress_${savedUid || 'local'}`, ''),
+      {}
+    );
+  });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
@@ -548,22 +512,22 @@ export default function App() {
       ])
     );
 
-    let poolSubs: SubAdminAccount[] = Array.from(
+    let poolSubs: SubAdminPublicProfile[] = Array.from(
       new Map(
-        [...activeSubAdmins, ...subAdminList]
+        activeSubAdmins
           .filter((s) => s.status === 'active')
-          .map((s) => [s.code, s])
+          .map((s) => [s.id, s])
       ).values()
     );
 
     if (poolSubs.length === 0) {
       try {
         const subSnap = await getDocs(
-          query(collection(db, 'sub_admins'), where('status', '==', 'active'))
+          query(collection(db, 'sub_admin_profiles'), where('status', '==', 'active'), limit(100))
         );
-        const fetched: SubAdminAccount[] = [];
+        const fetched: SubAdminPublicProfile[] = [];
         subSnap.forEach((d) => {
-          fetched.push({ id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) });
+          fetched.push({ id: d.id, ...(d.data() as Omit<SubAdminPublicProfile, 'id'>) });
         });
         poolSubs = fetched;
       } catch {}
@@ -585,15 +549,16 @@ export default function App() {
       const courseObj = courses.find((c) => c.id === sub.courseId);
       const courseTitle = sub.courseTitle || courseObj?.title || 'Course';
       candidateUids.forEach((uid) => {
-        const convId = `substudent__${sub.code}__${uid}`;
+        const convId = `substudent__${sub.id}__${uid}`;
         setDoc(
           doc(db, 'support_conversations', convId),
           {
             id: convId,
             userId: uid,
+            ownerUid: auth.currentUser?.uid || uid,
             userName: realName,
             channelType: 'student_subadmin',
-            subAdminCode: sub.code,
+            subAdminProfileId: sub.id,
             subAdminName: sub.name,
             courseId: sub.courseId,
             activeCourse: courseTitle,
@@ -866,11 +831,13 @@ export default function App() {
             setCourses(initialCourses);
             localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(initialCourses));
             localStorage.setItem('clipzone_courses_initialized', 'true');
-            // Seed to Firestore once
-            initialCourses.forEach(c => {
-              setDoc(doc(db, 'courses', c.id), c).catch(() => {});
-            });
-            setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true }).catch(() => {});
+            // Seed to Firestore once if signed in as verified admin
+            if (isFirebaseUserAdmin(auth.currentUser?.email, auth.currentUser)) {
+              initialCourses.forEach(c => {
+                setDoc(doc(db, 'courses', c.id), c).catch(() => {});
+              });
+              setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true }).catch(() => {});
+            }
           }
           setIsCoursesLoading(false);
         }
@@ -932,9 +899,9 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Realtime listener for live_sessions collection
+  // Realtime listener for live_sessions collection (bounded for million-user scale)
   useEffect(() => {
-    const liveQuery = query(collection(db, 'live_sessions'), orderBy('createdAt', 'desc'));
+    const liveQuery = query(collection(db, 'live_sessions'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(liveQuery, (snapshot) => {
       try {
         const list: LiveSession[] = [];
@@ -950,7 +917,7 @@ export default function App() {
         console.warn('Live sessions parse error:', e);
       }
     }, (err) => {
-      console.warn('Live sessions listener error:', err);
+      reportFirestoreNonFatal(err, OperationType.LIST, 'live_sessions');
     });
 
     return () => unsubscribe();
@@ -1225,22 +1192,29 @@ export default function App() {
       }
     }
 
+    const authUser = await ensureFirebaseSignedIn().catch(() => auth.currentUser);
     const deviceId = getOrCreateDeviceId();
     const updatedSub: SubAdminAccount = {
       ...subAccount,
       lastLoginAt: Date.now(),
-      activeDeviceId: deviceId
+      activeDeviceId: deviceId,
+      activeUid: authUser?.uid || subAccount.activeUid || ''
     };
     setSubAdminSession(updatedSub);
-    localStorage.setItem('clipzone_sub_admin_session', JSON.stringify(updatedSub));
+    safeStorageSet('clipzone_sub_admin_session', JSON.stringify(updatedSub));
 
     try {
       await setDoc(doc(db, 'sub_admins', subAccount.code), {
         lastLoginAt: updatedSub.lastLoginAt,
-        activeDeviceId: deviceId
+        activeDeviceId: deviceId,
+        ...(authUser?.uid ? { activeUid: authUser.uid } : {})
       }, { merge: true });
+      if (authUser?.uid) {
+        const pid = subAccount.publicProfileId || getSubAdminPublicProfileId(subAccount.code);
+        setDoc(doc(db, 'sub_admin_profiles', pid), { activeUid: authUser.uid, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+      }
     } catch (err) {
-      console.warn('Error updating sub-admin login session:', err);
+      reportFirestoreNonFatal(err, OperationType.UPDATE, `sub_admins/${subAccount.code}`);
     }
   };
 
@@ -1296,16 +1270,20 @@ export default function App() {
     }
   };
 
-  // Realtime enforcement: Single-device Admin Login
+  // Realtime enforcement: Single-device Admin Login (only active when Main Admin mode is active)
   useEffect(() => {
+    const localSessionId = localStorage.getItem('clipzone_admin_session_id');
+    const isAdminContext = isAdminActivated || Boolean(localSessionId);
+    if (!isAdminContext) return;
+
     const unsubAdminSession = onSnapshot(doc(db, 'system', 'admin_session'), (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
       const remoteSessionId = data?.activeSessionId;
-      const localSessionId = localStorage.getItem('clipzone_admin_session_id');
+      const currLocalSessionId = localStorage.getItem('clipzone_admin_session_id');
 
       // If this device was admin-activated, but remote activeSessionId is now different:
-      if (localSessionId && remoteSessionId && remoteSessionId !== localSessionId) {
+      if (currLocalSessionId && remoteSessionId && remoteSessionId !== currLocalSessionId) {
         setIsAdminActivated(false);
         localStorage.removeItem('clipzone_admin_session_id');
         localStorage.removeItem('clipzone_admin_activated');
@@ -1314,30 +1292,17 @@ export default function App() {
         showToast('⚠️ Admin session expired: अर्को डिभाइसमा लगइन भएकोले यो डिभाइस लगआउट भयो (Single Device Limit)', 'error');
       }
     }, (err) => {
-      console.warn('Admin session listener warning:', err);
+      reportFirestoreNonFatal(err, OperationType.GET, 'system/admin_session');
     });
 
-    // On mount, check if localSessionId is still the active session in Firestore
-    const localSessionId = localStorage.getItem('clipzone_admin_session_id');
     const legacyAdmin = localStorage.getItem('clipzone_admin_activated');
     if (legacyAdmin && !localSessionId) {
       localStorage.removeItem('clipzone_admin_activated');
       setIsAdminActivated(false);
-    } else if (localSessionId) {
-      getDoc(doc(db, 'system', 'admin_session')).then((snap) => {
-        if (snap.exists()) {
-          const remoteSessionId = snap.data()?.activeSessionId;
-          if (remoteSessionId && remoteSessionId !== localSessionId) {
-            localStorage.removeItem('clipzone_admin_session_id');
-            localStorage.removeItem('clipzone_admin_activated');
-            setIsAdminActivated(false);
-          }
-        }
-      }).catch(() => {});
     }
 
     return () => unsubAdminSession();
-  }, [showToast]);
+  }, [isAdminActivated, showToast]);
 
   const getOrCreateLocalUser = (displayName: string) => {
     // 1. Check if an existing activated key matches this student to guarantee persistent canonical UID
@@ -1506,25 +1471,35 @@ export default function App() {
     }
   };
 
+  // Startup Firestore connectivity probe + silent anonymous auth session
+  useEffect(() => {
+    testConnection().catch(() => {});
+  }, []);
+
   // Firebase Authentication Observer & User Keys Fetcher
   useEffect(() => {
+    let attemptedAutoAnon = false;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
         setAuthLoading(false);
         fetchUserActiveKeys(user);
       } else {
+        if (!attemptedAutoAnon) {
+          attemptedAutoAnon = true;
+          ensureFirebaseSignedIn().catch(() => {});
+        }
         const localName = localStorage.getItem('clipzone_student_name');
         if (localName) {
           const virtualUser = getOrCreateLocalUser(localName);
           setCurrentUser(virtualUser as any);
         }
         // Always preserve activated courses from persistent local storage so student is never auto-logged out
-        const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        const localActivated = safeJsonParse<string[]>(safeStorageGet('clipzone_local_activated_courses', '[]'), []);
         if (localActivated.length > 0) {
           setActiveCourseIds(localActivated);
         }
-        const localKeys = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+        const localKeys = safeJsonParse<any[]>(safeStorageGet('clipzone_activated_keys_info', '[]'), []);
         if (localKeys.length > 0) {
           setUserActivationKeys(localKeys);
         }
@@ -1542,6 +1517,97 @@ export default function App() {
       clearTimeout(safetyTimeout);
     };
   }, []);
+
+  // Sync LMS Course Progress (Video & PDF completion) from Firestore user_progress/{uid} + offline cache
+  useEffect(() => {
+    const firebaseUid = auth.currentUser?.uid;
+    const localUid = safeStorageGet('clipzone_student_uid', '');
+    const storageKey = `clipzone_user_progress_${firebaseUid || localUid || 'local'}`;
+    const localCached = safeJsonParse<Record<string, CourseProgressRecord>>(safeStorageGet(storageKey, '{}'), {});
+    if (Object.keys(localCached).length > 0) {
+      setCourseProgressMap(localCached);
+    }
+
+    if (!firebaseUid) return;
+    const progressRef = doc(db, 'user_progress', firebaseUid);
+    const unsub = onSnapshot(
+      progressRef,
+      (snap) => {
+        if (snap.exists()) {
+          const remoteCourses = (snap.data()?.courses || {}) as Record<string, CourseProgressRecord>;
+          setCourseProgressMap((prev) => {
+            const merged: Record<string, CourseProgressRecord> = { ...prev };
+            Object.entries(remoteCourses).forEach(([cid, rRec]) => {
+              const pRec = prev[cid];
+              if (!pRec || (rRec?.updatedAt || 0) >= (pRec?.updatedAt || 0)) {
+                merged[cid] = {
+                  completedVideoIndices: Array.isArray(rRec?.completedVideoIndices) ? rRec.completedVideoIndices : [],
+                  completedPdfIndices: Array.isArray(rRec?.completedPdfIndices) ? rRec.completedPdfIndices : [],
+                  updatedAt: rRec?.updatedAt || Date.now()
+                };
+              }
+            });
+            safeStorageSet(storageKey, JSON.stringify(merged));
+            return merged;
+          });
+        }
+      },
+      (err) => {
+        reportFirestoreNonFatal(err, OperationType.GET, `user_progress/${firebaseUid}`);
+      }
+    );
+
+    return () => unsub();
+  }, [currentUser?.uid]);
+
+  const toggleLessonComplete = useCallback(
+    (courseId: string, kind: 'video' | 'pdf', index: number, forceComplete?: boolean) => {
+      if (!courseId || index < 0) return;
+      const now = Date.now();
+      setCourseProgressMap((prev) => {
+        const existing = prev[courseId] || { completedVideoIndices: [], completedPdfIndices: [], updatedAt: now };
+        const targetArr = kind === 'video' ? [...(existing.completedVideoIndices || [])] : [...(existing.completedPdfIndices || [])];
+        const existsIdx = targetArr.indexOf(index);
+        if (forceComplete === true) {
+          if (existsIdx === -1) targetArr.push(index);
+          else return prev;
+        } else if (existsIdx !== -1) {
+          targetArr.splice(existsIdx, 1);
+        } else {
+          targetArr.push(index);
+        }
+        targetArr.sort((a, b) => a - b);
+
+        const nextRecord: CourseProgressRecord = {
+          completedVideoIndices: kind === 'video' ? targetArr : (existing.completedVideoIndices || []),
+          completedPdfIndices: kind === 'pdf' ? targetArr : (existing.completedPdfIndices || []),
+          updatedAt: now
+        };
+        const nextMap = { ...prev, [courseId]: nextRecord };
+
+        const firebaseUid = auth.currentUser?.uid;
+        const localUid = safeStorageGet('clipzone_student_uid', '');
+        safeStorageSet(`clipzone_user_progress_${firebaseUid || localUid || 'local'}`, JSON.stringify(nextMap));
+
+        if (firebaseUid) {
+          setDoc(
+            doc(db, 'user_progress', firebaseUid),
+            {
+              userId: firebaseUid,
+              courses: nextMap,
+              updatedAt: now
+            },
+            { merge: true }
+          ).catch((err) => {
+            reportFirestoreNonFatal(err, OperationType.WRITE, `user_progress/${firebaseUid}`);
+          });
+        }
+
+        return nextMap;
+      });
+    },
+    []
+  );
 
   // Device session check on window focus or visibility change (avoids aggressive 12s interval killing sessions on mobile)
   useEffect(() => {
@@ -2007,14 +2073,55 @@ export default function App() {
     }
   };
 
-  // Check if a Firebase user counts as an administrator
-  const isFirebaseUserAdmin = (email: string | null | undefined): boolean => {
+  // Check if a Firebase user counts as an administrator (strict emailVerified whitelist, zero pattern backdoors)
+  const isFirebaseUserAdmin = (email: string | null | undefined, userObj?: FirebaseUser | null): boolean => {
     if (!email) return false;
     const lower = email.toLowerCase();
-    return lower === 'ai.clipzone.edu@gmail.com' || lower === 'rajababum426@gmail.com' || lower.startsWith('admin');
+    const targetUser = userObj !== undefined ? userObj : (auth.currentUser || currentUser);
+    const verified = Boolean((targetUser as any)?.emailVerified);
+    if (!verified) return false;
+    return lower === 'ai.clipzone.edu@gmail.com' || lower === 'rajababum426@gmail.com';
   };
 
-  // Fetch keys for Admin (all keys) or Sub-Admin (strictly scoped to assigned courseId)
+  // Sync non-secret Sub-Admin public profile (NEVER contains code) for student chat routing
+  const syncSubAdminPublicProfile = useCallback(async (sub: SubAdminAccount) => {
+    if (!sub?.code) return;
+    const profileId = getSubAdminPublicProfileId(sub.code);
+    const profilePayload: SubAdminPublicProfile = {
+      id: profileId,
+      courseId: sub.courseId,
+      courseTitle: sub.courseTitle,
+      name: sub.name,
+      avatarUrl: sub.avatarUrl || '',
+      status: sub.status,
+      ...(sub.activeUid ? { activeUid: sub.activeUid } : {}),
+      updatedAt: sub.updatedAt || Date.now()
+    };
+    try {
+      await setDoc(doc(db, 'sub_admin_profiles', profileId), profilePayload, { merge: true });
+    } catch (err) {
+      reportFirestoreNonFatal(err, OperationType.WRITE, `sub_admin_profiles/${profileId}`);
+    }
+  }, []);
+
+  // Build scoped query for activation_keys based on role + pagination limit
+  const buildScopedKeysQuery = (mainAdminActive: boolean, subCourseId: string, cursorDoc?: QueryDocumentSnapshot<DocumentData> | null) => {
+    const keysCol = collection(db, 'activation_keys');
+    if (mainAdminActive) {
+      return cursorDoc
+        ? query(keysCol, orderBy('createdAt', 'desc'), startAfter(cursorDoc), limit(200))
+        : query(keysCol, orderBy('createdAt', 'desc'), limit(200));
+    }
+    const subUid = auth.currentUser?.uid || '';
+    if (subUid) {
+      return cursorDoc
+        ? query(keysCol, where('courseId', '==', subCourseId), where('subAdminUid', '==', subUid), startAfter(cursorDoc), limit(200))
+        : query(keysCol, where('courseId', '==', subCourseId), where('subAdminUid', '==', subUid), limit(200));
+    }
+    return query(keysCol, where('courseId', '==', subCourseId), limit(200));
+  };
+
+  // Fetch paginated keys (max 200 per page) for Admin or Sub-Admin
   const fetchAdminKeys = async () => {
     const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
     const subCourseId = !mainAdminActive && subAdminSession?.status === 'active' ? subAdminSession.courseId : '';
@@ -2025,26 +2132,18 @@ export default function App() {
 
     let cachedKeys: any[] = [];
     if (mainAdminActive) {
-      const cached = localStorage.getItem('clipzone_admin_keys_cache');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            cachedKeys = parsed;
-            setAllActivationKeys(parsed);
-          }
-        } catch (e) {}
+      const parsed = safeJsonParse<any[]>(safeStorageGet('clipzone_admin_keys_cache', '[]'), []);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        cachedKeys = parsed;
+        setAllActivationKeys(parsed);
       }
     }
 
     setIsAdminLoadingKeys(true);
 
     try {
-      const keysRef = mainAdminActive
-        ? collection(db, 'activation_keys')
-        : query(collection(db, 'activation_keys'), where('courseId', '==', subCourseId));
-
-      const querySnapshot = await getDocs(keysRef);
+      const keysQuery = buildScopedKeysQuery(mainAdminActive, subCourseId);
+      const querySnapshot = await getDocs(keysQuery);
 
       const firestoreKeys: any[] = [];
       querySnapshot.forEach((docSnap: any) => {
@@ -2053,19 +2152,48 @@ export default function App() {
 
       firestoreKeys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setAllActivationKeys(firestoreKeys);
+      setLastAdminKeyDoc(querySnapshot.docs[querySnapshot.docs.length - 1] || null);
+      setHasMoreAdminKeys(querySnapshot.docs.length >= 200);
       if (mainAdminActive) {
-        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(firestoreKeys));
+        safeStorageSetBoundedArray('clipzone_admin_keys_cache', firestoreKeys, 100);
       }
     } catch (err: any) {
-      console.error('Failed loading keys for admin:', err);
+      reportFirestoreNonFatal(err, OperationType.LIST, 'activation_keys');
       if (mainAdminActive && cachedKeys.length > 0) {
         setAllActivationKeys(cachedKeys);
       }
       if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
-        showToast('Database connection restricted. Showing cached key database.', 'info');
+        showToast('Database connection restricted. Please verify Cloud Admin if needed.', 'info');
       }
     } finally {
       setIsAdminLoadingKeys(false);
+    }
+  };
+
+  const handleLoadMoreAdminKeys = async () => {
+    const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    const subCourseId = !mainAdminActive && subAdminSession?.status === 'active' ? subAdminSession.courseId : '';
+    if (!lastAdminKeyDoc || isLoadingMoreKeys || (!mainAdminActive && !subCourseId)) return;
+
+    setIsLoadingMoreKeys(true);
+    try {
+      const nextQuery = buildScopedKeysQuery(mainAdminActive, subCourseId, lastAdminKeyDoc);
+      const snap = await getDocs(nextQuery);
+      const moreKeys: any[] = [];
+      snap.forEach((d) => moreKeys.push({ id: d.id, ...d.data() }));
+      setLastAdminKeyDoc(snap.docs[snap.docs.length - 1] || null);
+      setHasMoreAdminKeys(snap.docs.length >= 200);
+      setAllActivationKeys((prev) => {
+        const map = new Map<string, any>();
+        [...prev, ...moreKeys].forEach((k) => map.set(k.code || k.id, k));
+        const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return merged;
+      });
+    } catch (err) {
+      reportFirestoreNonFatal(err, OperationType.LIST, 'activation_keys');
+      showToast('अतिरिक्त कोडहरू लोड गर्न सकिएन।', 'error');
+    } finally {
+      setIsLoadingMoreKeys(false);
     }
   };
 
@@ -2080,9 +2208,7 @@ export default function App() {
 
     fetchAdminKeys();
 
-    const keysQuery = mainAdminActive
-      ? collection(db, 'activation_keys')
-      : query(collection(db, 'activation_keys'), where('courseId', '==', subCourseId));
+    const keysQuery = buildScopedKeysQuery(mainAdminActive, subCourseId);
 
     const unsubKeys = onSnapshot(keysQuery, (snapshot) => {
       const keys: any[] = [];
@@ -2090,26 +2216,38 @@ export default function App() {
         keys.push({ id: docSnap.id, ...docSnap.data() });
       });
       keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      setAllActivationKeys(keys);
+      setAllActivationKeys((prev) => {
+        // Preserve any older paginated items beyond top 200 if user loaded more
+        const topIds = new Set(keys.map(k => k.code || k.id));
+        const extras = prev.length > 200 ? prev.filter(k => !topIds.has(k.code || k.id)) : [];
+        return [...keys, ...extras];
+      });
+      setLastAdminKeyDoc((prevDoc) => prevDoc || snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMoreAdminKeys((prevHas) => prevHas || snapshot.docs.length >= 200);
       if (mainAdminActive) {
-        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
+        safeStorageSetBoundedArray('clipzone_admin_keys_cache', keys, 100);
       }
     }, (err) => {
-      console.warn('Realtime admin keys collection listener error:', err);
+      reportFirestoreNonFatal(err, OperationType.LIST, 'activation_keys');
     });
 
     let unsubSubAdmins: (() => void) | null = null;
     if (mainAdminActive) {
-      unsubSubAdmins = onSnapshot(collection(db, 'sub_admins'), (snapshot) => {
+      unsubSubAdmins = onSnapshot(query(collection(db, 'sub_admins'), limit(100)), (snapshot) => {
         const list: SubAdminAccount[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
+          const item = { id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) };
+          list.push(item);
         });
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setSubAdminList(list);
-        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(list));
+        safeStorageSetBoundedArray('clipzone_sub_admins_cache', list, 100);
+        // Keep public non-secret sub_admin_profiles synchronized
+        list.forEach((s) => {
+          if (s.code) syncSubAdminPublicProfile(s);
+        });
       }, (err) => {
-        console.warn('Realtime sub_admins listener error:', err);
+        reportFirestoreNonFatal(err, OperationType.LIST, 'sub_admins');
       });
     } else if (subAdminSession?.code) {
       // Live watch own Sub-Admin document so Main Admin disable / delete / reassign applies immediately
@@ -2145,9 +2283,9 @@ export default function App() {
           return;
         }
         setSubAdminSession(remote);
-        localStorage.setItem('clipzone_sub_admin_session', JSON.stringify(remote));
+        safeStorageSet('clipzone_sub_admin_session', JSON.stringify(remote));
       }, (err) => {
-        console.warn('Sub-admin self watcher error:', err);
+        reportFirestoreNonFatal(err, OperationType.GET, `sub_admins/${subAdminSession.code}`);
       });
     }
 
@@ -2155,9 +2293,9 @@ export default function App() {
       unsubKeys();
       if (unsubSubAdmins) unsubSubAdmins();
     };
-  }, [isAdminActivated, currentUser?.email, subAdminSession?.code, subAdminSession?.courseId]);
+  }, [isAdminActivated, currentUser?.email, subAdminSession?.code, subAdminSession?.courseId, syncSubAdminPublicProfile]);
 
-  // Public active Sub-Admins listener for Student -> Course Sub-Admin Ask routing (never caches codes in localStorage)
+  // Public active Sub-Admin profiles listener (NEVER touches sub_admins secret codes)
   useEffect(() => {
     const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
     if (mainAdminActive) {
@@ -2165,19 +2303,19 @@ export default function App() {
       return;
     }
     try {
-      const activeSubsQuery = query(collection(db, 'sub_admins'), where('status', '==', 'active'));
+      const activeSubsQuery = query(collection(db, 'sub_admin_profiles'), where('status', '==', 'active'), limit(100));
       const unsub = onSnapshot(activeSubsQuery, (snapshot) => {
-        const list: SubAdminAccount[] = [];
+        const list: SubAdminPublicProfile[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
+          list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminPublicProfile, 'id'>) });
         });
         setActiveSubAdmins(list);
       }, (err) => {
-        console.warn('Active sub_admins listener error:', err);
+        reportFirestoreNonFatal(err, OperationType.LIST, 'sub_admin_profiles');
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Error setting up active sub_admins listener:', e);
+      console.warn('Error setting up active sub_admin_profiles listener:', e);
     }
   }, [isAdminActivated, currentUser?.email]);
 
@@ -2362,6 +2500,8 @@ export default function App() {
     const candidates = Array.from(new Set([cleaned, rawUpper].filter(Boolean)));
     if (candidates.length === 0) return 'not_found';
 
+    await ensureFirebaseSignedIn().catch(() => null);
+
     let foundSub: SubAdminAccount | null = null;
     let checkedRemote = false;
 
@@ -2400,6 +2540,33 @@ export default function App() {
     await handleActivateSubAdminSession(foundSub);
 
     return 'activated';
+  };
+
+  // Google Admin Cloud Authentication (verifies emailVerified + authorized Main Admin email)
+  const handleVerifyAdminGoogleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      const signedUser = result.user;
+      if (!isFirebaseUserAdmin(signedUser?.email, signedUser)) {
+        await signOut(auth).catch(() => {});
+        showToast('❌ यो Google खाता Main Admin अनुमति सूचीमा छैन (Unauthorized email).', 'error');
+        return;
+      }
+      setCurrentUser(signedUser);
+      await handleActivateAdminSession();
+      setShowAdminLoginModal(false);
+      setAdminCodeInput('');
+      setAdminInitialTab('keys');
+      setShowAdminDashboard(true);
+      showToast('🔒 Google Cloud Admin Verified! Full cloud security active.', 'success');
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        console.warn('Google Admin login error:', err);
+        showToast('Google Admin प्रमाणीकरण हुन सकेन। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      }
+    }
   };
 
   // Shared login handler for Admin Verification Modal (supports Main Admin & Course Sub-Admin codes)
@@ -2672,32 +2839,34 @@ export default function App() {
         }
       }
 
-      // Link/ensure conversation document exists for assigned Course Sub-Admin ONLY (never Main Admin)
+      // Link/ensure conversation document exists for assigned Course Sub-Admin ONLY (never leaks SUB-* code)
       try {
-        let matchedSub = [...activeSubAdmins, ...subAdminList].find(
+        let matchedSub: SubAdminPublicProfile | undefined = activeSubAdmins.find(
           s => s.status === 'active' && (s.courseId === unlockedCourseId || s.courseTitle.trim().toLowerCase() === unlockedCourseTitle.trim().toLowerCase())
         );
         if (!matchedSub && unlockedCourseId && unlockedCourseId !== 'course-all') {
           try {
-            const subSnap = await getDocs(query(collection(db, 'sub_admins'), where('courseId', '==', unlockedCourseId), where('status', '==', 'active')));
+            const subSnap = await getDocs(query(collection(db, 'sub_admin_profiles'), where('courseId', '==', unlockedCourseId), where('status', '==', 'active'), limit(5)));
             subSnap.forEach((d) => {
               if (!matchedSub) {
-                matchedSub = { id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) };
+                matchedSub = { id: d.id, ...(d.data() as Omit<SubAdminPublicProfile, 'id'>) };
               }
             });
           } catch {}
         }
         if (matchedSub) {
-          const subConvId = `substudent__${matchedSub.code}__${permanentStudentUid}`;
+          const subConvId = `substudent__${matchedSub.id}__${permanentStudentUid}`;
           const convDocRef = doc(db, 'support_conversations', subConvId);
           setDoc(convDocRef, {
             id: subConvId,
             userId: permanentStudentUid,
+            ownerUid: auth.currentUser?.uid || permanentStudentUid,
             userName: assignedStudentName,
             userEmail: assignedStudentName,
             ...(resolvedStudentAvatar ? { userAvatar: resolvedStudentAvatar } : {}),
             channelType: 'student_subadmin',
-            subAdminCode: matchedSub.code,
+            subAdminProfileId: matchedSub.id,
+            ...(matchedSub.activeUid ? { subAdminUid: matchedSub.activeUid } : {}),
             subAdminName: matchedSub.name,
             courseId: unlockedCourseId,
             activeCourse: unlockedCourseTitle,
@@ -2833,17 +3002,18 @@ export default function App() {
         ? {
             createdBySubAdminCode: subAdminSession.code,
             createdByName: subAdminSession.name,
+            ...(auth.currentUser?.uid ? { subAdminUid: auth.currentUser.uid } : {}),
           }
         : {
             createdByName: 'Main Admin',
           }),
     };
 
-    // Instantly update UI and local cache (only Main Admin writes full global cache)
+    // Instantly update UI and bounded local cache (only Main Admin writes global cache)
     setAllActivationKeys(prev => {
       const updated = [newKeyDoc, ...prev.filter(k => k.code !== finalCode && k.id !== finalCode)];
       if (isMainAdmin) {
-        localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+        safeStorageSetBoundedArray('clipzone_admin_keys_cache', updated, 100);
       }
       return updated;
     });
@@ -2922,9 +3092,11 @@ export default function App() {
     } catch {}
 
     const cleanAvatarUrl = (avatarUrl || '').trim();
+    const publicProfileId = getSubAdminPublicProfileId(finalCode);
     const newSubAdmin: SubAdminAccount = {
       id: finalCode,
       code: finalCode,
+      publicProfileId,
       name: cleanName,
       courseId: targetCourse.id,
       courseTitle: targetCourse.title,
@@ -2936,6 +3108,7 @@ export default function App() {
 
     try {
       await setDoc(doc(db, 'sub_admins', finalCode), newSubAdmin);
+      await syncSubAdminPublicProfile(newSubAdmin);
       if (cleanAvatarUrl) {
         setDoc(
           doc(db, 'support_conversations', `subadmin_main__${finalCode}`),
@@ -2956,7 +3129,7 @@ export default function App() {
       }
       setSubAdminList(prev => {
         const updated = [newSubAdmin, ...prev.filter(s => s.code !== finalCode)];
-        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        safeStorageSetBoundedArray('clipzone_sub_admins_cache', updated, 100);
         return updated;
       });
       return newSubAdmin;
@@ -2980,6 +3153,7 @@ export default function App() {
         avatarUrl: cleanAvatar,
         updatedAt: now,
       });
+      await syncSubAdminPublicProfile({ ...subAdmin, avatarUrl: cleanAvatar, updatedAt: now });
       setDoc(
         doc(db, 'support_conversations', `subadmin_main__${subAdmin.code}`),
         {
@@ -3001,16 +3175,14 @@ export default function App() {
         const updated = prev.map(s =>
           s.code === subAdmin.code ? { ...s, avatarUrl: cleanAvatar, updatedAt: now } : s
         );
-        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        safeStorageSetBoundedArray('clipzone_sub_admins_cache', updated, 100);
         return updated;
       });
 
       if (subAdminSession && subAdminSession.code === subAdmin.code) {
         const nextSess = { ...subAdminSession, avatarUrl: cleanAvatar, updatedAt: now };
         setSubAdminSession(nextSess);
-        try {
-          localStorage.setItem('clipzone_sub_admin_session', JSON.stringify(nextSess));
-        } catch {}
+        safeStorageSet('clipzone_sub_admin_session', JSON.stringify(nextSess));
       }
 
       showToast(cleanAvatar ? `"${subAdmin.name}" को फोटो/लोगो अपडेट भयो!` : 'फोटो/लोगो हटाइयो।', 'success');
@@ -3026,14 +3198,16 @@ export default function App() {
       return;
     }
     const nextStatus: 'active' | 'disabled' = subAdmin.status === 'active' ? 'disabled' : 'active';
+    const now = Date.now();
     try {
       await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
         status: nextStatus,
-        updatedAt: Date.now(),
+        updatedAt: now,
       });
+      await syncSubAdminPublicProfile({ ...subAdmin, status: nextStatus, updatedAt: now });
       setSubAdminList(prev => {
-        const updated = prev.map(s => s.code === subAdmin.code ? { ...s, status: nextStatus, updatedAt: Date.now() } : s);
-        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        const updated = prev.map(s => s.code === subAdmin.code ? { ...s, status: nextStatus, updatedAt: now } : s);
+        safeStorageSetBoundedArray('clipzone_sub_admins_cache', updated, 100);
         return updated;
       });
       showToast(
@@ -3055,19 +3229,26 @@ export default function App() {
     }
     const targetCourse = courses.find(c => c.id === newCourseId);
     if (!targetCourse) return;
+    const now = Date.now();
     try {
       await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
         courseId: targetCourse.id,
         courseTitle: targetCourse.title,
-        updatedAt: Date.now(),
+        updatedAt: now,
+      });
+      await syncSubAdminPublicProfile({
+        ...subAdmin,
+        courseId: targetCourse.id,
+        courseTitle: targetCourse.title,
+        updatedAt: now,
       });
       setSubAdminList(prev => {
         const updated = prev.map(s =>
           s.code === subAdmin.code
-            ? { ...s, courseId: targetCourse.id, courseTitle: targetCourse.title, updatedAt: Date.now() }
+            ? { ...s, courseId: targetCourse.id, courseTitle: targetCourse.title, updatedAt: now }
             : s
         );
-        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        safeStorageSetBoundedArray('clipzone_sub_admins_cache', updated, 100);
         return updated;
       });
       showToast(`"${subAdmin.name}" को कोर्ष "${targetCourse.title}" मा अपडेट गरियो!`, 'success');
@@ -3084,9 +3265,10 @@ export default function App() {
     }
     try {
       await deleteDoc(doc(db, 'sub_admins', code));
+      await deleteDoc(doc(db, 'sub_admin_profiles', getSubAdminPublicProfileId(code))).catch(() => {});
       setSubAdminList(prev => {
         const updated = prev.filter(s => s.code !== code);
-        localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
+        safeStorageSetBoundedArray('clipzone_sub_admins_cache', updated, 100);
         return updated;
       });
       showToast(`Sub-Admin (${code}) स्थायी रूपमा हटाइयो।`, 'success');
@@ -3163,6 +3345,7 @@ export default function App() {
           ...updatedCourse,
           includeLive: existingCourse?.includeLive,
           includeCertificate: existingCourse?.includeLive ? false : existingCourse?.includeCertificate,
+          ...(subAdminSession?.code ? { lastEditedBySubAdminCode: subAdminSession.code } : {}),
         };
     const cleaned = cleanUndefined(safeCourse);
     setCourses(prev => {
@@ -3263,7 +3446,7 @@ export default function App() {
     }
   };
 
-  // ADMIN HANDLER: DELETE ALL STUDENT ACTIVATION KEYS PERMANENTLY (MAIN ADMIN ONLY)
+  // ADMIN HANDLER: DELETE ALL STUDENT ACTIVATION KEYS PERMANENTLY (PAGED BATCHES, MAIN ADMIN ONLY)
   const handleDeleteAllKeys = async () => {
     if (!isMainAdmin) {
       showToast('केवल Main Admin ले मात्र सबै कोडहरू मेटाउन सक्छ।', 'error');
@@ -3271,22 +3454,23 @@ export default function App() {
     }
     setIsAdminLoadingKeys(true);
     try {
-      const snap = await getDocs(collection(db, 'activation_keys'));
-      const batchSize = 300;
-      const docs = snap.docs;
-      for (let i = 0; i < docs.length; i += batchSize) {
+      while (true) {
+        const snap = await getDocs(query(collection(db, 'activation_keys'), limit(300)));
+        if (snap.empty) break;
         const batch = writeBatch(db);
-        docs.slice(i, i + batchSize).forEach(d => batch.delete(d.ref));
+        snap.docs.forEach(d => batch.delete(d.ref));
         await batch.commit();
+        if (snap.docs.length < 300) break;
       }
 
       // Clear local storage and state
       setAllActivationKeys([]);
+      setHasMoreAdminKeys(false);
+      setLastAdminKeyDoc(null);
       localStorage.removeItem('clipzone_admin_keys_cache');
       showToast('सबै विद्यार्थी कोर्ष कोडहरू स्थायी रूपमा मेटाइएका छन् (All student course codes permanently deleted)', 'success');
     } catch (err) {
       console.error('Failed to delete all keys:', err);
-      // Ensure local state is cleared even if offline
       setAllActivationKeys([]);
       localStorage.removeItem('clipzone_admin_keys_cache');
       showToast('सबै कोर्ष कोडहरू मेटाइएका छन्।', 'info');
@@ -3432,27 +3616,34 @@ export default function App() {
     try {
       const resetTime = Date.now();
 
-      // 1. Reset active devices and claimed user status on all activation keys in Firestore
-      try {
-        const keysSnap = await getDocs(collection(db, 'activation_keys'));
-        for (const kDoc of keysSnap.docs) {
-          const kData = kDoc.data();
-          if (kData.activeDeviceId || kData.claimedByUid) {
-            await updateDoc(doc(db, 'activation_keys', kDoc.id), {
-              activeDeviceId: '',
-              claimedByUid: ''
-            });
-          }
-        }
-      } catch (keyResetErr) {
-        console.warn('Error resetting activation key devices in Firestore:', keyResetErr);
-      }
-
-      // 2. Set global session reset timestamp in system config
+      // 1. Set global session reset timestamp in system config first (O(1) instant effect across million users)
       await setDoc(doc(db, 'system', 'config'), {
         global_session_reset_at: resetTime,
         courses_seeded: true
       }, { merge: true });
+
+      // 2. Batch-clear active device bindings in bounded chunks (scale-safe)
+      try {
+        let rounds = 0;
+        while (rounds < 20) {
+          rounds++;
+          const keysSnap = await getDocs(
+            query(collection(db, 'activation_keys'), where('activeDeviceId', '!=', ''), limit(300))
+          );
+          if (keysSnap.empty) break;
+          const batch = writeBatch(db);
+          keysSnap.docs.forEach((kDoc) => {
+            batch.update(kDoc.ref, {
+              activeDeviceId: '',
+              forceLogoutAt: resetTime
+            });
+          });
+          await batch.commit();
+          if (keysSnap.docs.length < 300) break;
+        }
+      } catch (keyResetErr) {
+        console.warn('Error resetting activation key devices in Firestore:', keyResetErr);
+      }
 
       // Save acknowledged reset time for current admin device
       localStorage.setItem('clipzone_last_session_reset', String(resetTime));
@@ -3993,11 +4184,42 @@ export default function App() {
     });
 
     try {
+      // Encrypt Zoom URL via server-side AES-256-GCM before storing in Firestore secrets
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-device-id': getOrCreateDeviceId(),
+      };
+      const idToken = await auth.currentUser?.getIdToken().catch(() => null);
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      const admSessId = localStorage.getItem('clipzone_admin_session_id');
+      if (admSessId && isMainAdmin) headers['x-admin-session-id'] = admSessId;
+      if (isSubAdmin && subAdminSession?.code) headers['x-subadmin-code'] = subAdminSession.code;
+
+      let encryptedZoomLink = '';
+      try {
+        const encRes = await fetch('/api/live-encrypt', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ zoomLink: data.zoomLink })
+        });
+        if (encRes.ok) {
+          const encData = await encRes.json();
+          encryptedZoomLink = encData?.encryptedZoomLink || '';
+        }
+      } catch (encErr) {
+        console.warn('Live link encryption request failed:', encErr);
+      }
+
+      if (!encryptedZoomLink) {
+        showToast('सुरक्षित Zoom लिङ्क इन्क्रिप्ट गर्न सकिएन। कृपया पुनः प्रयास गर्नुहोस्।', 'error');
+        return;
+      }
+
       await setDoc(sessionRef, sessionPayload);
       await setDoc(doc(db, 'live_session_secrets', sessionId), {
         sessionId,
         courseId: data.courseId,
-        zoomLink: data.zoomLink,
+        encryptedZoomLink,
         updatedAt: now
       });
 
@@ -4014,6 +4236,7 @@ export default function App() {
           courseId: data.courseId,
           sessionId,
           author: data.hostName,
+          ...(isSubAdmin && subAdminSession?.code ? { createdBySubAdminCode: subAdminSession.code } : {}),
           createdAt: now
         });
         await setDoc(notifRef, liveNotif);
@@ -4184,24 +4407,29 @@ export default function App() {
       console.warn('Sub-admin main chat listener error:', err);
     });
 
-    const studentConvsQuery = query(
-      collection(db, 'support_conversations'),
-      where('channelType', '==', 'student_subadmin'),
-      where('subAdminCode', '==', subAdminSession.code)
-    );
-    const unsubStudents = onSnapshot(studentConvsQuery, (snapshot) => {
-      let sum = 0;
-      snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        if (d && typeof d.unreadAdminCount === 'number' && d.unreadAdminCount > 0) {
-          sum += d.unreadAdminCount;
-        }
+    const subUid = subAdminSession.activeUid || auth.currentUser?.uid || '';
+    let unsubStudents = () => {};
+    if (subUid) {
+      const studentConvsQuery = query(
+        collection(db, 'support_conversations'),
+        where('channelType', '==', 'student_subadmin'),
+        where('subAdminUid', '==', subUid),
+        limit(150)
+      );
+      unsubStudents = onSnapshot(studentConvsQuery, (snapshot) => {
+        let sum = 0;
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          if (d && typeof d.unreadAdminCount === 'number' && d.unreadAdminCount > 0) {
+            sum += d.unreadAdminCount;
+          }
+        });
+        studentsUnread = sum;
+        setSubAdminUnreadCount(mainUnread + studentsUnread);
+      }, (err) => {
+        reportFirestoreNonFatal(err, OperationType.LIST, 'support_conversations');
       });
-      studentsUnread = sum;
-      setSubAdminUnreadCount(mainUnread + studentsUnread);
-    }, (err) => {
-      console.warn('Sub-admin student chats listener error:', err);
-    });
+    }
 
     return () => {
       unsubMain();
@@ -4209,7 +4437,7 @@ export default function App() {
     };
   }, [isSubAdmin, subAdminSession?.code]);
 
-  // 3. Real-time listener for Student: tracks unread replies sent by assigned Course Sub-Admin ONLY
+  // 3. Real-time listener for Student: tracks unread replies sent by assigned Course Sub-Admin ONLY (via non-secret subAdminProfileId)
   useEffect(() => {
     if (isUserAdminSession) {
       setStudentUnreadCount(0);
@@ -4222,7 +4450,7 @@ export default function App() {
       return;
     }
 
-    const targetSubCodes = Array.from(new Set(
+    const targetProfileIds = Array.from(new Set(
       activeSubs
         .filter(s => {
           if (activeCourseIds.includes('course-all')) return true;
@@ -4230,10 +4458,10 @@ export default function App() {
           const matchingCourse = courses.find(c => activeCourseIds.includes(c.id) && c.title.trim().toLowerCase() === s.courseTitle.trim().toLowerCase());
           return Boolean(matchingCourse);
         })
-        .map(s => s.code)
+        .map(s => s.id)
     ));
 
-    if (targetSubCodes.length === 0) {
+    if (targetProfileIds.length === 0) {
       setStudentUnreadCount(0);
       return;
     }
@@ -4244,8 +4472,7 @@ export default function App() {
       let matchedUid = '';
       if (Array.isArray(allActivationKeys) && allActivationKeys.length > 0) {
         const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
-        let activeCodes: string[] = [];
-        try { activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]'); } catch {}
+        const activeCodes = safeJsonParse<string[]>(safeStorageGet('clipzone_active_codes', '[]'), []);
         const match = allActivationKeys.find((k: any) => {
           if (activeCodes.includes(k.code || k.id)) return true;
           if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
@@ -4270,9 +4497,9 @@ export default function App() {
       const unsubs: (() => void)[] = [];
       const countsMap = new Map<string, number>();
 
-      targetSubCodes.forEach((subCode) => {
+      targetProfileIds.forEach((profileId) => {
         candidateUids.forEach((cUid) => {
-          const convDocId = `substudent__${subCode}__${cUid}`;
+          const convDocId = `substudent__${profileId}__${cUid}`;
           const convRef = doc(db, 'support_conversations', convDocId);
           const unsub = onSnapshot(convRef, (snap) => {
             if (snap.exists()) {
@@ -4287,7 +4514,7 @@ export default function App() {
             });
             setStudentUnreadCount(totalUnread);
           }, (err) => {
-            console.warn('Student subadmin conversation listener error:', err);
+            reportFirestoreNonFatal(err, OperationType.GET, `support_conversations/${convDocId}`);
           });
           unsubs.push(unsub);
         });
@@ -5661,7 +5888,7 @@ export default function App() {
                                   )}
                                 </div>
 
-                                <div className="min-w-0 space-y-1">
+                                <div className="min-w-0 space-y-1 flex-1">
                                   <h4 className="text-sm sm:text-base font-bold text-white truncate">
                                     {cleanTitle}
                                   </h4>
@@ -5693,6 +5920,27 @@ export default function App() {
                                       </>
                                     )}
                                   </div>
+                                  {(() => {
+                                    const totalItems = (course.videos?.length || 0) + (course.pdfs?.length || 0);
+                                    if (totalItems === 0) return null;
+                                    const rec = courseProgressMap[course.id];
+                                    const completedCount = (rec?.completedVideoIndices?.length || 0) + (rec?.completedPdfIndices?.length || 0);
+                                    const pct = Math.min(100, Math.round((completedCount / totalItems) * 100));
+                                    return (
+                                      <div className="pt-1 max-w-xs space-y-1">
+                                        <div className="flex items-center justify-between text-[10px] font-bold">
+                                          <span className="text-zinc-400">{completedCount}/{totalItems} Lessons</span>
+                                          <span className="text-blue-400">{pct}%</span>
+                                        </div>
+                                        <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/80">
+                                          <div
+                                            className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full transition-all duration-300"
+                                            style={{ width: `${pct}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
 
@@ -5890,8 +6138,8 @@ export default function App() {
                       >
                         {/* Course Header Banner */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
-                          <div className="space-y-2 text-left">
-                            <div className="flex items-center gap-2">
+                          <div className="space-y-2 text-left flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="bg-emerald-500/15 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-emerald-500/30 font-sans">
                                 🟢 Active Program
                               </span>
@@ -5903,6 +6151,27 @@ export default function App() {
                             <p className="text-xs text-zinc-400 font-medium font-sans">
                               कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!
                             </p>
+                            {(() => {
+                              const totalLessons = activePlaylist.length + (currentClassroomCourse.pdfs?.length || 0);
+                              if (totalLessons === 0) return null;
+                              const rec = courseProgressMap[currentClassroomCourse.id];
+                              const doneCount = (rec?.completedVideoIndices?.length || 0) + (rec?.completedPdfIndices?.length || 0);
+                              const pct = Math.min(100, Math.round((doneCount / totalLessons) * 100));
+                              return (
+                                <div className="pt-1.5 max-w-md space-y-1">
+                                  <div className="flex items-center justify-between text-[11px] font-extrabold font-sans">
+                                    <span className="text-zinc-300">📊 Course Progress: {doneCount} / {totalLessons} Completed</span>
+                                    <span className={pct === 100 ? 'text-emerald-400' : 'text-blue-400'}>{pct}%</span>
+                                  </div>
+                                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-blue-500 via-sky-400 to-emerald-400 rounded-full transition-all duration-300"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
@@ -6004,11 +6273,13 @@ export default function App() {
                           <div className="space-y-3 mt-6">
                             {activePlaylist.length > 0 ? (
                               activePlaylist.map((video, idx) => {
+                                const isDone = Boolean(courseProgressMap[currentClassroomCourse.id]?.completedVideoIndices?.includes(idx));
                                 return (
                                   <motion.div
                                     key={idx}
                                     whileHover={{ scale: 1.005, x: 2 }}
                                     onClick={() => {
+                                      toggleLessonComplete(currentClassroomCourse.id, 'video', idx, true);
                                       if (document.documentElement && document.documentElement.requestFullscreen) {
                                         document.documentElement.requestFullscreen().catch(() => {});
                                       }
@@ -6023,11 +6294,15 @@ export default function App() {
                                       });
                                       showToast(`Opening Lecture ${idx + 1} in Fullscreen! 🎥`, 'success');
                                     }}
-                                    className="group bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/40 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-3 sm:gap-4 text-left shadow-md"
+                                    className={`group bg-zinc-950/80 hover:bg-zinc-900 border rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-3 sm:gap-4 text-left shadow-md ${
+                                      isDone ? 'border-emerald-500/30 hover:border-emerald-500/60' : 'border-zinc-800/80 hover:border-blue-500/40'
+                                    }`}
                                   >
                                     {/* Left: Elegant play icon box */}
-                                    <div className="w-10 h-10 sm:w-12 sm:h-12 border border-blue-500/30 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform text-blue-400">
-                                      <Play className="w-4 h-4 text-blue-400 fill-blue-400 ml-0.5" />
+                                    <div className={`w-10 h-10 sm:w-12 sm:h-12 border rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+                                      isDone ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'
+                                    }`}>
+                                      <Play className={`w-4 h-4 ml-0.5 ${isDone ? 'text-emerald-400 fill-emerald-400' : 'text-blue-400 fill-blue-400'}`} />
                                     </div>
 
                                     {/* Center: Text Info */}
@@ -6041,6 +6316,23 @@ export default function App() {
                                         </span>
                                       )}
                                     </div>
+
+                                    {/* Right: Mark Complete Toggle */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleLessonComplete(currentClassroomCourse.id, 'video', idx);
+                                      }}
+                                      title={isDone ? 'Completed (Click to unmark)' : 'Mark Lecture Completed'}
+                                      className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 transition cursor-pointer ${
+                                        isDone
+                                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30'
+                                          : 'bg-zinc-900 border-zinc-700 text-zinc-500 hover:text-zinc-200 hover:border-zinc-500'
+                                      }`}
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </button>
                                   </motion.div>
                                 );
                               })
@@ -6082,15 +6374,21 @@ export default function App() {
                             {/* PDF List */}
                             {(currentClassroomCourse.pdfs && currentClassroomCourse.pdfs.length > 0) ? (
                               <div className="space-y-3">
-                                {currentClassroomCourse.pdfs.map((pdf, pidx) => (
+                                {currentClassroomCourse.pdfs.map((pdf, pidx) => {
+                                  const isPdfDone = Boolean(courseProgressMap[currentClassroomCourse.id]?.completedPdfIndices?.includes(pidx));
+                                  return (
                                   <motion.div
                                     key={pidx}
                                     whileHover={{ scale: 1.005, x: 2 }}
-                                    className="bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/40 rounded-2xl p-3.5 sm:p-4 transition-all duration-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left shadow-md"
+                                    className={`bg-zinc-950/80 hover:bg-zinc-900 border rounded-2xl p-3.5 sm:p-4 transition-all duration-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left shadow-md ${
+                                      isPdfDone ? 'border-emerald-500/30 hover:border-emerald-500/60' : 'border-zinc-800/80 hover:border-blue-500/40'
+                                    }`}
                                   >
                                     {/* Left: Document icon & details */}
                                     <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
-                                      <div className="w-11 h-11 border border-blue-500/30 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0 text-blue-400 mt-0.5 sm:mt-0">
+                                      <div className={`w-11 h-11 border rounded-xl flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${
+                                        isPdfDone ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'
+                                      }`}>
                                         <FileText className="w-5 h-5" />
                                       </div>
                                       <div className="min-w-0 flex-1">
@@ -6110,12 +6408,25 @@ export default function App() {
                                       </div>
                                     </div>
 
-                                    {/* Right: Action Buttons (Only Full Screen View, No Download) */}
+                                    {/* Right: Action Buttons (Full Screen View + Complete Toggle) */}
                                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleLessonComplete(currentClassroomCourse.id, 'pdf', pidx)}
+                                        title={isPdfDone ? 'Completed (Click to unmark)' : 'Mark PDF Completed'}
+                                        className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition cursor-pointer ${
+                                          isPdfDone
+                                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30'
+                                            : 'bg-zinc-900 border-zinc-700 text-zinc-500 hover:text-zinc-200 hover:border-zinc-500'
+                                        }`}
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </button>
                                       {/* Direct In-App Fullscreen Viewer */}
                                       <button
                                         type="button"
                                         onClick={() => {
+                                          toggleLessonComplete(currentClassroomCourse.id, 'pdf', pidx, true);
                                           setSelectedPdfForView({
                                             title: pdf.title,
                                             pdfUrl: pdf.pdfUrl,
@@ -6132,7 +6443,8 @@ export default function App() {
                                       </button>
                                     </div>
                                   </motion.div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             ) : (
                               <div className="text-center py-12 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-3">
@@ -7524,6 +7836,14 @@ export default function App() {
                   Admin Activate
                 </button>
                 <button
+                  type="button"
+                  onClick={handleVerifyAdminGoogleLogin}
+                  className="w-full bg-slate-950 hover:bg-slate-800 border border-blue-500/40 text-blue-300 font-extrabold py-3 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4 text-blue-400" />
+                  <span>Verify with Google Cloud Admin</span>
+                </button>
+                <button
                   onClick={() => setShowAdminLoginModal(false)}
                   className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3.5 px-4 rounded-xl text-sm transition cursor-pointer"
                 >
@@ -7557,6 +7877,11 @@ export default function App() {
         onLogoutKey={handleLogoutUserKey}
         onExpireKey={handleExpireKey}
         onRefreshKeys={fetchAdminKeys}
+        hasMoreKeys={hasMoreAdminKeys}
+        onLoadMoreKeys={handleLoadMoreAdminKeys}
+        isLoadingMoreKeys={isLoadingMoreKeys}
+        isGoogleAdminVerified={isFirebaseUserAdmin(currentUser?.email)}
+        onVerifyGoogleAdmin={handleVerifyAdminGoogleLogin}
         onOpenLogoutConfirm={() => {
           setLogoutSecretCodeInput('');
           setLogoutAllConfirmWord('');
