@@ -48,7 +48,6 @@ export interface Course {
   certificateSealText?: string;
   // Per-course Payment & WhatsApp override (editable by Main Admin or Course Sub-Admin)
   paymentConfig?: CoursePaymentConfig;
-  lastEditedBySubAdminCode?: string;
 }
 
 export interface LiveSession {
@@ -198,13 +197,12 @@ export interface SubAdminPublicProfile {
   name: string;
   avatarUrl?: string;
   status: 'active' | 'disabled';
-  activeUid?: string;
   updatedAt?: number;
 }
 
 export interface CourseProgressRecord {
-  completedVideoIndices: number[];
-  completedPdfIndices: number[];
+  completedVideoIndexes: number[];
+  completedPdfIndexes: number[];
   lastVideoIndex?: number;
   updatedAt: number;
 }
@@ -224,7 +222,6 @@ export interface PushNotificationItem {
   url?: string;
   createdAt: number;
   author?: string;
-  createdBySubAdminCode?: string;
   target?: 'all' | 'students' | 'course_students';
   courseId?: string;
   courseTitle?: string;
@@ -311,10 +308,7 @@ export interface SupportConversation {
   userAvatar?: string;
   purchasedCourses?: string[];
   channelType?: 'student_mainadmin' | 'student_subadmin' | 'subadmin_mainadmin';
-  ownerUid?: string;
   subAdminCode?: string;
-  subAdminProfileId?: string;
-  subAdminUid?: string;
   subAdminName?: string;
   courseId?: string;
   activeCourse?: string;

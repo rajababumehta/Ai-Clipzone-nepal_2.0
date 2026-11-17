@@ -1,171 +1,221 @@
 {
   "entities": {
-    "AdminUser": {
-      "title": "AdminUser",
-      "description": "Trusted Main Administrator grant keyed by Firebase Auth UID",
-      "type": "object",
-      "properties": {
-        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "email": { "type": "string", "format": "email", "maxLength": 200 },
-        "role": { "type": "string", "enum": ["main_admin"] },
-        "createdAt": { "type": "number" }
-      },
-      "required": ["uid", "role"]
-    },
     "CourseRequest": {
       "title": "CourseRequest",
       "description": "Represents a student's access request for a premium AI course",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "userEmail": { "type": "string", "format": "email", "maxLength": 200 },
-        "courseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
-        "requestedAt": { "type": "number" },
-        "expiresAt": { "type": "number" },
-        "duration": { "type": "string", "enum": ["1month", "1year"] }
+        "userId": {
+          "type": "string",
+          "description": "The unique Firebase Authentication UID of the student"
+        },
+        "userEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "The email address of the student"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "The custom string ID of the course requested"
+        },
+        "courseTitle": {
+          "type": "string",
+          "description": "The title of the requested course"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "declined"],
+          "description": "The current verification and activation status of the request"
+        },
+        "requestedAt": {
+          "type": "number",
+          "description": "The timestamp when the request was made"
+        }
       },
       "required": ["userId", "userEmail", "courseId", "courseTitle", "status", "requestedAt"]
     },
     "ActivationKey": {
       "title": "ActivationKey",
-      "description": "Represents a generated unique single-device subscription license key/code",
+      "description": "Represents a generated unique subscription license key/code",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "code": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "status": { "type": "string", "enum": ["unused", "used", "expired", "deleted"] },
-        "duration": { "type": "string", "enum": ["1day", "1month", "1year"] },
-        "createdAt": { "type": "number" },
-        "courseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "studentName": { "type": "string", "maxLength": 120 },
-        "claimedByName": { "type": "string", "maxLength": 120 },
-        "claimedByEmail": { "type": "string", "maxLength": 200 },
-        "claimedByUid": { "type": "string", "maxLength": 128 },
-        "originalOwnerUid": { "type": "string", "maxLength": 128 },
-        "claimedAt": { "type": "number" },
-        "expiresAt": { "type": "number" },
-        "activeDeviceId": { "type": "string", "maxLength": 128 },
-        "deviceClaimedAt": { "type": "number" },
-        "forceLogoutAt": { "type": "number" },
-        "studentAvatar": { "type": "string", "maxLength": 350000 },
-        "studentAvatarUpdatedAt": { "type": "number" },
-        "createdByRole": { "type": "string", "enum": ["main_admin", "sub_admin"] },
-        "createdBySubAdminCode": { "type": "string", "maxLength": 64 },
-        "createdByName": { "type": "string", "maxLength": 120 },
-        "subAdminUid": { "type": "string", "maxLength": 128 },
-        "isExpired": { "type": "boolean" }
+        "code": {
+          "type": "string",
+          "description": "The unique code like AI45NP"
+        },
+        "activeDeviceId": {
+          "type": "string",
+          "description": "The ID of the device currently active with this code for single-device restriction"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["unused", "used"],
+          "description": "Whether the key has been claimed"
+        },
+        "duration": {
+          "type": "string",
+          "enum": ["1month", "1year"],
+          "description": "Duration of the license"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp when key was created"
+        },
+        "claimedByEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "The email of the student who claimed the key"
+        },
+        "claimedByUid": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the student who claimed the key"
+        },
+        "claimedAt": {
+          "type": "number",
+          "description": "Timestamp when the key was claimed"
+        },
+        "expiresAt": {
+          "type": "number",
+          "description": "Timestamp when the license expires"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "The course ID associated with this activation key"
+        },
+        "courseTitle": {
+          "type": "string",
+          "description": "The title of the course associated with this activation key"
+        },
+        "createdByRole": {
+          "type": "string",
+          "enum": ["main_admin", "sub_admin"],
+          "description": "Whether the key was generated by the Main Admin or a course-scoped Sub-Admin"
+        },
+        "createdBySubAdminCode": {
+          "type": "string",
+          "description": "The secret code of the Sub-Admin who generated this key, if applicable"
+        },
+        "createdByName": {
+          "type": "string",
+          "description": "Display name of the Sub-Admin who generated this key"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student name assigned to this activation key"
+        },
+        "studentAvatar": {
+          "type": "string",
+          "description": "Saved profile photo or logo data URI/URL for the student"
+        }
       },
       "required": ["code", "status", "duration", "createdAt"]
     },
     "SubAdminAccount": {
       "title": "SubAdminAccount",
-      "description": "Course-scoped Sub-Admin credentials created by Main Admin (restricted from public listing)",
+      "description": "Course-scoped Sub-Admin credentials created by the Main Admin",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "code": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "publicProfileId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "name": { "type": "string", "maxLength": 120 },
-        "courseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "avatarUrl": { "type": "string", "maxLength": 350000 },
+        "id": { "type": "string" },
+        "code": { "type": "string", "description": "Unique Sub-Admin login secret code (e.g. SUB-XXXXXX)" },
+        "name": { "type": "string", "description": "Display label/name for the Sub-Admin" },
+        "courseId": { "type": "string", "description": "The single course ID this Sub-Admin is permitted to manage" },
+        "courseTitle": { "type": "string", "description": "The title of the assigned course" },
+        "avatarUrl": { "type": "string", "description": "Custom logo or profile image URL/data URI for the Sub-Admin" },
         "status": { "type": "string", "enum": ["active", "disabled"] },
-        "activeUid": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" },
         "lastLoginAt": { "type": "number" },
-        "activeDeviceId": { "type": "string", "maxLength": 128 }
+        "activeDeviceId": { "type": "string" }
       },
       "required": ["code", "name", "courseId", "courseTitle", "status", "createdAt"]
     },
-    "SubAdminPublicProfile": {
-      "title": "SubAdminPublicProfile",
-      "description": "Public non-secret routing directory for course instructors (never contains Sub-Admin login code)",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "courseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "name": { "type": "string", "maxLength": 120 },
-        "avatarUrl": { "type": "string", "maxLength": 350000 },
-        "status": { "type": "string", "enum": ["active", "disabled"] },
-        "activeUid": { "type": "string", "maxLength": 128 },
-        "updatedAt": { "type": "number" }
-      },
-      "required": ["id", "courseId", "courseTitle", "name", "status"]
-    },
     "Course": {
       "title": "Course",
-      "description": "Dynamic course offered on the LMS platform",
+      "description": "Represents a dynamic course offered by AI Clipzone",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "title": { "type": "string", "maxLength": 200 },
-        "price": { "type": "string", "maxLength": 64 },
-        "amount": { "type": "number" },
-        "message": { "type": "string", "maxLength": 500 },
-        "learn": { "type": "array" },
-        "image": { "type": "string", "maxLength": 350000 },
-        "isPopular": { "type": "boolean" },
-        "popularText": { "type": "string", "maxLength": 120 },
-        "order": { "type": "number" },
-        "language": { "type": "string", "maxLength": 80 },
-        "videos": { "type": "array" },
-        "pdfs": { "type": "array" },
-        "includeLive": { "type": "boolean" },
-        "includeCertificate": { "type": "boolean" },
-        "hasLiveSessions": { "type": "boolean" },
-        "certificateTitle": { "type": "string", "maxLength": 120 },
-        "certificateSubtitle": { "type": "string", "maxLength": 160 },
-        "certificateInstituteName": { "type": "string", "maxLength": 160 },
-        "certificateCourseTitle": { "type": "string", "maxLength": 200 },
-        "certificateDescription": { "type": "string", "maxLength": 1500 },
-        "certificateTheme": { "type": "string", "maxLength": 40 },
-        "certificateLogoUrl": { "type": "string", "maxLength": 350000 },
-        "certificateDirectorName": { "type": "string", "maxLength": 120 },
-        "certificateDirectorTitle": { "type": "string", "maxLength": 120 },
-        "certificateDirectorSignatureUrl": { "type": "string", "maxLength": 350000 },
-        "certificateCeoName": { "type": "string", "maxLength": 120 },
-        "certificateCeoTitle": { "type": "string", "maxLength": 120 },
-        "certificateCeoSignatureUrl": { "type": "string", "maxLength": 350000 },
-        "certificateStampUrl": { "type": "string", "maxLength": 350000 },
-        "certificateSealText": { "type": "string", "maxLength": 160 },
-        "paymentConfig": { "type": "object" },
-        "lastEditedBySubAdminCode": { "type": "string", "maxLength": 64 }
+        "id": {
+          "type": "string",
+          "description": "The unique course slug ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the course"
+        },
+        "price": {
+          "type": "string",
+          "description": "The displayed price tag of the course"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Numerical price value for calculation"
+        },
+        "message": {
+          "type": "string",
+          "description": "Suffix message for WhatsApp purchases"
+        },
+        "learn": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Key learn highlights of the course"
+        },
+        "image": {
+          "type": "string",
+          "description": "URL to the course display thumbnail"
+        },
+        "isPopular": {
+          "type": "boolean",
+          "description": "Whether this is marked as a popular bestseller"
+        },
+        "popularText": {
+          "type": "string",
+          "description": "Display banner text for popular courses"
+        },
+        "videos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "duration": { "type": "string" },
+              "videoUrl": { "type": "string" }
+            },
+            "required": ["title", "duration", "videoUrl"]
+          },
+          "description": "List of instructional videos in this course"
+        },
+        "includeLive": {
+          "type": "boolean",
+          "description": "Whether live Zoom sessions are enabled for this course (replaces Certificate for activated students)"
+        },
+        "includeCertificate": {
+          "type": "boolean",
+          "description": "Whether completion certificate is enabled for this course"
+        },
+        "paymentConfig": {
+          "type": "object",
+          "description": "Optional per-course payment QR, eSewa, bank, and WhatsApp override"
+        }
       },
       "required": ["id", "title", "price", "amount", "message", "learn", "image", "videos"]
     },
-    "UserProgress": {
-      "title": "UserProgress",
-      "description": "LMS per-student video and PDF completion progress map",
-      "type": "object",
-      "properties": {
-        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "courses": { "type": "object" },
-        "updatedAt": { "type": "number" }
-      },
-      "required": ["userId", "courses", "updatedAt"]
-    },
     "LiveSession": {
       "title": "LiveSession",
-      "description": "Public student-facing metadata for a course live Zoom class (never stores Zoom URL)",
+      "description": "Public student-facing metadata for a course live Zoom class (never stores raw Zoom link)",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "courseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "title": { "type": "string", "maxLength": 200 },
-        "description": { "type": "string", "maxLength": 2000 },
-        "scheduledDate": { "type": "string", "maxLength": 40 },
-        "scheduledTime": { "type": "string", "maxLength": 40 },
-        "durationMinutes": { "type": "string", "maxLength": 20 },
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "scheduledTime": { "type": "string" },
+        "durationMinutes": { "type": "string" },
         "status": { "type": "string", "enum": ["live", "scheduled", "ended"] },
-        "hostName": { "type": "string", "maxLength": 120 },
+        "hostName": { "type": "string" },
         "createdByRole": { "type": "string", "enum": ["main_admin", "sub_admin"] },
-        "createdBySubAdminCode": { "type": "string", "maxLength": 64 },
+        "createdBySubAdminCode": { "type": "string" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
@@ -173,73 +223,100 @@
     },
     "LiveSessionSecret": {
       "title": "LiveSessionSecret",
-      "description": "Encrypted AES-256-GCM Zoom URL payload resolved strictly on server API routes",
+      "description": "Protected document holding the Zoom join URL for a live session, resolved into opaque launch tokens",
       "type": "object",
       "properties": {
-        "sessionId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "courseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\- ]+$" },
-        "encryptedZoomLink": { "type": "string", "maxLength": 4000 },
-        "zoomLink": { "type": "string", "maxLength": 4000 },
+        "sessionId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "zoomLink": { "type": "string" },
         "updatedAt": { "type": "number" }
       },
-      "required": ["sessionId", "courseId", "updatedAt"]
+      "required": ["sessionId", "courseId", "zoomLink", "updatedAt"]
     },
-    "PushNotification": {
-      "title": "PushNotification",
-      "description": "Broadcast or course-targeted live class notification item",
+    "PaymentQrConfig": {
+      "title": "PaymentQrConfig",
+      "description": "System payment QR code, eSewa ID, bank and payment checkout configuration",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "title": { "type": "string", "maxLength": 250 },
-        "body": { "type": "string", "maxLength": 2000 },
-        "type": { "type": "string", "enum": ["discount", "welcome", "announcement", "course", "live", "live_class", "live_reminder", "general"] },
-        "badge": { "type": "string", "maxLength": 60 },
-        "url": { "type": "string", "maxLength": 500 },
-        "createdAt": { "type": "number" },
-        "author": { "type": "string", "maxLength": 120 },
-        "createdBySubAdminCode": { "type": "string", "maxLength": 64 },
-        "target": { "type": "string", "enum": ["all", "students", "course_students", "course_enrolled"] },
-        "courseId": { "type": "string", "maxLength": 128 },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "sessionId": { "type": "string", "maxLength": 128 },
-        "liveClassId": { "type": "string", "maxLength": 128 },
-        "deliveryKey": { "type": "string", "maxLength": 160 },
-        "reminderType": { "type": "string", "maxLength": 40 },
-        "icon": { "type": "string", "maxLength": 500 }
+        "esewaId": { "type": "string" },
+        "accountName": { "type": "string" },
+        "bankName": { "type": "string" },
+        "bankAccountNo": { "type": "string" },
+        "bankBranch": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "qrImageUrl": { "type": "string" },
+        "paymentInstruction": { "type": "string" },
+        "updatedAt": { "type": "number" }
       },
-      "required": ["id", "title", "body", "type", "createdAt"]
+      "required": ["esewaId", "accountName", "whatsappNumber"]
     },
-    "SystemDocument": {
-      "title": "SystemDocument",
-      "description": "Global platform configuration documents (payment_qr, faqs, site_settings, config, admin_session)",
+    "FAQConfig": {
+      "title": "FAQConfig",
+      "description": "Dynamic FAQs collection and questions list configuration",
       "type": "object",
       "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "answer": { "type": "string" }
+            },
+            "required": ["question", "answer"]
+          }
+        },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["items"]
+    },
+    "SiteSettingsConfig": {
+      "title": "SiteSettingsConfig",
+      "description": "Global website banner, contact info, institute branding, logo URLs, and certificate design & signatures",
+      "type": "object",
+      "properties": {
+        "siteTitle": { "type": "string" },
+        "siteTagline": { "type": "string" },
+        "instituteName": { "type": "string" },
+        "instituteLogoUrl": { "type": "string" },
+        "noticeBannerText": { "type": "string" },
+        "showNoticeBanner": { "type": "boolean" },
+        "supportEmail": { "type": "string" },
+        "supportPhone": { "type": "string" },
+        "certificateTitle": { "type": "string" },
+        "certificateSubtitle": { "type": "string" },
+        "certificateInstituteName": { "type": "string" },
+        "certificateLogoUrl": { "type": "string" },
+        "certificateDescription": { "type": "string" },
+        "certificateDirectorName": { "type": "string" },
+        "certificateDirectorTitle": { "type": "string" },
+        "certificateDirectorSignatureUrl": { "type": "string" },
+        "certificateCeoName": { "type": "string" },
+        "certificateCeoTitle": { "type": "string" },
+        "certificateCeoSignatureUrl": { "type": "string" },
+        "certificateTheme": { "type": "string" },
+        "certificateStampUrl": { "type": "string" },
+        "certificateSealText": { "type": "string" },
         "updatedAt": { "type": "number" }
       }
     },
     "SupportConversation": {
       "title": "SupportConversation",
-      "description": "Role-isolated support conversation (Student <-> Sub-Admin or Sub-Admin <-> Main Admin)",
+      "description": "Represents a role-isolated support conversation (Sub-Admin <-> Student or Main Admin <-> Sub-Admin)",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 160 },
-        "userId": { "type": "string", "maxLength": 160 },
-        "ownerUid": { "type": "string", "maxLength": 128 },
-        "userName": { "type": "string", "maxLength": 120 },
-        "userEmail": { "type": "string", "maxLength": 200 },
-        "userPhone": { "type": "string", "maxLength": 40 },
-        "userAvatar": { "type": "string", "maxLength": 350000 },
-        "purchasedCourses": { "type": "array" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userAvatar": { "type": "string" },
         "channelType": { "type": "string", "enum": ["student_mainadmin", "student_subadmin", "subadmin_mainadmin"] },
-        "subAdminCode": { "type": "string", "maxLength": 64 },
-        "subAdminProfileId": { "type": "string", "maxLength": 128 },
-        "subAdminUid": { "type": "string", "maxLength": 128 },
-        "subAdminName": { "type": "string", "maxLength": 120 },
-        "courseId": { "type": "string", "maxLength": 128 },
-        "activeCourse": { "type": "string", "maxLength": 200 },
-        "lastMessage": { "type": "string", "maxLength": 2000 },
+        "subAdminCode": { "type": "string" },
+        "subAdminName": { "type": "string" },
+        "courseId": { "type": "string" },
+        "activeCourse": { "type": "string" },
+        "lastMessage": { "type": "string" },
         "lastMessageAt": { "type": "number" },
-        "lastSender": { "type": "string", "enum": ["user", "admin", "system"] },
+        "lastSender": { "type": "string" },
         "unreadAdminCount": { "type": "number" },
         "unreadUserCount": { "type": "number" },
         "createdAt": { "type": "number" },
@@ -247,181 +324,66 @@
         "clearedByUserAt": { "type": "number" },
         "clearedByAdminAt": { "type": "number" }
       },
-      "required": ["userId", "userName"]
+      "required": ["userId", "userName", "lastMessage", "lastMessageAt"]
     },
     "SupportMessage": {
       "title": "SupportMessage",
-      "description": "Single message inside a role-isolated support conversation",
+      "description": "A single chat message in a support conversation",
       "type": "object",
       "properties": {
-        "conversationId": { "type": "string", "maxLength": 160 },
-        "sender": { "type": "string", "enum": ["user", "admin"] },
-        "senderName": { "type": "string", "maxLength": 120 },
-        "senderAvatar": { "type": "string", "maxLength": 350000 },
-        "text": { "type": "string", "maxLength": 5000 },
-        "timestamp": { "type": "number" },
-        "isSeen": { "type": "boolean" },
-        "seenAt": { "type": "number" },
-        "status": { "type": "string", "enum": ["sent", "seen"] },
-        "attachmentType": { "type": "string", "enum": ["image", "document"] },
-        "attachmentUrl": { "type": "string", "maxLength": 900000 },
-        "attachmentName": { "type": "string", "maxLength": 200 },
-        "attachmentSize": { "type": "number" }
+        "conversationId": { "type": "string" },
+        "sender": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" }
       },
       "required": ["conversationId", "sender", "senderName", "text", "timestamp"]
-    },
-    "LiveClass": {
-      "title": "LiveClass",
-      "description": "Server-managed live class record",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "maxLength": 128 },
-        "courseId": { "type": "string", "maxLength": 128 },
-        "courseTitle": { "type": "string", "maxLength": 200 },
-        "title": { "type": "string", "maxLength": 200 },
-        "status": { "type": "string", "enum": ["draft", "published", "live", "completed", "cancelled"] },
-        "scheduledStartAt": { "type": "number" },
-        "createdAt": { "type": "number" },
-        "updatedAt": { "type": "number" }
-      },
-      "required": ["id", "courseId", "title", "status"]
-    },
-    "LiveClassRegistration": {
-      "title": "LiveClassRegistration",
-      "description": "Student seat registration under a live class",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "maxLength": 128 },
-        "liveClassId": { "type": "string", "maxLength": 128 },
-        "userId": { "type": "string", "maxLength": 128 },
-        "studentName": { "type": "string", "maxLength": 120 },
-        "registeredAt": { "type": "number" }
-      },
-      "required": ["liveClassId", "userId"]
-    },
-    "LiveClassSecret": {
-      "title": "LiveClassSecret",
-      "description": "Server-only live class credentials and meeting secrets",
-      "type": "object",
-      "properties": {
-        "liveClassId": { "type": "string", "maxLength": 128 },
-        "provider": { "type": "string", "maxLength": 40 }
-      },
-      "required": ["liveClassId"]
-    },
-    "FcmToken": {
-      "title": "FcmToken",
-      "description": "Registered FCM Web Push device token scoped by enrolledCourseIds",
-      "type": "object",
-      "properties": {
-        "token": { "type": "string", "maxLength": 4096 },
-        "userId": { "type": "string", "maxLength": 128 },
-        "enrolledCourseIds": { "type": "array" },
-        "activationCode": { "type": "string", "maxLength": 64 },
-        "platform": { "type": "string", "maxLength": 40 },
-        "isPwa": { "type": "boolean" },
-        "updatedAt": { "type": "number" }
-      },
-      "required": ["token", "userId", "enrolledCourseIds", "updatedAt"]
-    },
-    "NotificationDelivery": {
-      "title": "NotificationDelivery",
-      "description": "Server deduplication lock for scheduled live class reminders",
-      "type": "object",
-      "properties": {
-        "deliveryKey": { "type": "string", "maxLength": 160 },
-        "liveClassId": { "type": "string", "maxLength": 128 },
-        "courseId": { "type": "string", "maxLength": 128 },
-        "reminderType": { "type": "string", "maxLength": 40 },
-        "createdAt": { "type": "number" }
-      },
-      "required": ["deliveryKey", "liveClassId", "createdAt"]
-    },
-    "HealthProbe": {
-      "title": "HealthProbe",
-      "description": "Connectivity verification probe document",
-      "type": "object",
-      "properties": {
-        "ok": { "type": "boolean" }
-      }
     }
   },
   "firestore": {
-    "admins/{adminUid}": {
-      "schema": "AdminUser",
-      "description": "Trusted Main Admin UID grants"
-    },
-    "test/{docId}": {
-      "schema": "HealthProbe",
-      "description": "Startup Firestore server connectivity check document"
-    },
     "course_requests/{requestId}": {
       "schema": "CourseRequest",
-      "description": "Student payment and activation course requests"
+      "description": "Collection tracking student payment and activation course requests"
     },
     "activation_keys/{code}": {
       "schema": "ActivationKey",
-      "description": "Single-device subscription activation keys"
-    },
-    "user_progress/{userId}": {
-      "schema": "UserProgress",
-      "description": "LMS per-student video and PDF completion progress"
+      "description": "Collection tracking subscription activation codes"
     },
     "courses/{courseId}": {
       "schema": "Course",
-      "description": "Dynamic courses available for enrollment"
+      "description": "Collection tracking dynamic courses available for enrollment"
     },
     "live_sessions/{sessionId}": {
       "schema": "LiveSession",
-      "description": "Public live class session metadata without exposing Zoom links"
+      "description": "Collection storing public live class session metadata without exposing Zoom links"
     },
     "live_session_secrets/{sessionId}": {
       "schema": "LiveSessionSecret",
-      "description": "AES-256-GCM encrypted Zoom meeting URLs resolved on the backend"
+      "description": "Collection storing raw Zoom meeting URLs separately for opaque token resolution"
     },
-    "notifications/{notificationId}": {
-      "schema": "PushNotification",
-      "description": "Broadcast and course-targeted live class notifications"
+    "system/payment_qr": {
+      "schema": "PaymentQrConfig",
+      "description": "Document holding dynamic payment QR and checkout credentials"
     },
-    "system/{configId}": {
-      "schema": "SystemDocument",
-      "description": "Global platform configuration docs (payment_qr, faqs, site_settings, config, admin_session)"
+    "system/faqs": {
+      "schema": "FAQConfig",
+      "description": "Document holding dynamic FAQs list"
+    },
+    "system/site_settings": {
+      "schema": "SiteSettingsConfig",
+      "description": "Document holding global website branding and settings"
     },
     "support_conversations/{conversationId}": {
       "schema": "SupportConversation",
-      "description": "Role-isolated support threads"
+      "description": "Collection of student support threads"
     },
     "support_conversations/{conversationId}/messages/{messageId}": {
       "schema": "SupportMessage",
-      "description": "Messages inside support threads"
+      "description": "Real-time messages between student and admin"
     },
     "sub_admins/{code}": {
       "schema": "SubAdminAccount",
-      "description": "Protected course-scoped sub-admin credentials (never listable by students)"
-    },
-    "sub_admin_profiles/{profileId}": {
-      "schema": "SubAdminPublicProfile",
-      "description": "Non-secret public instructor routing profiles (no secret codes)"
-    },
-    "liveClasses/{liveClassId}": {
-      "schema": "LiveClass",
-      "description": "Server-managed live classes"
-    },
-    "liveClasses/{liveClassId}/registrations/{regId}": {
-      "schema": "LiveClassRegistration",
-      "description": "Live class student registrations"
-    },
-    "liveClassSecrets/{liveClassId}": {
-      "schema": "LiveClassSecret",
-      "description": "Server-only live class credentials"
-    },
-    "fcmTokens/{tokenId}": {
-      "schema": "FcmToken",
-      "description": "Scoped student push notification device tokens"
-    },
-    "notificationDeliveries/{deliveryId}": {
-      "schema": "NotificationDelivery",
-      "description": "Server reminder deduplication records"
+      "description": "Collection of course-scoped sub-admin accounts managed by the Main Admin"
     }
   }
 }

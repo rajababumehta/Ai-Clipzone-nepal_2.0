@@ -8,17 +8,13 @@ export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T
   }
 }
 
-export function safeStorageGet(
-  key: string,
-  fallback: string = '',
-  storage: 'local' | 'session' = 'local'
-): string {
-  if (typeof window === 'undefined') return fallback;
+export function safeStorageGet(key: string, storage: 'local' | 'session' = 'local'): string {
+  if (typeof window === 'undefined') return '';
   try {
     const store = storage === 'session' ? window.sessionStorage : window.localStorage;
-    return store.getItem(key) ?? fallback;
+    return store.getItem(key) || '';
   } catch {
-    return fallback;
+    return '';
   }
 }
 
