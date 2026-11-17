@@ -52,7 +52,7 @@ interface AdminDashboardModalProps {
   courses: Course[];
   adminRole?: 'main_admin' | 'sub_admin';
   subAdminSession?: SubAdminAccount | null;
-  onLogoutAdminSession?: () => void;
+  onLogoutAdminSession?: () => void | Promise<void>;
   subAdmins?: (SubAdminAccount | SubAdminPublicProfile)[];
   onCreateSubAdmin?: (name: string, courseId: string, customCode?: string, avatarUrl?: string) => Promise<SubAdminAccount | null>;
   onToggleSubAdminStatus?: (subAdmin: SubAdminAccount) => Promise<void>;
@@ -3629,7 +3629,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       try {
                         setIsExecutingSecurityAction(true);
                         if (securityConfirmAction.type === 'admin_logout') {
-                          onLogoutAdminSession?.();
+                          await onLogoutAdminSession?.();
                         } else if (securityConfirmAction.type === 'expire_key' && securityConfirmAction.code && onExpireKey) {
                           await onExpireKey(securityConfirmAction.code);
                         } else if (securityConfirmAction.type === 'logout_key' && securityConfirmAction.code && onLogoutKey) {

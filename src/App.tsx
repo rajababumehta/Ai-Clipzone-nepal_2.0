@@ -1240,30 +1240,75 @@ export default function App() {
 
   const handleAdminExit = async () => {
     const currentSessionId = localStorage.getItem('clipzone_admin_session_id');
-    setIsAdminActivated(false);
-    localStorage.removeItem('clipzone_admin_session_id');
-    localStorage.removeItem('clipzone_admin_activated');
-    setShowAdminMenu(false);
-    setShowAdminDashboard(false);
-    showToast('Logged out of Admin mode', 'info');
+    const wasGoogleAdmin = Boolean(
+      (auth.currentUser && (!auth.currentUser.isAnonymous || isFirebaseUserAdmin(auth.currentUser.email, auth.currentUser))) ||
+      (currentUser && (!(currentUser as any).isAnonymous || isFirebaseUserAdmin(currentUser.email, currentUser)))
+    );
 
+    // 1. Release Firestore single-device admin_session BEFORE signing out Firebase Auth
+    // (Hardened Firestore rules require isAdmin() to write system/admin_session)
     if (currentSessionId) {
       try {
-        const snap = await getDoc(doc(db, 'system', 'admin_session'));
-        if (snap.exists() && snap.data()?.activeSessionId === currentSessionId) {
-          await setDoc(doc(db, 'system', 'admin_session'), {
-            activeSessionId: '',
-            loggedOutAt: Date.now()
-          }, { merge: true });
-        }
+        await Promise.race([
+          (async () => {
+            const snap = await getDoc(doc(db, 'system', 'admin_session'));
+            if (snap.exists() && snap.data()?.activeSessionId === currentSessionId) {
+              await setDoc(doc(db, 'system', 'admin_session'), {
+                activeSessionId: '',
+                loggedOutAt: Date.now()
+              }, { merge: true });
+            }
+          })(),
+          new Promise((resolve) => setTimeout(resolve, 2500))
+        ]);
       } catch (err) {
         console.warn('Error releasing admin session:', err);
       }
     }
+
+    // 2. Sign out verified Google/non-anonymous Admin session from Firebase Auth so isMainAdmin cannot stay true
+    if (wasGoogleAdmin) {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        console.warn('Error signing out Firebase Admin auth session:', err);
+      }
+    }
+
+    // 3. Clear all Main Admin local flags, cached admin data, and React state
+    setIsAdminActivated(false);
+    localStorage.removeItem('clipzone_admin_session_id');
+    localStorage.removeItem('clipzone_admin_activated');
+    localStorage.removeItem('clipzone_admin_keys_cache');
+    localStorage.removeItem('clipzone_sub_admins_cache');
+    setAllActivationKeys([]);
+    setSubAdminList([]);
+    setLastAdminKeyDoc(null);
+    setHasMoreAdminKeys(false);
+
+    if (wasGoogleAdmin) {
+      const localName = localStorage.getItem('clipzone_student_name');
+      if (localName) {
+        setCurrentUser(getOrCreateLocalUser(localName) as any);
+      } else {
+        setCurrentUser(null);
+      }
+      // Restore silent anonymous Firebase session for public/student reads without admin privileges
+      ensureFirebaseSignedIn().catch(() => {});
+    }
+
+    setShowAdminMenu(false);
+    setShowAdminDashboard(false);
+    showToast('Admin र Google Cloud सेसन सफलतापूर्वक लगआउट गरियो (Logged out of Admin mode)', 'info');
   };
 
   const handleLogoutAdminSession = async () => {
-    if (isAdminActivated) {
+    const mainAdminActive = Boolean(
+      isAdminActivated ||
+      isFirebaseUserAdmin(currentUser?.email, currentUser) ||
+      isFirebaseUserAdmin(auth.currentUser?.email, auth.currentUser)
+    );
+    if (mainAdminActive) {
       await handleAdminExit();
     } else if (subAdminSession) {
       await handleSubAdminExit();
@@ -1273,7 +1318,7 @@ export default function App() {
   // Realtime enforcement: Single-device Admin Login (only active when Main Admin mode is active)
   useEffect(() => {
     const localSessionId = localStorage.getItem('clipzone_admin_session_id');
-    const isAdminContext = isAdminActivated || Boolean(localSessionId);
+    const isAdminContext = isAdminActivated || Boolean(localSessionId) || isFirebaseUserAdmin(currentUser?.email, currentUser);
     if (!isAdminContext) return;
 
     const unsubAdminSession = onSnapshot(doc(db, 'system', 'admin_session'), (snap) => {
@@ -1287,6 +1332,15 @@ export default function App() {
         setIsAdminActivated(false);
         localStorage.removeItem('clipzone_admin_session_id');
         localStorage.removeItem('clipzone_admin_activated');
+        localStorage.removeItem('clipzone_admin_keys_cache');
+        localStorage.removeItem('clipzone_sub_admins_cache');
+        setAllActivationKeys([]);
+        setSubAdminList([]);
+        if (auth.currentUser && isFirebaseUserAdmin(auth.currentUser.email, auth.currentUser)) {
+          signOut(auth).catch(() => {});
+          const localName = localStorage.getItem('clipzone_student_name');
+          setCurrentUser(localName ? (getOrCreateLocalUser(localName) as any) : null);
+        }
         setShowAdminDashboard(false);
         setShowAdminMenu(false);
         showToast('⚠️ Admin session expired: अर्को डिभाइसमा लगइन भएकोले यो डिभाइस लगआउट भयो (Single Device Limit)', 'error');
@@ -1302,7 +1356,7 @@ export default function App() {
     }
 
     return () => unsubAdminSession();
-  }, [isAdminActivated, showToast]);
+  }, [isAdminActivated, currentUser?.email, showToast]);
 
   const getOrCreateLocalUser = (displayName: string) => {
     // 1. Check if an existing activated key matches this student to guarantee persistent canonical UID
@@ -1493,6 +1547,8 @@ export default function App() {
         if (localName) {
           const virtualUser = getOrCreateLocalUser(localName);
           setCurrentUser(virtualUser as any);
+        } else {
+          setCurrentUser(null);
         }
         // Always preserve activated courses from persistent local storage so student is never auto-logged out
         const localActivated = safeJsonParse<string[]>(safeStorageGet('clipzone_local_activated_courses', '[]'), []);
