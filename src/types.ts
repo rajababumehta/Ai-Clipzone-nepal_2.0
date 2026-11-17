@@ -182,35 +182,10 @@ export interface SubAdminAccount {
   courseTitle: string;
   avatarUrl?: string;
   status: 'active' | 'disabled';
-  publicProfileId?: string;
-  activeUid?: string;
   createdAt: number;
   updatedAt?: number;
   lastLoginAt?: number;
   activeDeviceId?: string;
-}
-
-export interface SubAdminPublicProfile {
-  id: string; // opaque non-secret profile ID (never contains login code)
-  courseId: string;
-  courseTitle: string;
-  name: string;
-  avatarUrl?: string;
-  status: 'active' | 'disabled';
-  updatedAt?: number;
-}
-
-export interface CourseProgressRecord {
-  completedVideoIndexes: number[];
-  completedPdfIndexes: number[];
-  lastVideoIndex?: number;
-  updatedAt: number;
-}
-
-export interface UserProgressDoc {
-  userId: string;
-  courses: Record<string, CourseProgressRecord>;
-  updatedAt: number;
 }
 
 export interface PushNotificationItem {

@@ -3155,14 +3155,11 @@ export default function App() {
     }
     const existingCourse = courses.find(c => c.id === updatedCourse.id);
     const safeCourse: Course = isMainAdmin
-      ? {
-          ...updatedCourse,
-          includeCertificate: updatedCourse.includeLive ? false : updatedCourse.includeCertificate,
-        }
+      ? updatedCourse
       : {
           ...updatedCourse,
           includeLive: existingCourse?.includeLive,
-          includeCertificate: existingCourse?.includeLive ? false : existingCourse?.includeCertificate,
+          includeCertificate: existingCourse?.includeCertificate,
         };
     const cleaned = cleanUndefined(safeCourse);
     setCourses(prev => {
@@ -3866,20 +3863,6 @@ export default function App() {
     [isSubAdmin, subAdminSession?.courseId, courses]
   );
   const canSubAdminAccessLive = Boolean(isSubAdmin && subAdminAssignedCourse?.includeLive === true);
-  const hasStudentLiveCourse = Boolean(
-    !isUserAdminSession &&
-    courses.some((c) => activeCourseIds.includes(c.id) && c.includeLive === true)
-  );
-  const canShowLiveNav = Boolean(canSubAdminAccessLive || hasStudentLiveCourse);
-  const hasActiveLiveNow = useMemo(() => {
-    if (canSubAdminAccessLive && subAdminSession?.courseId) {
-      return liveSessions.some((s) => s.courseId === subAdminSession.courseId && s.status === 'live');
-    }
-    if (hasStudentLiveCourse) {
-      return liveSessions.some((s) => activeCourseIds.includes(s.courseId) && s.status === 'live');
-    }
-    return false;
-  }, [canSubAdminAccessLive, subAdminSession?.courseId, hasStudentLiveCourse, liveSessions, activeCourseIds]);
   const canEditCourse = useCallback(
     (courseId: string) => isMainAdmin || (isSubAdmin && subAdminSession?.courseId === courseId),
     [isMainAdmin, isSubAdmin, subAdminSession?.courseId]
@@ -4426,7 +4409,7 @@ export default function App() {
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
     setFormIncludeLive(Boolean(course.includeLive));
-    setFormIncludeCertificate(course.includeLive ? false : course.includeCertificate !== false);
+    setFormIncludeCertificate(course.includeCertificate !== false);
     setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
@@ -4499,20 +4482,13 @@ export default function App() {
       price: formPrice,
       amount: Number(formAmount) || 299,
       message: formMessage || `I want to buy ${formTitle}`,
-      learn:
-        learnArray.length > 0
-          ? learnArray
-          : formIncludeLive
-          ? ['Interactive AI Learning', 'Live Interactive Zoom Sessions', 'Practical Step-by-Step Training']
-          : ['Interactive AI Learning', 'Certificate of Completion Included', 'Practical Step-by-Step Training'],
+      learn: learnArray.length > 0 ? learnArray : ['Interactive AI Learning', 'Certificate of Completion Included', 'Lifetime Updates Access'],
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
-      // Strictly Main-Admin-only editable flags: Live courses NEVER include certificates
+      // Strictly Main-Admin-only editable flags: Sub-Admins preserve existing values unchanged
       includeLive: isMainAdmin ? formIncludeLive : Boolean(editingCourse?.includeLive),
-      includeCertificate: isMainAdmin
-        ? (formIncludeLive ? false : formIncludeCertificate)
-        : (editingCourse?.includeLive ? false : (editingCourse?.includeCertificate ?? true)),
+      includeCertificate: isMainAdmin ? formIncludeCertificate : (editingCourse?.includeCertificate ?? true),
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos,
@@ -8102,37 +8078,28 @@ export default function App() {
                       <input
                         type="checkbox"
                         checked={formIncludeLive}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setFormIncludeLive(checked);
-                          if (checked) {
-                            setFormIncludeCertificate(false);
-                          }
-                        }}
+                        onChange={(e) => setFormIncludeLive(e.target.checked)}
                         className="rounded border-zinc-700 text-rose-600 focus:ring-rose-500 w-4 h-4 bg-black mt-0.5"
                       />
                       <div>
                         <span>🎥 Include Live Session (Zoom Live Class)</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          सक्रिय विद्यार्थी र Sub-Admin लाई Live मेनु देखा पर्नेछ (Live कोर्षमा Certificate हुँदैन)।
+                          सक्रिय विद्यार्थीहरूलाई Course Section मा Certificate को सट्टा Live Session देखा पर्नेछ र Sub-Admin लाई Live मेनु खुल्नेछ।
                         </span>
                       </div>
                     </label>
 
-                    <label className={`flex items-start gap-2.5 text-xs font-bold select-none pt-1 border-t border-zinc-800 ${formIncludeLive ? 'text-zinc-500 cursor-not-allowed opacity-60' : 'text-zinc-100 cursor-pointer'}`}>
+                    <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-100 cursor-pointer select-none pt-1 border-t border-zinc-800">
                       <input
                         type="checkbox"
-                        disabled={formIncludeLive}
-                        checked={formIncludeLive ? false : formIncludeCertificate}
+                        checked={formIncludeCertificate}
                         onChange={(e) => setFormIncludeCertificate(e.target.checked)}
-                        className="rounded border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 bg-black mt-0.5 disabled:opacity-40"
+                        className="rounded border-zinc-700 text-blue-600 focus:ring-blue-500 w-4 h-4 bg-black mt-0.5"
                       />
                       <div>
                         <span>📜 Include Course Certificate</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          {formIncludeLive
-                            ? 'Live Class समावेश भएको कोर्षमा Certificate विकल्प स्वतः बन्द रहन्छ।'
-                            : 'Live Session नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।'}
+                          Live Session सक्रिय नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।
                         </span>
                       </div>
                     </label>
@@ -8933,52 +8900,35 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-              currentView === 'classroom'
+              currentView === 'classroom' || currentView === 'course-live'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
             <div className="relative flex items-center justify-center shrink-0">
-              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+              <BookOpen className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'classroom' || currentView === 'course-live' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
               <span className="w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
             </div>
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Course</span>
           </button>
 
-          {/* 2b. Live Menu - Shown to Sub-Admins assigned a Live course AND to Students enrolled in a Live course */}
-          {canShowLiveNav && (
+          {/* 2b. Live Menu - STRICTLY ONLY for Sub-Admins whose assigned course includes Live (NEVER shown to regular users) */}
+          {canSubAdminAccessLive && (
             <button
               id="app-nav-live"
               onClick={() => {
                 setShowProfileModal(false);
-                if (canSubAdminAccessLive) {
-                  setCurrentView('live');
-                } else {
-                  const activeLiveCourses = courses.filter(
-                    (c) => activeCourseIds.includes(c.id) && c.includeLive === true
-                  );
-                  const preferredCourse =
-                    activeLiveCourses.find((c) => c.id === selectedLiveCourseId) ||
-                    activeLiveCourses.find((c) => c.id === selectedClassroomCourseId) ||
-                    activeLiveCourses[0];
-                  if (preferredCourse) {
-                    setSelectedLiveCourseId(preferredCourse.id);
-                  }
-                  setCurrentView('course-live');
-                }
+                setCurrentView('live');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
-                (canSubAdminAccessLive && currentView === 'live') || (hasStudentLiveCourse && currentView === 'course-live')
+                currentView === 'live'
                   ? 'text-rose-400 font-bold bg-rose-500/10 md:bg-rose-600/15 md:border md:border-rose-500/40 md:shadow-md md:shadow-rose-500/15'
                   : 'text-zinc-400 hover:text-rose-300 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
               }`}
             >
               <div className="relative flex items-center justify-center shrink-0">
-                <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${((canSubAdminAccessLive && currentView === 'live') || (hasStudentLiveCourse && currentView === 'course-live')) ? 'stroke-[2.5] text-rose-400' : 'stroke-[1.8]'}`} />
-                {hasActiveLiveNow && (
-                  <span className="w-2 h-2 bg-rose-500 rounded-full ring-2 ring-black absolute -top-1 -right-1.5 animate-pulse shadow-xs" />
-                )}
+                <Video className={`w-5 h-5 mb-0.5 md:mb-0 ${currentView === 'live' ? 'stroke-[2.5] text-rose-400' : 'stroke-[1.8]'}`} />
               </div>
               <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Live</span>
             </button>
