@@ -1,5 +1,5 @@
-// Ai Clipzone - Advanced PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v33';
+// Ai Clipzone - High-Speed PWA Service Worker
+const CACHE_NAME = 'aiclipzone-pwa-v34';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -35,10 +35,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Pre-caching PWA App Shell');
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Some precache assets skipped:', err);
-      });
+      return cache.addAll(STATIC_ASSETS).catch(() => {});
     })
   );
 });
@@ -50,7 +47,6 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
-            console.log('[SW] Clearing old cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -59,14 +55,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Strict separation between HTML navigation and scripts/assets
+// 3. Fetch Event: Instant cache-first for immutable assets & stale-while-revalidate for shell
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Ignore non-http, browser extensions, API calls, dev Vite modules, or Service Worker scripts
   if (!url.protocol.startsWith('http')) return;
   if (url.pathname.startsWith('/api/')) return;
   if (
@@ -78,7 +72,7 @@ self.addEventListener('fetch', (event) => {
   }
   if (url.pathname.endsWith('sw.js') || url.pathname.endsWith('firebase-messaging-sw.js')) return;
 
-  // A. HTML Page Navigation requests (Network-first with offline index.html fallback)
+  // A. HTML Page Navigation requests (Stale-While-Revalidate for instant open)
   const isNavigation =
     event.request.mode === 'navigate' ||
     event.request.destination === 'document' ||
@@ -86,56 +80,60 @@ self.addEventListener('fetch', (event) => {
 
   if (isNavigation) {
     event.respondWith(
-      fetch(event.request)
-        .then(async (networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = (await cache.match(event.request)) || (await cache.match('/')) || (await cache.match('/index.html'));
+        const networkPromise = fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
             return networkResponse;
-          }
-          if (networkResponse && networkResponse.status === 404) {
-            const cachedRoot = (await caches.match('/')) || (await caches.match('/index.html'));
-            if (cachedRoot) return cachedRoot;
-            try {
-              const rootRes = await fetch('/');
-              if (rootRes && rootRes.ok) return rootRes;
-            } catch {}
-          }
-          return networkResponse;
-        })
-        .catch(async () => {
-          const cached =
-            (await caches.match(event.request)) ||
-            (await caches.match('/')) ||
-            (await caches.match('/index.html'));
-          return cached || Response.error();
-        })
+          })
+          .catch(() => null);
+
+        if (cached) {
+          event.waitUntil(networkPromise);
+          return cached;
+        }
+        const net = await networkPromise;
+        return net || Response.error();
+      })
     );
     return;
   }
 
-  // B. Code & Style Assets (JS, CSS, modules) - Network-first with cache fallback (NEVER fallback to HTML)
+  // B. Hashed Vite Code & Style Assets (/assets/*.js, /assets/*.css) - Cache-First for 0ms boot
+  const isHashedAsset = url.pathname.startsWith('/assets/');
   const isScriptOrStyle =
     event.request.destination === 'script' ||
     event.request.destination === 'style' ||
     url.pathname.endsWith('.js') ||
     url.pathname.endsWith('.css') ||
-    url.pathname.includes('/assets/');
+    isHashedAsset;
 
   if (isScriptOrStyle) {
     event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          }
-          return networkResponse;
-        })
-        .catch(async () => {
-          const cached = await caches.match(event.request);
-          return cached || Response.error();
-        })
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached && isHashedAsset) {
+          return cached;
+        }
+        const networkPromise = fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(() => null);
+
+        if (cached) {
+          event.waitUntil(networkPromise);
+          return cached;
+        }
+        const net = await networkPromise;
+        return net || Response.error();
+      })
     );
     return;
   }

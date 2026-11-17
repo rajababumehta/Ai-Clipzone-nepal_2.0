@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, FormEvent, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -73,19 +73,22 @@ import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTI
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, SubAdminPublicProfile, LiveSession, CourseProgressRecord } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { db, auth, testConnection, ensureFirebaseSignedIn, getSubAdminPublicProfileId, OperationType, handleFirestoreError, reportFirestoreNonFatal } from './firebase';
+import { db, auth, ensureFirebaseSignedIn, getSubAdminPublicProfileId, OperationType, handleFirestoreError, reportFirestoreNonFatal } from './firebase';
 import { safeJsonParse, safeStorageGet, safeStorageSet, safeStorageSetBoundedArray } from './utils/safeStorage';
-import { CertificateModal } from './components/CertificateModal';
-import { ImageAdjustModal } from './components/ImageAdjustModal';
-import { AdminDashboardModal } from './components/AdminDashboardModal';
-import { AskChatModal } from './components/AskChatModal';
+import { compressCourseThumbnail } from './utils/chatMedia';
 import { VerifiedBadge } from './components/VerifiedBadge';
-import { PdfViewerModal } from './components/PdfViewerModal';
-import { NotificationPromptModal } from './components/NotificationPromptModal';
-import { NotificationCenterModal } from './components/NotificationCenterModal';
-import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
+import type { SaveLiveSessionInput } from './components/LiveSessionsPanel';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
+
+const CertificateModal = lazy(() => import('./components/CertificateModal').then((m) => ({ default: m.CertificateModal })));
+const ImageAdjustModal = lazy(() => import('./components/ImageAdjustModal').then((m) => ({ default: m.ImageAdjustModal })));
+const AdminDashboardModal = lazy(() => import('./components/AdminDashboardModal').then((m) => ({ default: m.AdminDashboardModal })));
+const AskChatModal = lazy(() => import('./components/AskChatModal').then((m) => ({ default: m.AskChatModal })));
+const PdfViewerModal = lazy(() => import('./components/PdfViewerModal').then((m) => ({ default: m.PdfViewerModal })));
+const NotificationPromptModal = lazy(() => import('./components/NotificationPromptModal').then((m) => ({ default: m.NotificationPromptModal })));
+const NotificationCenterModal = lazy(() => import('./components/NotificationCenterModal').then((m) => ({ default: m.NotificationCenterModal })));
+const LiveSessionsPanel = lazy(() => import('./components/LiveSessionsPanel').then((m) => ({ default: m.LiveSessionsPanel })));
 
 function cleanUndefined<T extends object>(obj: T): T {
   const clean: any = {};
@@ -344,11 +347,7 @@ export default function App() {
     }
     return null;
   });
-  const [authLoading, setAuthLoading] = useState<boolean>(() => {
-    // If student profile already exists in local storage, don't block UI with loading
-    const localName = localStorage.getItem('clipzone_student_name');
-    return !localName || localName === 'Admin (ClipZone)';
-  });
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [userActivationKeys, setUserActivationKeys] = useState<any[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
@@ -671,17 +670,8 @@ export default function App() {
     return typeof navigator !== 'undefined' ? navigator.onLine : true;
   });
 
-  // Course loading state from database
-  const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => {
-    const cached = localStorage.getItem('clipzone_dynamic_courses');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return false;
-      } catch (e) {}
-    }
-    return COURSES.length === 0;
-  });
+  // Course loading state from database (instant local-first render, zero initial spinner)
+  const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(false);
 
   // Keep activeCourseIds strictly in sync ONLY with explicitly deleted courses
   // CRITICAL: NEVER wipe activeCourseIds when offline or when courses array is momentarily empty!
@@ -741,6 +731,8 @@ export default function App() {
   const [formAmount, setFormAmount] = useState(299);
   const [formMessage, setFormMessage] = useState('');
   const [formImage, setFormImage] = useState('');
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  const courseThumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
   const [formIncludeLive, setFormIncludeLive] = useState(false);
@@ -794,10 +786,17 @@ export default function App() {
             order: typeof c.order === 'number' ? c.order : i
           })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-          setCourses(sortedCourses);
-          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
+          setCourses((prev) => {
+            if (prev.length === sortedCourses.length && JSON.stringify(prev) === JSON.stringify(sortedCourses)) {
+              return prev;
+            }
+            return sortedCourses;
+          });
+          try {
+            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
+            localStorage.setItem('clipzone_courses_initialized', 'true');
+          } catch {}
           setIsCoursesLoading(false);
-          localStorage.setItem('clipzone_courses_initialized', 'true');
         } else {
           // If offline or snapshot is from local cache without server sync, PRESERVE local courses!
           if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -888,7 +887,9 @@ export default function App() {
           });
         });
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        setRawNotifications(list);
+        setRawNotifications((prev) =>
+          prev.length === list.length && JSON.stringify(prev) === JSON.stringify(list) ? prev : list
+        );
       } catch (e) {
         console.warn('Notifications parse error:', e);
       }
@@ -912,7 +913,9 @@ export default function App() {
             id: d.id
           });
         });
-        setLiveSessions(list);
+        setLiveSessions((prev) =>
+          prev.length === list.length && JSON.stringify(prev) === JSON.stringify(list) ? prev : list
+        );
       } catch (e) {
         console.warn('Live sessions parse error:', e);
       }
@@ -1046,8 +1049,11 @@ export default function App() {
     const unsubPayment = onSnapshot(doc(db, 'system', 'payment_qr'), (snap) => {
       if (snap.exists()) {
         const data = snap.data() as PaymentQrConfig;
-        setPaymentConfig(prev => ({ ...prev, ...data }));
-        localStorage.setItem('clipzone_payment_config', JSON.stringify(data));
+        setPaymentConfig(prev => {
+          const merged = { ...prev, ...data };
+          return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+        });
+        try { localStorage.setItem('clipzone_payment_config', JSON.stringify(data)); } catch {}
       }
     }, (err) => {
       console.warn('Payment QR config realtime listener error:', err);
@@ -1058,8 +1064,12 @@ export default function App() {
       if (snap.exists()) {
         const data = snap.data();
         if (Array.isArray(data?.items) && data.items.length > 0) {
-          setFaqs(data.items);
-          localStorage.setItem('clipzone_faqs_config', JSON.stringify(data.items));
+          setFaqs(prev =>
+            prev.length === data.items.length && JSON.stringify(prev) === JSON.stringify(data.items)
+              ? prev
+              : data.items
+          );
+          try { localStorage.setItem('clipzone_faqs_config', JSON.stringify(data.items)); } catch {}
         }
       }
     }, (err) => {
@@ -1076,8 +1086,11 @@ export default function App() {
           instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
           certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
         };
-        setSiteSettings(prev => ({ ...prev, ...cleaned }));
-        localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned));
+        setSiteSettings(prev => {
+          const merged = { ...prev, ...cleaned };
+          return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+        });
+        try { localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned)); } catch {}
       }
     }, (err) => {
       console.warn('Site settings realtime listener error:', err);
@@ -1525,23 +1538,21 @@ export default function App() {
     }
   };
 
-  // Startup Firestore connectivity probe + silent anonymous auth session
-  useEffect(() => {
-    testConnection().catch(() => {});
-  }, []);
-
-  // Firebase Authentication Observer & User Keys Fetcher
+  // Firebase Authentication Observer & User Keys Fetcher (non-blocking instant startup)
   useEffect(() => {
     let attemptedAutoAnon = false;
+    let idleTimer: any = null;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setCurrentUser(user);
+        setCurrentUser((prev: any) => (prev?.uid === user.uid && prev?.email === user.email && prev?.displayName === user.displayName ? prev : user));
         setAuthLoading(false);
         fetchUserActiveKeys(user);
       } else {
         if (!attemptedAutoAnon) {
           attemptedAutoAnon = true;
-          ensureFirebaseSignedIn().catch(() => {});
+          idleTimer = setTimeout(() => {
+            ensureFirebaseSignedIn().catch(() => {});
+          }, 150);
         }
         const localName = localStorage.getItem('clipzone_student_name');
         if (localName) {
@@ -1570,7 +1581,7 @@ export default function App() {
 
     return () => {
       unsubscribe();
-      clearTimeout(safetyTimeout);
+      if (idleTimer) clearTimeout(idleTimer);
     };
   }, []);
 
@@ -1665,9 +1676,11 @@ export default function App() {
     []
   );
 
-  // Device session check on window focus or visibility change (avoids aggressive 12s interval killing sessions on mobile)
+  // Device session check on window focus or visibility change (deferred after initial paint)
   useEffect(() => {
-    checkActiveDeviceSessions();
+    const initialCheckTimer = setTimeout(() => {
+      checkActiveDeviceSessions();
+    }, 600);
     const handleFocus = () => {
       if (document.visibilityState === 'visible') {
         checkActiveDeviceSessions();
@@ -1690,6 +1703,7 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
 
     return () => {
+      clearTimeout(initialCheckTimer);
       window.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('online', handleOnline);
@@ -4741,6 +4755,23 @@ export default function App() {
     setShowCourseFormModal(true);
   };
 
+  // Handle Direct Course Thumbnail File Upload (auto-compressed for instant Firestore & offline storage)
+  const handleCourseThumbnailFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingThumbnail(true);
+    try {
+      const compressed = await compressCourseThumbnail(file);
+      setFormImage(compressed.url);
+      showToast(`🖼️ Thumbnail तयार भयो (${Math.max(1, Math.round(compressed.size / 1024))} KB)`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Thumbnail upload गर्न सकिएन।', 'error');
+    } finally {
+      setIsUploadingThumbnail(false);
+      e.target.value = '';
+    }
+  };
+
   // Submit Course Form (Create/Edit)
   const handleCourseFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -4753,7 +4784,7 @@ export default function App() {
       return;
     }
     if (!formTitle.trim() || !formPrice.trim() || !formImage.trim()) {
-      showToast('Please fill in all required fields (Title, Price, Image URL)', 'error');
+      showToast('कृपया Title, Price र Course Thumbnail Image अपलोड गर्नुहोस्।', 'error');
       return;
     }
 
@@ -4816,8 +4847,10 @@ export default function App() {
         } else {
           updatedList = [...prev, updatedCourse];
         }
-        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
-        localStorage.setItem('clipzone_courses_initialized', 'true');
+        try {
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+          localStorage.setItem('clipzone_courses_initialized', 'true');
+        } catch {}
         return updatedList;
       });
 
@@ -5474,17 +5507,19 @@ export default function App() {
         {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / HOME VIEWS */}
         {currentView === 'live' && (canSubAdminAccessLive || isMainAdmin) ? (
           <section id="live-manager-view" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-6">
-            <LiveSessionsPanel
-              mode="manager"
-              courses={courses}
-              sessions={liveSessions}
-              adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
-              subAdminSession={isMainAdmin ? null : subAdminSession}
-              onSaveSession={handleSaveLiveSession}
-              onDeleteSession={handleDeleteLiveSession}
-              onUpdateStatus={handleUpdateLiveSessionStatus}
-              showToast={showToast}
-            />
+            <Suspense fallback={null}>
+              <LiveSessionsPanel
+                mode="manager"
+                courses={courses}
+                sessions={liveSessions}
+                adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+                subAdminSession={isMainAdmin ? null : subAdminSession}
+                onSaveSession={handleSaveLiveSession}
+                onDeleteSession={handleDeleteLiveSession}
+                onUpdateStatus={handleUpdateLiveSessionStatus}
+                showToast={showToast}
+              />
+            </Suspense>
           </section>
         ) : currentView === 'course-live' && isCourseActiveUser ? (
           (() => {
@@ -5570,14 +5605,16 @@ export default function App() {
                   </div>
 
                   {targetLiveCourse ? (
-                    <LiveSessionsPanel
-                      mode="student"
-                      course={targetLiveCourse}
-                      courses={courses}
-                      sessions={liveSessions}
-                      studentName={courseLiveStudentName}
-                      showToast={showToast}
-                    />
+                    <Suspense fallback={null}>
+                      <LiveSessionsPanel
+                        mode="student"
+                        course={targetLiveCourse}
+                        courses={courses}
+                        sessions={liveSessions}
+                        studentName={courseLiveStudentName}
+                        showToast={showToast}
+                      />
+                    </Suspense>
                   ) : (
                     <div className="text-center py-10 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-3">
                       <p className="text-sm font-bold text-zinc-300">
@@ -5598,13 +5635,14 @@ export default function App() {
           })()
         ) : currentView === 'ask' && isCourseActiveUser ? (
           <section id="ask-embedded-view" className="w-full flex-1 min-h-0 flex flex-col bg-black">
-            <AskChatModal
-              embedded={true}
-              isOpen={true}
-              onClose={() => {
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
+            <Suspense fallback={null}>
+              <AskChatModal
+                embedded={true}
+                isOpen={true}
+                onClose={() => {
+                  setCurrentView('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               isRunningInAppMode={true}
               siteSettings={siteSettings}
               currentUserId={
@@ -5655,6 +5693,7 @@ export default function App() {
               allActivationKeys={allActivationKeys}
               studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
             />
+            </Suspense>
           </section>
         ) : currentView === 'account' ? (
           <section id="account-full-view" className="w-full max-w-3xl mx-auto space-y-5 pb-20 pt-2">
@@ -6809,15 +6848,10 @@ export default function App() {
             {filteredHomeCourses.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
                 {filteredHomeCourses.map((course, index) => (
-                  <motion.div
+                  <div
                     key={course.id}
                     id={`course-card-${course.id}`}
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-50px' }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    whileHover={{ y: -6 }}
-                    className="group bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
+                    className="group bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 hover:border-blue-500/40 hover:shadow-blue-500/10 hover:-translate-y-1.5 transition-all duration-200 relative flex flex-col h-full scroll-mt-28"
                   >
                     {course.isPopular && (
                       <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
@@ -6831,6 +6865,8 @@ export default function App() {
                         src={course.image} 
                         alt={course.title}
                         referrerPolicy="no-referrer"
+                        loading={index < 2 ? 'eager' : 'lazy'}
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
@@ -6971,7 +7007,7 @@ export default function App() {
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
 
               {isMainAdmin && (
@@ -7911,60 +7947,64 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ADMIN FULL DASHBOARD MODAL */}
-      <AdminDashboardModal
-        isOpen={showAdminDashboard}
-        onClose={() => setShowAdminDashboard(false)}
-        courses={courses}
-        adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
-        subAdminSession={isMainAdmin ? null : subAdminSession}
-        onLogoutAdminSession={handleLogoutAdminSession}
-        subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
-        onCreateSubAdmin={handleCreateSubAdmin}
-        onToggleSubAdminStatus={handleToggleSubAdminStatus}
-        onUpdateSubAdminCourse={handleUpdateSubAdminCourse}
-        onUpdateSubAdminAvatar={handleUpdateSubAdminAvatar}
-        onDeleteSubAdmin={handleDeleteSubAdmin}
-        allActivationKeys={allActivationKeys}
-        isAdminLoadingKeys={isAdminLoadingKeys}
-        onGenerateKey={handleGenerateActivationKey}
-        onDeleteKey={handleDeleteActivationKey}
-        onDeleteAllKeys={handleDeleteAllKeys}
-        onLogoutKey={handleLogoutUserKey}
-        onExpireKey={handleExpireKey}
-        onRefreshKeys={fetchAdminKeys}
-        hasMoreKeys={hasMoreAdminKeys}
-        onLoadMoreKeys={handleLoadMoreAdminKeys}
-        isLoadingMoreKeys={isLoadingMoreKeys}
-        isGoogleAdminVerified={isFirebaseUserAdmin(currentUser?.email)}
-        onVerifyGoogleAdmin={handleVerifyAdminGoogleLogin}
-        onOpenLogoutConfirm={() => {
-          setLogoutSecretCodeInput('');
-          setLogoutAllConfirmWord('');
-          setShowLogoutConfirmModal(true);
-        }}
-        paymentConfig={paymentConfig}
-        onSavePaymentConfig={handleSavePaymentConfig}
-        faqs={faqs}
-        onSaveFaqs={handleSaveFaqs}
-        siteSettings={siteSettings}
-        onSaveSiteSettings={handleSaveSiteSettings}
-        onCreateCourseClick={handleCreateCourseClick}
-        onEditCourseClick={handleEditCourseClick}
-        onDeleteCourseClick={handleDeleteCourse}
-        onBatchDeleteCourses={handleBatchDeleteCourses}
-        onSaveCourse={handleSaveCourseDirect}
-        notifications={notifications}
-        onSendNotification={handleSendNotification}
-        onDeleteNotification={handleDeleteNotification}
-        liveSessions={liveSessions}
-        onSaveLiveSession={handleSaveLiveSession}
-        onDeleteLiveSession={handleDeleteLiveSession}
-        onUpdateLiveSessionStatus={handleUpdateLiveSessionStatus}
-        showToast={showToast}
-        initialTab={adminInitialTab}
-        adminUnreadAskCount={isMainAdmin ? adminUnreadCount : subAdminUnreadCount}
-      />
+      {/* ADMIN FULL DASHBOARD MODAL (lazy-loaded only when opened) */}
+      {showAdminDashboard && (
+        <Suspense fallback={null}>
+          <AdminDashboardModal
+            isOpen={showAdminDashboard}
+            onClose={() => setShowAdminDashboard(false)}
+            courses={courses}
+            adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
+            subAdminSession={isMainAdmin ? null : subAdminSession}
+            onLogoutAdminSession={handleLogoutAdminSession}
+            subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
+            onCreateSubAdmin={handleCreateSubAdmin}
+            onToggleSubAdminStatus={handleToggleSubAdminStatus}
+            onUpdateSubAdminCourse={handleUpdateSubAdminCourse}
+            onUpdateSubAdminAvatar={handleUpdateSubAdminAvatar}
+            onDeleteSubAdmin={handleDeleteSubAdmin}
+            allActivationKeys={allActivationKeys}
+            isAdminLoadingKeys={isAdminLoadingKeys}
+            onGenerateKey={handleGenerateActivationKey}
+            onDeleteKey={handleDeleteActivationKey}
+            onDeleteAllKeys={handleDeleteAllKeys}
+            onLogoutKey={handleLogoutUserKey}
+            onExpireKey={handleExpireKey}
+            onRefreshKeys={fetchAdminKeys}
+            hasMoreKeys={hasMoreAdminKeys}
+            onLoadMoreKeys={handleLoadMoreAdminKeys}
+            isLoadingMoreKeys={isLoadingMoreKeys}
+            isGoogleAdminVerified={isFirebaseUserAdmin(currentUser?.email)}
+            onVerifyGoogleAdmin={handleVerifyAdminGoogleLogin}
+            onOpenLogoutConfirm={() => {
+              setLogoutSecretCodeInput('');
+              setLogoutAllConfirmWord('');
+              setShowLogoutConfirmModal(true);
+            }}
+            paymentConfig={paymentConfig}
+            onSavePaymentConfig={handleSavePaymentConfig}
+            faqs={faqs}
+            onSaveFaqs={handleSaveFaqs}
+            siteSettings={siteSettings}
+            onSaveSiteSettings={handleSaveSiteSettings}
+            onCreateCourseClick={handleCreateCourseClick}
+            onEditCourseClick={handleEditCourseClick}
+            onDeleteCourseClick={handleDeleteCourse}
+            onBatchDeleteCourses={handleBatchDeleteCourses}
+            onSaveCourse={handleSaveCourseDirect}
+            notifications={notifications}
+            onSendNotification={handleSendNotification}
+            onDeleteNotification={handleDeleteNotification}
+            liveSessions={liveSessions}
+            onSaveLiveSession={handleSaveLiveSession}
+            onDeleteLiveSession={handleDeleteLiveSession}
+            onUpdateLiveSessionStatus={handleUpdateLiveSessionStatus}
+            showToast={showToast}
+            initialTab={adminInitialTab}
+            adminUnreadAskCount={isMainAdmin ? adminUnreadCount : subAdminUnreadCount}
+          />
+        </Suspense>
+      )}
 
       {/* CONFIRM LOGOUT ALL USER DEVICES MODAL */}
       <AnimatePresence>
@@ -8429,17 +8469,87 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Course Thumbnail Image URL */}
+                {/* Direct Course Thumbnail Image Upload (No URL required) */}
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Thumbnail Image URL *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={formImage}
-                    onChange={(e) => setFormImage(e.target.value)}
-                    placeholder="https://example.com/course-thumbnail.jpg"
-                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-medium text-white transition outline-hidden placeholder-zinc-600 font-mono"
+                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">
+                    Course Thumbnail Image (डाइरेक्ट फोटो अपलोड) *
+                  </label>
+                  <input
+                    ref={courseThumbnailInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCourseThumbnailFileChange}
+                    className="hidden"
                   />
+
+                  {formImage ? (
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-2.5 space-y-2.5">
+                      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black border border-zinc-800">
+                        <img
+                          src={formImage}
+                          alt="Course Thumbnail Preview"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                        {isUploadingThumbnail && (
+                          <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-xs font-bold text-white gap-2">
+                            <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                            <span>Compressing...</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold text-emerald-400 truncate">
+                          {formImage.startsWith('data:image/')
+                            ? `✅ Uploaded (${Math.max(1, Math.round((formImage.length * 3) / 4 / 1024))} KB)`
+                            : '✅ Current Course Thumbnail'}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            disabled={isUploadingThumbnail}
+                            onClick={() => courseThumbnailInputRef.current?.click()}
+                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-black px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Change Image</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isUploadingThumbnail}
+                            onClick={() => setFormImage('')}
+                            className="bg-zinc-800 hover:bg-rose-900/70 text-zinc-300 hover:text-rose-200 text-[11px] font-black px-2.5 py-1.5 rounded-xl transition cursor-pointer"
+                            title="Remove Thumbnail"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isUploadingThumbnail}
+                      onClick={() => courseThumbnailInputRef.current?.click()}
+                      className="w-full bg-zinc-900 hover:bg-zinc-800/80 border-2 border-dashed border-zinc-700 hover:border-blue-500/70 rounded-2xl p-6 text-center transition cursor-pointer flex flex-col items-center justify-center gap-2 group"
+                    >
+                      <div className="w-11 h-11 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center group-hover:scale-105 transition">
+                        {isUploadingThumbnail ? (
+                          <span className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Upload className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="block text-xs font-black text-white">
+                          {isUploadingThumbnail ? 'Processing Image...' : 'Upload Course Thumbnail Image'}
+                        </span>
+                        <span className="block text-[11px] text-zinc-400 font-medium">
+                          ग्यालरी वा कम्प्युटरबाट सिधै फोटो छान्नुहोस् (PNG, JPG, WebP)
+                        </span>
+                      </div>
+                    </button>
+                  )}
                 </div>
 
                 {/* Popular Badge Configuration */}
@@ -9045,54 +9155,60 @@ export default function App() {
         const effectiveSealText = targetedCourse?.certificateSealText || siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL';
 
         return (
-          <CertificateModal
-            studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
-            studentPhoto={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
-            courseTitle={effectiveCourseTitle}
-            issueDate={certificateIssueDate || '2083/01/14'}
-            certificateId={certificateCode || (targetedCourse ? (getCourseActivationCode(targetedCourse.id) || 'AICLIP-ACTIVE') : 'AICLIP-ACTIVE')}
-            instituteName={siteSettings.instituteName}
-            certificateInstituteName={effectiveInstituteName}
-            logoUrl={effectiveLogoUrl}
-            certificateTitle={effectiveCertTitle}
-            certificateSubtitle={effectiveCertSubtitle}
-            certificateDescription={effectiveDescription}
-            directorName={effectiveDirectorName}
-            directorTitle={effectiveDirectorTitle}
-            directorSignatureUrl={effectiveDirectorSig}
-            ceoName={effectiveCeoName}
-            ceoTitle={effectiveCeoTitle}
-            ceoSignatureUrl={effectiveCeoSig}
-            certificateTheme={effectiveTheme}
-            certificateStampUrl={effectiveStampUrl}
-            certificateSealText={effectiveSealText}
-            courses={enrolledCourses}
-            selectedCourseId={targetedCourse?.id}
-            onSelectCourseId={(newId) => {
-              setSelectedCertCourseId(newId);
-              const found = enrolledCourses.find(c => c.id === newId);
-              if (found) {
-                setCertificateCourseTitle(found.certificateCourseTitle || found.title);
-              }
-            }}
-            onClose={() => {
-              setShowCertificateModal(false);
-              setSelectedCertCourseId('');
-            }}
-          />
+          <Suspense fallback={null}>
+            <CertificateModal
+              studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
+              studentPhoto={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
+              courseTitle={effectiveCourseTitle}
+              issueDate={certificateIssueDate || '2083/01/14'}
+              certificateId={certificateCode || (targetedCourse ? (getCourseActivationCode(targetedCourse.id) || 'AICLIP-ACTIVE') : 'AICLIP-ACTIVE')}
+              instituteName={siteSettings.instituteName}
+              certificateInstituteName={effectiveInstituteName}
+              logoUrl={effectiveLogoUrl}
+              certificateTitle={effectiveCertTitle}
+              certificateSubtitle={effectiveCertSubtitle}
+              certificateDescription={effectiveDescription}
+              directorName={effectiveDirectorName}
+              directorTitle={effectiveDirectorTitle}
+              directorSignatureUrl={effectiveDirectorSig}
+              ceoName={effectiveCeoName}
+              ceoTitle={effectiveCeoTitle}
+              ceoSignatureUrl={effectiveCeoSig}
+              certificateTheme={effectiveTheme}
+              certificateStampUrl={effectiveStampUrl}
+              certificateSealText={effectiveSealText}
+              courses={enrolledCourses}
+              selectedCourseId={targetedCourse?.id}
+              onSelectCourseId={(newId) => {
+                setSelectedCertCourseId(newId);
+                const found = enrolledCourses.find(c => c.id === newId);
+                if (found) {
+                  setCertificateCourseTitle(found.certificateCourseTitle || found.title);
+                }
+              }}
+              onClose={() => {
+                setShowCertificateModal(false);
+                setSelectedCertCourseId('');
+              }}
+            />
+          </Suspense>
         );
       })()}
 
       {/* WHATSAPP-STYLE PROFILE IMAGE ADJUST / CROP MODAL */}
-      <ImageAdjustModal
-        imageUrl={tempImageForAdjust || ''}
-        isOpen={showImageAdjustModal && !!tempImageForAdjust}
-        onClose={() => {
-          setShowImageAdjustModal(false);
-          setTempImageForAdjust(null);
-        }}
-        onConfirm={handleConfirmAdjustedAvatar}
-      />
+      {showImageAdjustModal && !!tempImageForAdjust && (
+        <Suspense fallback={null}>
+          <ImageAdjustModal
+            imageUrl={tempImageForAdjust || ''}
+            isOpen={showImageAdjustModal && !!tempImageForAdjust}
+            onClose={() => {
+              setShowImageAdjustModal(false);
+              setTempImageForAdjust(null);
+            }}
+            onConfirm={handleConfirmAdjustedAvatar}
+          />
+        </Suspense>
+      )}
 
       {/* PWA INSTALLATION NATIVE DIALOG MATCHING USER SCREENSHOT */}
       {showPwaInstallModal && (
@@ -9203,82 +9319,92 @@ export default function App() {
 
       {/* PDF VIEWER MODAL FOR DIRECT GOOGLE DRIVE EMBED WITHOUT LOGIN */}
       {selectedPdfForView && (
-        <PdfViewerModal
-          isOpen={!!selectedPdfForView}
-          onClose={() => setSelectedPdfForView(null)}
-          pdfTitle={selectedPdfForView.title}
-          pdfUrl={selectedPdfForView.pdfUrl}
-          chapterTitle={selectedPdfForView.chapterTitle}
-          fileSize={selectedPdfForView.fileSize}
-          courseTitle={selectedPdfForView.courseTitle}
-        />
+        <Suspense fallback={null}>
+          <PdfViewerModal
+            isOpen={!!selectedPdfForView}
+            onClose={() => setSelectedPdfForView(null)}
+            pdfTitle={selectedPdfForView.title}
+            pdfUrl={selectedPdfForView.pdfUrl}
+            chapterTitle={selectedPdfForView.chapterTitle}
+            fileSize={selectedPdfForView.fileSize}
+            courseTitle={selectedPdfForView.courseTitle}
+          />
+        </Suspense>
       )}
 
       {/* NOTIFICATION PROMPT MODAL */}
-      <NotificationPromptModal
-        isOpen={showNotifPromptModal}
-        onClose={() => setShowNotifPromptModal(false)}
-        showToast={showToast}
-        onPermissionGranted={() => {
-          showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
-        }}
-      />
+      {showNotifPromptModal && (
+        <Suspense fallback={null}>
+          <NotificationPromptModal
+            isOpen={showNotifPromptModal}
+            onClose={() => setShowNotifPromptModal(false)}
+            showToast={showToast}
+            onPermissionGranted={() => {
+              showToast('🎉 Notifications enabled! You will receive course updates & discounts.', 'success');
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* NOTIFICATION CENTER MODAL */}
-      <NotificationCenterModal
-        isOpen={showNotifCenterModal}
-        onClose={() => setShowNotifCenterModal(false)}
-        notifications={notifications}
-        unreadIds={unreadNotifIds}
-        showToast={showToast}
-        onNotificationClick={(notif) => {
-          // Mark clicked notification read
-          try {
-            const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
-            if (!readIds.includes(notif.id)) {
-              const updatedRead = [...readIds, notif.id];
-              localStorage.setItem('clipzone_read_notifs', JSON.stringify(updatedRead));
-              setUnreadNotifIds(prev => prev.filter(id => id !== notif.id));
-              setUnreadNotifCount(prev => Math.max(0, prev - 1));
-            }
-          } catch {}
+      {showNotifCenterModal && (
+        <Suspense fallback={null}>
+          <NotificationCenterModal
+            isOpen={showNotifCenterModal}
+            onClose={() => setShowNotifCenterModal(false)}
+            notifications={notifications}
+            unreadIds={unreadNotifIds}
+            showToast={showToast}
+            onNotificationClick={(notif) => {
+              // Mark clicked notification read
+              try {
+                const readIds: string[] = JSON.parse(localStorage.getItem('clipzone_read_notifs') || '[]');
+                if (!readIds.includes(notif.id)) {
+                  const updatedRead = [...readIds, notif.id];
+                  localStorage.setItem('clipzone_read_notifs', JSON.stringify(updatedRead));
+                  setUnreadNotifIds(prev => prev.filter(id => id !== notif.id));
+                  setUnreadNotifCount(prev => Math.max(0, prev - 1));
+                }
+              } catch {}
 
-          if (notif.type === 'live' && notif.courseId) {
-            setShowNotifCenterModal(false);
-            if (isUserAdminSession) {
-              setAdminInitialTab('live');
-              setShowAdminDashboard(true);
-              return;
-            }
-            const resolvedCourseId = activeCourseIds.includes(notif.courseId)
-              ? notif.courseId
-              : activeCourseIds[0];
-            if (resolvedCourseId) {
-              setSelectedLiveCourseId(resolvedCourseId);
-              setCurrentView('course-live');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-            return;
-          }
+              if (notif.type === 'live' && notif.courseId) {
+                setShowNotifCenterModal(false);
+                if (isUserAdminSession) {
+                  setAdminInitialTab('live');
+                  setShowAdminDashboard(true);
+                  return;
+                }
+                const resolvedCourseId = activeCourseIds.includes(notif.courseId)
+                  ? notif.courseId
+                  : activeCourseIds[0];
+                if (resolvedCourseId) {
+                  setSelectedLiveCourseId(resolvedCourseId);
+                  setCurrentView('course-live');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                return;
+              }
 
-          if (notif.url) {
-            if (notif.url.startsWith('#') || notif.url.startsWith('/#')) {
-              const hash = notif.url.replace('/#', '#');
-              window.location.hash = hash;
-            } else if (notif.url.startsWith('/')) {
-              window.location.href = notif.url;
-            } else {
-              const a = document.createElement('a');
-              a.href = notif.url;
-              a.target = '_blank';
-              a.rel = 'noopener noreferrer';
-              a.click();
-            }
-          }
-        }}
-        onMarkAllRead={handleMarkAllNotifsRead}
-        onRequestPermissionPrompt={() => setShowNotifPromptModal(true)}
-      />
+              if (notif.url) {
+                if (notif.url.startsWith('#') || notif.url.startsWith('/#')) {
+                  const hash = notif.url.replace('/#', '#');
+                  window.location.hash = hash;
+                } else if (notif.url.startsWith('/')) {
+                  window.location.href = notif.url;
+                } else {
+                  const a = document.createElement('a');
+                  a.href = notif.url;
+                  a.target = '_blank';
+                  a.rel = 'noopener noreferrer';
+                  a.click();
+                }
+              }
+            }}
+            onMarkAllRead={handleMarkAllNotifsRead}
+            onRequestPermissionPrompt={() => setShowNotifPromptModal(true)}
+          />
+        </Suspense>
+      )}
 
       {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA WITH EXPANDED FULL-SCREEN DESKTOP VIEW */}
       <nav 
