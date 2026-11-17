@@ -665,32 +665,47 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
           </div>
 
           {/* Step 1: Compact Zoom Link Quick Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-900/90 border border-zinc-800 rounded-xl px-3.5 py-2.5">
-            <span className="text-xs text-zinc-300 font-semibold">
-              1. Zoom मा Meeting खोलेर Link कपी गर्नुहोस्:
-            </span>
-            <div className="flex items-center gap-2">
-              <a
-                href="https://zoom.us/start/videomeeting"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1"
-              >
-                <Radio className="w-3 h-3" />
-                <span>Start Zoom</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-              <a
-                href="https://zoom.us/meeting/schedule"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1"
-              >
-                <Calendar className="w-3 h-3" />
-                <span>Schedule</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl px-3.5 py-2.5 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-zinc-300 font-semibold">
+                1. Zoom मा Meeting खोलेर Link कपी गर्नुहोस्:
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <a
+                  href="https://zoom.us/start/videomeeting"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1"
+                >
+                  <Radio className="w-3 h-3" />
+                  <span>Start Zoom</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <a
+                  href="https://zoom.us/meeting/schedule"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1"
+                >
+                  <Calendar className="w-3 h-3" />
+                  <span>Schedule</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <a
+                  href="https://zoom.us/profile/setting?tab=meeting"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition inline-flex items-center gap-1"
+                  title="Turn off Waiting Room once in Zoom Settings so students enter directly without Admit"
+                >
+                  <span>Zoom Settings</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </div>
+            <p className="text-[11px] text-amber-300/90 leading-snug">
+              Direct Join (Admit नचाहिने) बनाउन Zoom मा <strong>Waiting Room OFF</strong> राख्नुहोस् (Meeting भित्र: <em>Security → Enable Waiting Room</em> अनचेक गर्नुहोस्)।
+            </p>
           </div>
 
           {/* Step 2: Essential Fields Only */}
