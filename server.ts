@@ -46,6 +46,7 @@ function buildZoomUrls(rawUrl: string, studentName: string): { webUrl: string; e
     if (!["http:", "https:"].includes(parsed.protocol)) return null;
 
     const cleanName = String(studentName || "Student").trim().slice(0, 60) || "Student";
+    const base64Name = Buffer.from(cleanName, "utf8").toString("base64");
     const idMatch =
       parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i) ||
       parsed.pathname.match(/\/wc\/(\d{9,12})\/join/i);
@@ -61,8 +62,9 @@ function buildZoomUrls(rawUrl: string, studentName: string): { webUrl: string; e
     let embedUrl = webUrl;
     if (meetingId) {
       const wc = new URL(`https://app.zoom.us/wc/${meetingId}/join`);
-      wc.searchParams.set("uname", cleanName);
       wc.searchParams.set("prefer", "1");
+      wc.searchParams.set("un", base64Name);
+      wc.searchParams.set("uname", cleanName);
       if (pwd) wc.searchParams.set("pwd", pwd);
       if (tk) wc.searchParams.set("tk", tk);
       embedUrl = wc.toString();

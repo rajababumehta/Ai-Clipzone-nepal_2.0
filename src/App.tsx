@@ -1985,6 +1985,21 @@ export default function App() {
       localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(verifiedKeys));
       localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
       setActiveCourseIds(finalActiveIds);
+
+      // Keep student display name synced with the admin-assigned name from primary activation keys
+      const primaryNamedKey = verifiedKeys.find((k) => {
+        const keyOwnerUid = k.originalOwnerUid || k.claimedByUid;
+        const isSec = Boolean(keyOwnerUid && currentUid && keyOwnerUid !== currentUid && k.status === 'used');
+        return !isSec && Boolean(cleanRealName(k.studentName));
+      });
+      const dbAssignedName = cleanRealName(primaryNamedKey?.studentName);
+      if (dbAssignedName) {
+        setAuthName(dbAssignedName);
+        try {
+          localStorage.setItem('clipzone_student_name', dbAssignedName);
+        } catch {}
+        setCurrentUser((prev) => (prev ? { ...prev, displayName: dbAssignedName } : prev));
+      }
     } catch (err) {
       console.error('Error fetching student keys:', err);
       setActiveCourseIds(localActivatedCourses);
@@ -5174,12 +5189,37 @@ export default function App() {
               activeLiveCourses.find(c => c.id === selectedClassroomCourseId) ||
               activeLiveCourses[0];
 
+            const courseLiveStudentName = (() => {
+              const forThisCourse = userActivationKeys.find(
+                (k: any) => k.courseId === targetLiveCourse?.id && Boolean(cleanRealName(k.studentName))
+              );
+              if (forThisCourse) return cleanRealName(forThisCourse.studentName);
+              try {
+                const activeCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+                const fromAll = allActivationKeys.find(
+                  (k: any) =>
+                    k.courseId === targetLiveCourse?.id &&
+                    (activeCodes.includes(k.code || k.id) || k.claimedByUid === currentUser?.uid) &&
+                    Boolean(cleanRealName(k.studentName))
+                );
+                if (fromAll) return cleanRealName(fromAll.studentName);
+              } catch {}
+              const anyKeyName = userActivationKeys.find((k: any) => Boolean(cleanRealName(k.studentName)))?.studentName;
+              return (
+                cleanRealName(anyKeyName) ||
+                cleanRealName(currentUser?.displayName) ||
+                cleanRealName(authName) ||
+                cleanRealName(localStorage.getItem('clipzone_student_name')) ||
+                'Student'
+              );
+            })();
+
             return (
-              <section id="course-live-view" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-5">
-                <div className="bg-black border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
-                  {/* Top Back + Course Title Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
-                    <div className="space-y-1.5 text-left">
+              <section id="course-live-view" className="max-w-3xl mx-auto py-4 sm:py-6 space-y-4">
+                <div className="bg-black border border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4">
+                  {/* Compact Back + Course Title Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3.5">
+                    <div className="space-y-1 text-left">
                       <button
                         type="button"
                         onClick={() => {
@@ -5192,24 +5232,18 @@ export default function App() {
                         className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition cursor-pointer"
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>कोर्षमा फर्कनुहोस् (Back to Course)</span>
+                        <span>Back</span>
                       </button>
 
                       {targetLiveCourse && (
-                        <div className="pt-1">
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                            <Video className="w-3 h-3" />
-                            Course Live Session
-                          </span>
-                          <h2 className="text-lg sm:text-2xl font-black text-white mt-1.5 leading-snug">
-                            {targetLiveCourse.title}
-                          </h2>
-                        </div>
+                        <h2 className="text-base sm:text-xl font-black text-white pt-1 leading-snug">
+                          {targetLiveCourse.title}
+                        </h2>
                       )}
                     </div>
 
                     {activeLiveCourses.length > 1 && targetLiveCourse && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {activeLiveCourses.map((c) => (
                           <button
                             key={c.id}
@@ -5234,11 +5268,11 @@ export default function App() {
                       course={targetLiveCourse}
                       courses={courses}
                       sessions={liveSessions}
-                      studentName={currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student'}
+                      studentName={courseLiveStudentName}
                       showToast={showToast}
                     />
                   ) : (
-                    <div className="text-center py-12 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-3">
+                    <div className="text-center py-10 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-3">
                       <p className="text-sm font-bold text-zinc-300">
                         यस कोर्षमा Live Session उपलब्ध छैन।
                       </p>

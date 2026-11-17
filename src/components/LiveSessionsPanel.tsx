@@ -20,6 +20,19 @@ import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Course, LiveSession, SubAdminAccount } from '../types';
 
+function toBase64Utf8(str: string): string {
+  try {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    bytes.forEach((b) => {
+      bin += String.fromCharCode(b);
+    });
+    return btoa(bin);
+  } catch {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+}
+
 function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: string; embedUrl: string } | null {
   try {
     const trimmed = String(rawUrl || '').trim();
@@ -28,6 +41,7 @@ function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: str
     if (!['http:', 'https:'].includes(parsed.protocol)) return null;
 
     const cleanName = String(studentName || 'Student').trim().slice(0, 60) || 'Student';
+    const base64Name = toBase64Utf8(cleanName);
     const idMatch =
       parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i) ||
       parsed.pathname.match(/\/wc\/(\d{9,12})\/join/i);
@@ -43,8 +57,9 @@ function buildClientZoomUrls(rawUrl: string, studentName: string): { webUrl: str
     let embedUrl = webUrl;
     if (meetingId) {
       const wc = new URL(`https://app.zoom.us/wc/${meetingId}/join`);
-      wc.searchParams.set('uname', cleanName);
       wc.searchParams.set('prefer', '1');
+      wc.searchParams.set('un', base64Name);
+      wc.searchParams.set('uname', cleanName);
       if (pwd) wc.searchParams.set('pwd', pwd);
       if (tk) wc.searchParams.set('tk', tk);
       embedUrl = wc.toString();
@@ -270,6 +285,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
   }, [mode, sessions, isMainAdmin, subAdminSession?.courseId]);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showOptionalFields, setShowOptionalFields] = useState(false);
   const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
   const [formCourseId, setFormCourseId] = useState('');
   const [formTitle, setFormTitle] = useState('');
@@ -292,6 +308,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
 
   const resetForm = useCallback(() => {
     setEditingSession(null);
+    setShowOptionalFields(false);
     setFormCourseId(liveEnabledCourses[0]?.id || subAdminSession?.courseId || '');
     setFormTitle('');
     setFormZoomLink('');
@@ -317,6 +334,9 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     setFormScheduledTime(session.scheduledTime || '');
     setFormDuration(session.durationMinutes || '60 mins');
     setFormDescription(session.description || '');
+    setShowOptionalFields(
+      Boolean(session.scheduledDate || session.scheduledTime || session.description || session.status === 'scheduled')
+    );
     setFormNotifyStudents(false);
     setFormZoomLink('');
     setShowCreateForm(true);
@@ -380,43 +400,13 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
   };
 
   // =========================
-  // RENDER: STUDENT MODE
+  // RENDER: STUDENT MODE (SIMPLE & DIRECT)
   // =========================
   if (mode === 'student') {
-    const liveCount = studentCourseSessions.filter((s) => s.status === 'live').length;
-    const upcomingCount = studentCourseSessions.filter((s) => s.status === 'scheduled').length;
+    const lockedStudentName = (studentName || 'Student').trim() || 'Student';
 
     return (
-      <div className="space-y-5 text-left">
-        {/* Info Header */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
-              <Video className="w-5 h-5" />
-            </div>
-            <div>
-              <h5 className="text-sm font-black text-white flex items-center gap-2">
-                <span>Live Zoom Sessions</span>
-                {liveCount > 0 && (
-                  <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {liveCount} Live Now
-                  </span>
-                )}
-              </h5>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {upcomingCount > 0 || liveCount > 0
-                  ? 'Click Join below to enter your live Zoom class directly.'
-                  : 'Instructor ले Live Session सुरु गरेपछि यहाँ Join बटन देखिनेछ।'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 shrink-0">
-            <Lock className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Direct Secure Entry</span>
-          </div>
-        </div>
-
+      <div className="space-y-4 text-left">
         {/* Sessions List */}
         {studentCourseSessions.length > 0 ? (
           <div className="space-y-3">
@@ -424,7 +414,6 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
               const isLive = session.status === 'live';
               const isScheduled = session.status === 'scheduled';
               const isEnded = session.status === 'ended';
-              const opaqueUrl = launchUrls[session.id];
               const isResolving = Boolean(resolvingIds[session.id]);
 
               return (
@@ -457,9 +446,11 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                           Ended
                         </span>
                       )}
-                      <span className="text-[11px] text-zinc-400 font-semibold">
-                        Host: {session.hostName || 'Instructor'}
-                      </span>
+                      {(session.scheduledDate || session.scheduledTime) && (
+                        <span className="text-[11px] text-zinc-400 font-medium">
+                          {[session.scheduledDate, session.scheduledTime].filter(Boolean).join(' • ')}
+                        </span>
+                      )}
                     </div>
 
                     <h6 className="text-sm sm:text-base font-black text-white leading-snug">
@@ -467,37 +458,23 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                     </h6>
 
                     {session.description && (
-                      <p className="text-xs text-zinc-400 leading-relaxed">
+                      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
                         {session.description}
                       </p>
                     )}
 
-                    {(session.scheduledDate || session.scheduledTime || session.durationMinutes) && (
-                      <div className="flex items-center gap-3 text-[11px] text-zinc-400 font-medium pt-0.5 flex-wrap">
-                        {session.scheduledDate && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-blue-400" />
-                            {session.scheduledDate}
-                          </span>
-                        )}
-                        {session.scheduledTime && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-blue-400" />
-                            {session.scheduledTime}
-                          </span>
-                        )}
-                        {session.durationMinutes && (
-                          <span>⏱️ {session.durationMinutes}</span>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 pt-0.5">
+                      <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>Name:</span>
+                      <span className="font-bold text-zinc-200 truncate">{lockedStudentName}</span>
+                    </div>
                   </div>
 
-                  {/* Join Action (Opens Zoom directly inside our website — NEVER exposes Zoom URL) */}
+                  {/* Single Simple Join Action (Embedded in website, locked name) */}
                   <div className="shrink-0 flex items-center justify-end">
                     {isEnded ? (
                       <span className="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 text-xs font-bold">
-                        Session Ended
+                        Ended
                       </span>
                     ) : (
                       <button
@@ -505,7 +482,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                         disabled={isResolving}
                         onClick={() => handleJoinInsideWebsite(session)}
                         title="Join Live Session"
-                        className={`px-6 py-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center gap-2 shadow-lg cursor-pointer select-none active:scale-95 disabled:opacity-60 ${
+                        className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg cursor-pointer select-none active:scale-95 disabled:opacity-60 ${
                           isLive
                             ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
                             : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/25'
@@ -516,7 +493,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                         ) : (
                           <Play className="w-4 h-4 fill-current" />
                         )}
-                        <span>{isResolving ? 'Connecting...' : 'Join'}</span>
+                        <span>{isResolving ? 'Joining...' : 'Join Class'}</span>
                       </button>
                     )}
                   </div>
@@ -525,15 +502,15 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             })}
           </div>
         ) : (
-          <div className="text-center py-12 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-2.5">
-            <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 text-blue-400 flex items-center justify-center mx-auto">
-              <Video className="w-6 h-6" />
+          <div className="text-center py-10 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-2">
+            <div className="w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-800 text-blue-400 flex items-center justify-center mx-auto">
+              <Video className="w-5 h-5" />
             </div>
             <h5 className="text-sm font-bold text-zinc-200">
-              कुनै Live Session तालिका बनाइएको छैन
+              अहिले कुनै Live Class छैन
             </h5>
             <p className="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
-              तपाईंको कोर्ष शिक्षकले Zoom मार्फत Live Class Create Meeting गर्नुभएपछि तपाईंलाई तुरुन्तै Notification आउनेछ र यहाँ Join बटन देखा पर्नेछ।
+              शिक्षकले Live Class सुरु गरेपछि यहाँ Join Class बटन देखिनेछ।
             </p>
           </div>
         )}
@@ -544,24 +521,23 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             className="fixed inset-0 z-[9999] bg-black flex flex-col"
             onContextMenu={(e) => e.preventDefault()}
           >
-            {/* Classroom Top Bar */}
-            <div className="h-14 px-3 sm:px-5 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+            {/* Slim Classroom Top Bar */}
+            <div className="h-12 px-3 sm:px-5 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2.5 py-1 rounded-full uppercase shrink-0">
+                <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded-full uppercase shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Classroom
+                  Live
                 </span>
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-black text-white truncate">
-                    {activeClassroom.session.title}
-                  </p>
-                  <p className="text-[10px] text-zinc-400 truncate">
-                    {activeClassroom.session.courseTitle} • {(studentName || 'Student').trim() || 'Student'}
-                  </p>
-                </div>
+                <p className="text-xs sm:text-sm font-black text-white truncate">
+                  {activeClassroom.session.title}
+                </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-zinc-300 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-lg max-w-[180px] truncate">
+                  <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span className="truncate">{lockedStudentName}</span>
+                </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -571,18 +547,17 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                     );
                   }}
                   title="Reload Live Classroom"
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Reload</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveClassroom(null)}
-                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-rose-600/25 active:scale-95"
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black transition flex items-center gap-1 cursor-pointer shadow-md shadow-rose-600/25 active:scale-95"
                 >
-                  <X className="w-4 h-4" />
-                  <span>Leave Class</span>
+                  <X className="w-3.5 h-3.5" />
+                  <span>Leave</span>
                 </button>
               </div>
             </div>
@@ -590,15 +565,13 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             {/* Embedded Live Meeting Frame */}
             <div className="flex-1 relative w-full h-full bg-black overflow-hidden">
               {iframeLoading && (
-                <div className="absolute inset-0 z-10 bg-zinc-950 flex flex-col items-center justify-center gap-3 p-6 text-center pointer-events-none">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
-                    <RefreshCw className="w-6 h-6 animate-spin" />
-                  </div>
+                <div className="absolute inset-0 z-10 bg-zinc-950 flex flex-col items-center justify-center gap-2.5 p-6 text-center pointer-events-none">
+                  <RefreshCw className="w-7 h-7 animate-spin text-blue-400" />
                   <p className="text-sm font-black text-white">
-                    Live Class लोड हुँदैछ...
+                    Live Class खुल्दैछ...
                   </p>
                   <p className="text-xs text-zinc-400 max-w-xs">
-                    कृपया Camera र Microphone को अनुमति (Allow) दिनुहोस् ताकि तपाईं कक्षामा सजिलै जोडिन सक्नुहोस्।
+                    नाम: <strong className="text-white">{lockedStudentName}</strong>
                   </p>
                 </div>
               )}
@@ -672,18 +645,13 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
         </div>
       )}
 
-      {/* Create / Edit Meeting Form */}
+      {/* Simplified Create / Edit Meeting Form */}
       {showCreateForm && liveEnabledCourses.length > 0 && (
-        <div className="bg-zinc-950 border border-blue-500/40 rounded-2xl p-5 sm:p-6 space-y-5 shadow-2xl">
+        <div className="bg-zinc-950 border border-blue-500/40 rounded-2xl p-4 sm:p-5 space-y-4 shadow-2xl">
           <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-            <div>
-              <h5 className="text-base font-black text-white">
-                {editingSession ? 'Update Live Meeting' : 'Create Live Session (Zoom)'}
-              </h5>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
-                Step 1: Zoom मा Meeting बनाउनुहोस् → Step 2: Link यहाँ राखेर Create Meeting गर्नुहोस्
-              </p>
-            </div>
+            <h5 className="text-sm sm:text-base font-black text-white">
+              {editingSession ? 'Update Live Meeting' : 'Create Live Session'}
+            </h5>
             <button
               type="button"
               onClick={() => {
@@ -696,51 +664,79 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             </button>
           </div>
 
-          {/* Step 1: Launch Zoom */}
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-blue-400">
-                  Step 1 • Zoom Meeting Setup
-                </span>
-                <p className="text-xs text-zinc-300 font-medium mt-0.5">
-                  Zoom खोलेर Meeting Create गर्नुहोस् र Invite Link कपी गर्नुहोस्:
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <a
-                  href="https://zoom.us/meeting/schedule"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3.5 py-2 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  <span>Open Zoom Schedule</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                <a
-                  href="https://zoom.us/start/videomeeting"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3.5 py-2 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm"
-                >
-                  <Radio className="w-3.5 h-3.5" />
-                  <span>Start Instant Zoom</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
+          {/* Step 1: Compact Zoom Link Quick Actions */}
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-900/90 border border-zinc-800 rounded-xl px-3.5 py-2.5">
+            <span className="text-xs text-zinc-300 font-semibold">
+              1. Zoom मा Meeting खोलेर Link कपी गर्नुहोस्:
+            </span>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://zoom.us/start/videomeeting"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1"
+              >
+                <Radio className="w-3 h-3" />
+                <span>Start Zoom</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href="https://zoom.us/meeting/schedule"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1"
+              >
+                <Calendar className="w-3 h-3" />
+                <span>Schedule</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
           </div>
 
-          {/* Step 2: Form */}
-          <form onSubmit={handleSubmitForm} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Course Selection (locked for Sub-Admin) */}
-              <div>
-                <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">
-                  Target Course *
+          {/* Step 2: Essential Fields Only */}
+          <form onSubmit={handleSubmitForm} className="space-y-3.5">
+            {/* Session Title */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-blue-400 mb-1">
+                Session Title *
+              </label>
+              <input
+                type="text"
+                required
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="e.g. Live Class 1: AI Workflow Q&A"
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder-zinc-500"
+              />
+            </div>
+
+            {/* Zoom Link (Protected) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] font-black uppercase text-blue-400">
+                  2. Paste Zoom Link *
                 </label>
-                {isMainAdmin ? (
+                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  Hidden from students
+                </span>
+              </div>
+              <input
+                type="url"
+                required
+                value={formZoomLink}
+                onChange={(e) => setFormZoomLink(e.target.value)}
+                placeholder="https://us02web.zoom.us/j/1234567890?pwd=..."
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-hidden placeholder-zinc-500"
+              />
+            </div>
+
+            <div className={`grid grid-cols-1 ${isMainAdmin ? 'sm:grid-cols-2' : ''} gap-3`}>
+              {isMainAdmin && (
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1">
+                    Course *
+                  </label>
                   <select
                     value={formCourseId}
                     onChange={(e) => setFormCourseId(e.target.value)}
@@ -753,21 +749,20 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                       </option>
                     ))}
                   </select>
-                ) : (
-                  <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-bold text-emerald-300 truncate">
-                    {liveEnabledCourses[0]?.title || subAdminSession?.courseTitle}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Session Status */}
               <div>
-                <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">
-                  Session Status *
+                <label className="block text-[10px] font-black uppercase text-blue-400 mb-1">
+                  Status *
                 </label>
                 <select
                   value={formStatus}
-                  onChange={(e) => setFormStatus(e.target.value as 'live' | 'scheduled' | 'ended')}
+                  onChange={(e) => {
+                    const val = e.target.value as 'live' | 'scheduled' | 'ended';
+                    setFormStatus(val);
+                    if (val === 'scheduled') setShowOptionalFields(true);
+                  }}
                   className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-hidden"
                 >
                   <option value="live">Live Now (अहिले सुरु)</option>
@@ -777,112 +772,85 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
               </div>
             </div>
 
-            {/* Session Title */}
+            {/* Collapsible Optional Schedule & Notes */}
             <div>
-              <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">
-                Session Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="e.g. Live Class 1: AI Workflow Q&A Workshop"
-                className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white outline-hidden placeholder-zinc-500"
-              />
-            </div>
+              <button
+                type="button"
+                onClick={() => setShowOptionalFields((v) => !v)}
+                className="text-[11px] font-bold text-zinc-400 hover:text-blue-400 transition cursor-pointer"
+              >
+                {showOptionalFields ? '− Hide Date / Time / Notes' : '+ Add Date, Time or Notes (Optional)'}
+              </button>
 
-            {/* Zoom Link (Protected) */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[10px] font-black uppercase text-blue-400">
-                  Zoom Meeting Link *
-                </label>
-                <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Hidden from students (Join button only)
-                </span>
-              </div>
-              <input
-                type="url"
-                required
-                value={formZoomLink}
-                onChange={(e) => setFormZoomLink(e.target.value)}
-                placeholder="https://us02web.zoom.us/j/1234567890?pwd=..."
-                className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white outline-hidden placeholder-zinc-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
-                  Date (Optional)
-                </label>
-                <input
-                  type="date"
-                  value={formScheduledDate}
-                  onChange={(e) => setFormScheduledDate(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white outline-hidden"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
-                  Time (Optional)
-                </label>
-                <input
-                  type="time"
-                  value={formScheduledTime}
-                  onChange={(e) => setFormScheduledTime(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white outline-hidden"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
-                  Duration
-                </label>
-                <input
-                  type="text"
-                  value={formDuration}
-                  onChange={(e) => setFormDuration(e.target.value)}
-                  placeholder="60 mins"
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white outline-hidden"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
-                Session Notes / Topic (Optional)
-              </label>
-              <textarea
-                rows={2}
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Topics covered in this live class..."
-                className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2 text-xs text-white outline-hidden placeholder-zinc-500"
-              />
+              {showOptionalFields && (
+                <div className="mt-2.5 space-y-3 bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        value={formScheduledDate}
+                        onChange={(e) => setFormScheduledDate(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
+                        Time
+                      </label>
+                      <input
+                        type="time"
+                        value={formScheduledTime}
+                        onChange={(e) => setFormScheduledTime(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
+                        Duration
+                      </label>
+                      <input
+                        type="text"
+                        value={formDuration}
+                        onChange={(e) => setFormDuration(e.target.value)}
+                        placeholder="60 mins"
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white outline-hidden"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-zinc-400 mb-1">
+                      Notes (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      placeholder="Topics covered in this live class..."
+                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2 text-xs text-white outline-hidden placeholder-zinc-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Notify Course Students Checkbox */}
-            <label className="flex items-center gap-2.5 bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 cursor-pointer select-none">
+            <label className="flex items-center gap-2.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-3.5 py-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={formNotifyStudents}
                 onChange={(e) => setFormNotifyStudents(e.target.checked)}
                 className="w-4 h-4 rounded border-zinc-700 text-blue-600 focus:ring-blue-500 bg-black"
               />
-              <div className="text-xs">
-                <span className="font-bold text-white flex items-center gap-1.5">
-                  <Bell className="w-3.5 h-3.5 text-blue-400" />
-                  Send notification to users who activated this course
-                </span>
-                <span className="text-[11px] text-zinc-400 block mt-0.5">
-                  यो कोर्ष Activate गरेका विद्यार्थीहरूलाई मात्र Live Class सूचना पठाइनेछ (Zoom Link लुकाइनेछ)।
-                </span>
-              </div>
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                Send notification to course students
+              </span>
             </label>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-2.5 pt-1">
               <button
                 type="submit"
                 disabled={isSaving}
@@ -907,7 +875,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                   setShowCreateForm(false);
                   resetForm();
                 }}
-                className="px-5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs transition cursor-pointer"
+                className="px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs transition cursor-pointer"
               >
                 Cancel
               </button>
