@@ -83,7 +83,6 @@ import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
-import { QrCodeScannerPanel } from './components/QrCodeScannerPanel';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 
@@ -3564,28 +3563,6 @@ export default function App() {
   const [openDetailChapters, setOpenDetailChapters] = useState<Record<string, boolean>>({});
   const [activationCodeInput, setActivationCodeInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
-  const [qrScannerContext, setQrScannerContext] = useState<'modal' | 'account' | 'renew' | 'classroom' | null>(null);
-
-  useEffect(() => {
-    if (!showCodeInputModal && qrScannerContext === 'modal') {
-      setQrScannerContext(null);
-    }
-  }, [showCodeInputModal, qrScannerContext]);
-
-  const handleQrCodeScanned = useCallback((rawDecodedText: string) => {
-    let candidate = String(rawDecodedText || '').trim();
-    if (/^https?:\/\//i.test(candidate)) {
-      try {
-        const u = new URL(candidate);
-        const paramCode = u.searchParams.get('code') || u.searchParams.get('key') || u.searchParams.get('activation');
-        if (paramCode) candidate = paramCode;
-      } catch {}
-    }
-    const cleaned = extractAndCleanCode(candidate) || candidate.toUpperCase();
-    setActivationCodeInput(cleaned);
-    setQrScannerContext(null);
-    showToast(`📷 QR कोड स्क्यान भई पेस्ट गरियो: ${cleaned}`, 'success');
-  }, [showToast]);
 
   // Reusable clipboard paste handler for course activation code
   const handlePasteCodeToInput = useCallback(async (targetSetter?: (val: string) => void) => {
@@ -5406,42 +5383,20 @@ export default function App() {
 
                 <form onSubmit={handleClaimActivationCode} className="space-y-4 pt-1">
                   <div className="space-y-2 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase text-blue-400 tracking-wider">
                         Secret Activation Code (सेक्रेट कोड) *
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setQrScannerContext((prev) => (prev === 'account' ? null : 'account'))}
-                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95 ${
-                            qrScannerContext === 'account'
-                              ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                          }`}
-                          title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Scan QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePasteCodeToInput()}
-                          className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
-                          title="Clipboard बाट कोड Paste गर्नुहोस्"
-                        >
-                          <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
-                          <span>Paste</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
+                        <span>📋 Paste Code</span>
+                      </button>
                     </div>
-
-                    {qrScannerContext === 'account' && (
-                      <QrCodeScannerPanel
-                        onScanSuccess={handleQrCodeScanned}
-                        onClose={() => setQrScannerContext(null)}
-                      />
-                    )}
 
                     <div className="relative flex items-center">
                       <input 
@@ -6237,42 +6192,20 @@ export default function App() {
 
                   {/* Instant Reactivation Form */}
                   <form onSubmit={handleClaimActivationCode} className="space-y-3 pt-2 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase tracking-wider text-zinc-300">
                         नयाँ सेक्रेट कोड राख्नुहोस् (Enter New Secret Code)
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setQrScannerContext((prev) => (prev === 'renew' ? null : 'renew'))}
-                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer active:scale-95 ${
-                            qrScannerContext === 'renew'
-                              ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                          }`}
-                          title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Scan QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePasteCodeToInput()}
-                          className="text-[11px] font-extrabold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer active:scale-95"
-                          title="Clipboard बाट कोड Paste गर्नुहोस्"
-                        >
-                          <ClipboardPaste className="w-3.5 h-3.5" />
-                          <span>Paste</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>📋 Paste</span>
+                      </button>
                     </div>
-
-                    {qrScannerContext === 'renew' && (
-                      <QrCodeScannerPanel
-                        onScanSuccess={handleQrCodeScanned}
-                        onClose={() => setQrScannerContext(null)}
-                      />
-                    )}
 
                     <div className="relative flex items-center">
                       <input 
@@ -6354,42 +6287,20 @@ export default function App() {
                   </div>
 
                   <form onSubmit={handleClaimActivationCode} className="space-y-3 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
                         Secret Activation Code (सेक्रेट कोड) *
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setQrScannerContext((prev) => (prev === 'classroom' ? null : 'classroom'))}
-                          className={`text-[11px] font-extrabold px-2.5 py-1 rounded-xl border transition flex items-center gap-1 cursor-pointer active:scale-95 ${
-                            qrScannerContext === 'classroom'
-                              ? 'bg-emerald-600 text-white border-emerald-500'
-                              : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                          }`}
-                          title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                        >
-                          <QrCode className="w-3.5 h-3.5" />
-                          <span>Scan QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePasteCodeToInput()}
-                          className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer active:scale-95"
-                          title="Clipboard बाट कोड Paste गर्नुहोस्"
-                        >
-                          <ClipboardPaste className="w-3.5 h-3.5" />
-                          <span>Paste</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteCodeToInput()}
+                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>📋 Paste</span>
+                      </button>
                     </div>
-
-                    {qrScannerContext === 'classroom' && (
-                      <QrCodeScannerPanel
-                        onScanSuccess={handleQrCodeScanned}
-                        onClose={() => setQrScannerContext(null)}
-                      />
-                    )}
 
                     <div className="relative flex items-center">
                       <input 
@@ -6531,10 +6442,7 @@ export default function App() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                        <span className="bg-zinc-950/85 backdrop-blur-md text-zinc-300 text-xs font-semibold px-3 py-1 rounded-lg border border-zinc-750">
-                          Lifetime Access
-                        </span>
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-end">
                         <span className="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
                           Instant Delivery
                         </span>
@@ -7360,17 +7268,14 @@ export default function App() {
             />
 
             {/* Modal Box */}
-              <motion.div
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-black max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-zinc-800 text-zinc-200 max-h-[92vh] overflow-y-auto"
+              className="bg-black max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-zinc-800 text-zinc-200"
             >
               <button 
-                onClick={() => {
-                  setQrScannerContext(null);
-                  setShowCodeInputModal(false);
-                }}
+                onClick={() => setShowCodeInputModal(false)}
                 className="absolute top-5 right-5 text-zinc-400 hover:text-white transition cursor-pointer p-1 rounded-full hover:bg-zinc-800"
               >
                 <X className="w-5 h-5" />
@@ -7384,54 +7289,31 @@ export default function App() {
                 Add New Course to Student ID
               </h3>
               <p className="text-xs text-zinc-400 mt-1.5 text-center font-medium">
-                तपाईंसँग भएको सेक्रेट कोड (CLIP-XXXXXX) यहाँ राखी वा QR स्क्यान गरी आफ्नो एकाउन्टमा नयाँ कोर्स जोड्नुहोस्।
+                तपाईंसँग भएको सेक्रेट कोड (CLIP-XXXXXX) यहाँ राखी आफ्नो यही एकाउन्टमा नयाँ कोर्स जोड्नुहोस्।
               </p>
 
               <form 
                 onSubmit={async (e) => {
-                  setQrScannerContext(null);
                   await handleClaimActivationCode(e);
                   setShowCodeInputModal(false);
                 }} 
                 className="mt-6 space-y-4 text-left"
               >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
-                      Secret Activation Code *
+                      Secret Activation Code (सेक्रेट कोड) *
                     </label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQrScannerContext((prev) => (prev === 'modal' ? null : 'modal'))}
-                        className={`text-[11px] font-extrabold px-3 py-1 rounded-xl border transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
-                          qrScannerContext === 'modal'
-                            ? 'bg-emerald-600 text-white border-emerald-500'
-                            : 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30'
-                        }`}
-                        title="क्यामेराबाट QR कोड स्क्यान गर्नुहोस्"
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        <span>{qrScannerContext === 'modal' ? 'Close QR' : 'Scan QR'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePasteCodeToInput()}
-                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                        title="Clipboard बाट कोड Paste गर्नुहोस्"
-                      >
-                        <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Paste</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePasteCodeToInput()}
+                      className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                      title="Clipboard बाट कोड Paste गर्नुहोस्"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
+                      <span>📋 Paste Code</span>
+                    </button>
                   </div>
-
-                  {qrScannerContext === 'modal' && (
-                    <QrCodeScannerPanel
-                      onScanSuccess={handleQrCodeScanned}
-                      onClose={() => setQrScannerContext(null)}
-                    />
-                  )}
 
                   <div className="relative flex items-center">
                     <input 
@@ -7481,7 +7363,7 @@ export default function App() {
                   </div>
 
                   <p className="text-[11px] text-zinc-400 font-medium">
-                    💡 सजिलै <strong>Scan QR</strong> बाट स्क्यान गर्नुहोस्, <strong>Paste</strong> थिच्नुहोस् वा कोड टाइप गर्नुहोस्।
+                    💡 सजिलै <strong>Paste</strong> बटन थिच्नुहोस् वा आफ्नो कोड टाइप गर्नुहोस्।
                   </p>
                 </div>
 
