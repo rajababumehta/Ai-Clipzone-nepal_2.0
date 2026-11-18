@@ -10,8 +10,8 @@ interface ImageAdjustModalProps {
 }
 
 const CROP_BOX_SIZE = 260; // 260px on screen
-const OUTPUT_SIZE = 512; // 512px output canvas
-const SCALE_FACTOR = OUTPUT_SIZE / CROP_BOX_SIZE; // ~1.96923
+const OUTPUT_SIZE = 384; // 384px output canvas (lightweight & crisp for Firestore)
+const SCALE_FACTOR = OUTPUT_SIZE / CROP_BOX_SIZE;
 
 export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
   imageUrl,
@@ -131,7 +131,7 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
 
     ctx.restore();
 
-    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
     onConfirm(croppedDataUrl);
   }, [offset, rotation, zoom, baseDimensions, onConfirm]);
 

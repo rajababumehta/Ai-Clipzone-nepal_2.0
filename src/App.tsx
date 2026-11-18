@@ -506,17 +506,13 @@ export default function App() {
       }
     });
 
-    // 1. Persist permanently on every active key in Firestore
+    // 1. Persist permanently on every active key in Firestore (only update existing key docs)
     activeCodes.forEach((code) => {
       if (!code) return;
-      setDoc(
-        doc(db, 'activation_keys', code),
-        {
-          studentAvatar: cleanAvatar,
-          studentAvatarUpdatedAt: Date.now()
-        },
-        { merge: true }
-      ).catch(() => {});
+      updateDoc(doc(db, 'activation_keys', code), {
+        studentAvatar: cleanAvatar,
+        studentAvatarUpdatedAt: Date.now()
+      }).catch(() => {});
     });
 
     setUserActivationKeys((prev) => {
@@ -527,7 +523,10 @@ export default function App() {
       return updated;
     });
 
-    // 2. Sync to assigned Course Sub-Admin support_conversations in Firestore
+    // 2. Sync to existing assigned Course Sub-Admin support_conversations in Firestore
+    // Skip oversized Data URLs (>200KB) and never create skeleton docs for unstarted chats
+    if (cleanAvatar.length > 200000) return;
+
     const keyClaimedUids = userActivationKeys
       .map((k: any) => k?.claimedByUid)
       .filter((uid: any) => typeof uid === 'string' && uid.length > 0);
@@ -541,11 +540,18 @@ export default function App() {
       new Set([primaryUid, ...keyClaimedUids, currentUser?.uid, getOrCreateDeviceId()].filter(Boolean))
     ) as string[];
 
+    const normText = (v?: string) => (v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const expandAliases = (cid: string): string[] => {
+      if (cid === 'al-master-class-course-by-al-clipzone') return [cid, 'Ai master class course by Ai clipzone'];
+      if (cid === 'Ai master class course by Ai clipzone') return [cid, 'al-master-class-course-by-al-clipzone'];
+      return [cid];
+    };
+
     const enrolledCourseIds = Array.from(
       new Set([
         ...activeCourseIds,
         ...userActivationKeys.map((k: any) => k?.courseId).filter(Boolean)
-      ])
+      ].flatMap(expandAliases))
     );
 
     let poolSubs: SubAdminAccount[] = Array.from(
@@ -573,36 +579,23 @@ export default function App() {
       if (enrolledCourseIds.includes('course-all') || enrolledCourseIds.includes(s.courseId)) {
         return true;
       }
+      const subTitleNorm = normText(s.courseTitle);
       return userActivationKeys.some(
         (k: any) =>
           k?.courseTitle &&
-          s.courseTitle &&
-          k.courseTitle.trim().toLowerCase() === s.courseTitle.trim().toLowerCase()
+          subTitleNorm &&
+          normText(k.courseTitle) === subTitleNorm
       );
     });
 
     targetSubs.forEach((sub) => {
-      const courseObj = courses.find((c) => c.id === sub.courseId);
-      const courseTitle = sub.courseTitle || courseObj?.title || 'Course';
       candidateUids.forEach((uid) => {
         const convId = `substudent__${sub.code}__${uid}`;
-        setDoc(
-          doc(db, 'support_conversations', convId),
-          {
-            id: convId,
-            userId: uid,
-            userName: realName,
-            channelType: 'student_subadmin',
-            subAdminCode: sub.code,
-            subAdminName: sub.name,
-            courseId: sub.courseId,
-            activeCourse: courseTitle,
-            purchasedCourses: [courseTitle],
-            userAvatar: cleanAvatar,
-            updatedAt: Date.now()
-          },
-          { merge: true }
-        ).catch(() => {});
+        updateDoc(doc(db, 'support_conversations', convId), {
+          userName: realName,
+          userAvatar: cleanAvatar,
+          updatedAt: Date.now()
+        }).catch(() => {});
       });
     });
   };
@@ -2674,15 +2667,31 @@ export default function App() {
 
       // Link/ensure conversation document exists for assigned Course Sub-Admin ONLY (never Main Admin)
       try {
+        const normTitle = (v?: string) => (v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const unlockedAliases =
+          unlockedCourseId === 'al-master-class-course-by-al-clipzone'
+            ? [unlockedCourseId, 'Ai master class course by Ai clipzone']
+            : unlockedCourseId === 'Ai master class course by Ai clipzone'
+              ? [unlockedCourseId, 'al-master-class-course-by-al-clipzone']
+              : [unlockedCourseId];
+
         let matchedSub = [...activeSubAdmins, ...subAdminList].find(
-          s => s.status === 'active' && (s.courseId === unlockedCourseId || s.courseTitle.trim().toLowerCase() === unlockedCourseTitle.trim().toLowerCase())
+          s =>
+            s.status === 'active' &&
+            (unlockedAliases.includes(s.courseId) ||
+              (normTitle(unlockedCourseTitle) !== '' && normTitle(s.courseTitle) === normTitle(unlockedCourseTitle)))
         );
         if (!matchedSub && unlockedCourseId && unlockedCourseId !== 'course-all') {
           try {
-            const subSnap = await getDocs(query(collection(db, 'sub_admins'), where('courseId', '==', unlockedCourseId), where('status', '==', 'active')));
+            const subSnap = await getDocs(query(collection(db, 'sub_admins'), where('status', '==', 'active')));
             subSnap.forEach((d) => {
-              if (!matchedSub) {
-                matchedSub = { id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) };
+              if (matchedSub) return;
+              const sData = { id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) };
+              if (
+                unlockedAliases.includes(sData.courseId) ||
+                (normTitle(unlockedCourseTitle) !== '' && normTitle(sData.courseTitle) === normTitle(unlockedCourseTitle))
+              ) {
+                matchedSub = sData;
               }
             });
           } catch {}
@@ -2690,20 +2699,44 @@ export default function App() {
         if (matchedSub) {
           const subConvId = `substudent__${matchedSub.code}__${permanentStudentUid}`;
           const convDocRef = doc(db, 'support_conversations', subConvId);
-          setDoc(convDocRef, {
-            id: subConvId,
-            userId: permanentStudentUid,
-            userName: assignedStudentName,
-            userEmail: assignedStudentName,
-            ...(resolvedStudentAvatar ? { userAvatar: resolvedStudentAvatar } : {}),
-            channelType: 'student_subadmin',
-            subAdminCode: matchedSub.code,
-            subAdminName: matchedSub.name,
-            courseId: unlockedCourseId,
-            activeCourse: unlockedCourseTitle,
-            purchasedCourses: [unlockedCourseTitle],
-            updatedAt: Date.now()
-          }, { merge: true }).catch(() => {});
+          const safeAvatar =
+            resolvedStudentAvatar && resolvedStudentAvatar.length <= 200000
+              ? resolvedStudentAvatar
+              : '';
+          const convInitNow = Date.now();
+          const existingConvSnap = await getDoc(convDocRef).catch(() => null);
+          if (existingConvSnap?.exists()) {
+            updateDoc(convDocRef, {
+              userName: assignedStudentName,
+              userEmail: assignedStudentName,
+              ...(safeAvatar ? { userAvatar: safeAvatar } : {}),
+              subAdminName: matchedSub.name,
+              courseId: unlockedCourseId || matchedSub.courseId,
+              activeCourse: unlockedCourseTitle || matchedSub.courseTitle,
+              updatedAt: convInitNow
+            }).catch(() => {});
+          } else {
+            setDoc(convDocRef, {
+              id: subConvId,
+              userId: permanentStudentUid,
+              userName: assignedStudentName,
+              userEmail: assignedStudentName,
+              ...(safeAvatar ? { userAvatar: safeAvatar } : {}),
+              channelType: 'student_subadmin',
+              subAdminCode: matchedSub.code,
+              subAdminName: matchedSub.name,
+              courseId: unlockedCourseId || matchedSub.courseId,
+              activeCourse: unlockedCourseTitle || matchedSub.courseTitle,
+              purchasedCourses: unlockedCourseTitle ? [unlockedCourseTitle] : [],
+              lastMessage: '',
+              lastMessageAt: convInitNow,
+              lastSender: 'system',
+              unreadAdminCount: 0,
+              unreadUserCount: 0,
+              createdAt: convInitNow,
+              updatedAt: convInitNow
+            }).catch(() => {});
+          }
         }
       } catch (e) {}
 
@@ -2937,6 +2970,8 @@ export default function App() {
     try {
       await setDoc(doc(db, 'sub_admins', finalCode), newSubAdmin);
       if (cleanAvatarUrl) {
+        const subNow = Date.now();
+        const safeSubAvatar = cleanAvatarUrl.length <= 200000 ? cleanAvatarUrl : '';
         setDoc(
           doc(db, 'support_conversations', `subadmin_main__${finalCode}`),
           {
@@ -2946,10 +2981,16 @@ export default function App() {
             subAdminName: cleanName,
             userId: finalCode,
             userName: cleanName,
-            userAvatar: cleanAvatarUrl,
+            ...(safeSubAvatar ? { userAvatar: safeSubAvatar } : {}),
             courseId: targetCourse.id,
             activeCourse: targetCourse.title,
-            updatedAt: Date.now(),
+            lastMessage: 'कुनै म्यासेज छैन',
+            lastMessageAt: subNow,
+            lastSender: 'system',
+            unreadAdminCount: 0,
+            unreadUserCount: 0,
+            createdAt: subNow,
+            updatedAt: subNow,
           },
           { merge: true }
         ).catch(() => {});
@@ -2974,28 +3015,39 @@ export default function App() {
       return;
     }
     const cleanAvatar = (avatarUrl || '').trim();
+    const safeConvAvatar = cleanAvatar.length <= 200000 ? cleanAvatar : '';
     const now = Date.now();
     try {
       await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
         avatarUrl: cleanAvatar,
         updatedAt: now,
       });
-      setDoc(
-        doc(db, 'support_conversations', `subadmin_main__${subAdmin.code}`),
-        {
+      const mainConvRef = doc(db, 'support_conversations', `subadmin_main__${subAdmin.code}`);
+      updateDoc(mainConvRef, {
+        subAdminName: subAdmin.name,
+        userName: subAdmin.name,
+        userAvatar: safeConvAvatar,
+        updatedAt: now,
+      }).catch(() => {
+        setDoc(mainConvRef, {
           id: `subadmin_main__${subAdmin.code}`,
           channelType: 'subadmin_mainadmin',
           subAdminCode: subAdmin.code,
           subAdminName: subAdmin.name,
           userId: subAdmin.code,
           userName: subAdmin.name,
-          userAvatar: cleanAvatar,
+          userAvatar: safeConvAvatar,
           courseId: subAdmin.courseId,
           activeCourse: subAdmin.courseTitle,
+          lastMessage: 'कुनै म्यासेज छैन',
+          lastMessageAt: now,
+          lastSender: 'system',
+          unreadAdminCount: 0,
+          unreadUserCount: 0,
+          createdAt: now,
           updatedAt: now,
-        },
-        { merge: true }
-      ).catch(() => {});
+        }).catch(() => {});
+      });
 
       setSubAdminList(prev => {
         const updated = prev.map(s =>
@@ -4205,13 +4257,29 @@ export default function App() {
       return;
     }
 
+    const normTitle = (v?: string) => (v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const expandedCourseIds = new Set<string>();
+    activeCourseIds.forEach((cid) => {
+      expandedCourseIds.add(cid);
+      if (cid === 'al-master-class-course-by-al-clipzone') {
+        expandedCourseIds.add('Ai master class course by Ai clipzone');
+      } else if (cid === 'Ai master class course by Ai clipzone') {
+        expandedCourseIds.add('al-master-class-course-by-al-clipzone');
+      }
+    });
+
     const targetSubCodes = Array.from(new Set(
       activeSubs
         .filter(s => {
-          if (activeCourseIds.includes('course-all')) return true;
-          if (activeCourseIds.includes(s.courseId)) return true;
-          const matchingCourse = courses.find(c => activeCourseIds.includes(c.id) && c.title.trim().toLowerCase() === s.courseTitle.trim().toLowerCase());
-          return Boolean(matchingCourse);
+          if (expandedCourseIds.has('course-all')) return true;
+          if (expandedCourseIds.has(s.courseId)) return true;
+          const matchingCourse = courses.find(
+            c => expandedCourseIds.has(c.id) && normTitle(c.title) !== '' && normTitle(c.title) === normTitle(s.courseTitle)
+          );
+          if (matchingCourse) return true;
+          return userActivationKeys.some(
+            (k: any) => k?.courseTitle && normTitle(k.courseTitle) === normTitle(s.courseTitle)
+          );
         })
         .map(s => s.code)
     ));
@@ -4225,15 +4293,19 @@ export default function App() {
       const devId = getOrCreateDeviceId();
       const localStudentUid = localStorage.getItem('clipzone_student_uid');
       let matchedUid = '';
-      if (Array.isArray(allActivationKeys) && allActivationKeys.length > 0) {
+      const combinedKeys = [
+        ...(Array.isArray(allActivationKeys) ? allActivationKeys : []),
+        ...(Array.isArray(userActivationKeys) ? userActivationKeys : []),
+      ];
+      if (combinedKeys.length > 0) {
         const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
         let activeCodes: string[] = [];
         try { activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]'); } catch {}
-        const match = allActivationKeys.find((k: any) => {
-          if (activeCodes.includes(k.code || k.id)) return true;
-          if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
-          if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
-          if (currentUser?.email && k.claimedByEmail && k.claimedByEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
+        const match = combinedKeys.find((k: any) => {
+          if (activeCodes.includes(k.code || k.id) && k.claimedByUid) return true;
+          if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase() && k.claimedByUid) return true;
+          if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase() && k.claimedByUid) return true;
+          if (currentUser?.email && k.claimedByEmail && k.claimedByEmail.toLowerCase() === currentUser.email.toLowerCase() && k.claimedByUid) return true;
           return false;
         });
         if (match?.claimedByUid) {
@@ -4282,7 +4354,7 @@ export default function App() {
     } catch (e) {
       console.warn('Error setting up student support conversation listener:', e);
     }
-  }, [currentUser, isUserAdminSession, allActivationKeys, authName, activeSubAdmins, activeCourseIds, courses]);
+  }, [currentUser, isUserAdminSession, allActivationKeys, userActivationKeys, authName, activeSubAdmins, activeCourseIds, courses]);
 
   // PWA Installation states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -5311,11 +5383,15 @@ export default function App() {
                   try {
                     const localName = cleanRealName(localStorage.getItem('clipzone_student_name')) || cleanRealName(currentUser?.displayName) || cleanRealName(authName);
                     const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
-                    if (Array.isArray(allActivationKeys)) {
-                      const match = allActivationKeys.find((k: any) => {
-                        if (activeCodes.includes(k.code || k.id)) return true;
-                        if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase()) return true;
-                        if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase()) return true;
+                    const combinedKeys = [
+                      ...(Array.isArray(allActivationKeys) ? allActivationKeys : []),
+                      ...(Array.isArray(userActivationKeys) ? userActivationKeys : []),
+                    ];
+                    if (combinedKeys.length > 0) {
+                      const match = combinedKeys.find((k: any) => {
+                        if (activeCodes.includes(k.code || k.id) && k.claimedByUid) return true;
+                        if (localName && k.studentName && k.studentName.trim().toLowerCase() === localName.toLowerCase() && k.claimedByUid) return true;
+                        if (localName && k.claimedByName && k.claimedByName.trim().toLowerCase() === localName.toLowerCase() && k.claimedByUid) return true;
                         return false;
                       });
                       if (match?.claimedByUid) {
@@ -5345,7 +5421,7 @@ export default function App() {
               subAdmins={isMainAdmin ? subAdminList : activeSubAdmins}
               courses={courses}
               activeCourseIds={activeCourseIds}
-              allActivationKeys={allActivationKeys}
+              allActivationKeys={isUserAdminSession ? allActivationKeys : userActivationKeys}
               studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
             />
           </section>

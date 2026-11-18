@@ -9,11 +9,18 @@ service cloud.firestore {
 
     // Helper to check if user is the administrator
     function isAdmin() {
-      return isSignedIn() && (
+      return isSignedIn() &&
+        'email' in request.auth.token &&
+        request.auth.token.email != null && (
         request.auth.token.email.lower() == 'ai.clipzone.edu@gmail.com' ||
         request.auth.token.email.lower() == 'rajababum426@gmail.com' || 
         request.auth.token.email.lower().matches('^admin.*')
       );
+    }
+
+    // Connectivity probe document
+    match /test/connection {
+      allow get: if true;
     }
 
     // Security rules for student course access requests

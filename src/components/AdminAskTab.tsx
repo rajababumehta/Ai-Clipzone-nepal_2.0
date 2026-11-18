@@ -21,21 +21,22 @@ import {
   formatFileSize,
   compressImageFile,
   readDocumentFile,
-  downloadFileAttachment
+  downloadFileAttachment,
+  sanitizeMessageAvatar,
+  assertFirestoreMessageSize
 } from '../utils/chatMedia';
 import {
   collection,
   doc,
   onSnapshot,
-  setDoc,
-  addDoc,
   updateDoc,
   deleteDoc,
   query,
   orderBy,
   increment,
   getDocs,
-  limit
+  limit,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { VerifiedBadge } from './VerifiedBadge';
@@ -86,7 +87,7 @@ const cleanRealName = (name?: string | null): string => {
   return trimmed;
 };
 
-const normTitle = (t?: string) => (t || '').trim().toLowerCase();
+const normTitle = (t?: string) => (t || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 const isRenderableAvatar = (url?: string): boolean => {
   if (!url || typeof url !== 'string') return false;
@@ -140,7 +141,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   useEffect(() => {
     setIsLoadingConvs(true);
     const convsRef = collection(db, 'support_conversations');
-    const q = query(convsRef, orderBy('lastMessageAt', 'desc'), limit(300));
+    const q = query(convsRef, limit(500));
 
     const unsubscribe = onSnapshot(
       q,
@@ -582,12 +583,6 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     const text = (textToSend !== undefined ? textToSend : replyText).trim();
     if ((!text && !adminPendingAttachment) || isSending || !selectedConvId) return;
 
-    setIsSending(true);
-    const attachmentToSend = adminPendingAttachment;
-    setReplyText('');
-    setAdminPendingAttachment(null);
-    setShowAttachMenu(false);
-
     const now = Date.now();
     const targetConv = conversations.find((c) => c.id === selectedConvId);
     const isSubViewingMainAdmin = isSubAdmin && selectedConvId.startsWith('subadmin_main__');
@@ -602,23 +597,37 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         ? subAdminSession.avatarUrl || ''
         : officialLogoUrl;
 
+    const msgPayload: Record<string, any> = {
+      conversationId: selectedConvId,
+      sender: msgSender,
+      senderName: senderLabel,
+      senderAvatar: sanitizeMessageAvatar(senderPhoto),
+      text,
+      timestamp: now,
+      isSeen: false,
+      status: 'sent',
+      attachmentType: adminPendingAttachment?.type || undefined,
+      attachmentUrl: adminPendingAttachment?.url || undefined,
+      attachmentName: adminPendingAttachment?.name || undefined,
+      attachmentSize: adminPendingAttachment?.size || undefined
+    };
+
+    try {
+      assertFirestoreMessageSize(msgPayload);
+    } catch (sizeErr: any) {
+      showToast(sizeErr?.message || 'फाइल धेरै ठूलो छ। कृपया सानो फाइल पठाउनुहोस्।', 'error');
+      return;
+    }
+
+    setIsSending(true);
+    const attachmentToSend = adminPendingAttachment;
+    setReplyText('');
+    setAdminPendingAttachment(null);
+    setShowAttachMenu(false);
+
     try {
       const messagesRef = collection(db, 'support_conversations', selectedConvId, 'messages');
-      await addDoc(messagesRef, {
-        conversationId: selectedConvId,
-        sender: msgSender,
-        senderName: senderLabel,
-        senderAvatar: senderPhoto || undefined,
-        text,
-        timestamp: now,
-        isSeen: false,
-        status: 'sent',
-        attachmentType: attachmentToSend?.type || undefined,
-        attachmentUrl: attachmentToSend?.url || undefined,
-        attachmentName: attachmentToSend?.name || undefined,
-        attachmentSize: attachmentToSend?.size || undefined
-      });
-
+      const msgRef = doc(messagesRef);
       const summaryText =
         text || (attachmentToSend?.type === 'image' ? 'Photo' : attachmentToSend?.name || 'Document');
 
@@ -635,11 +644,11 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         convPayload.channelType = 'subadmin_mainadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId;
-        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.courseId = subAdminSession.courseId || '';
+        convPayload.activeCourse = subAdminSession.courseTitle || '';
         convPayload.userId = subAdminSession.code;
         convPayload.userName = subAdminSession.name;
-        if (subAdminSession.avatarUrl) {
+        if (subAdminSession.avatarUrl && subAdminSession.avatarUrl.length <= 200000) {
           convPayload.userAvatar = subAdminSession.avatarUrl;
         }
         convPayload.unreadAdminCount = increment(1);
@@ -659,8 +668,8 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         convPayload.channelType = 'student_subadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId;
-        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.courseId = subAdminSession.courseId || '';
+        convPayload.activeCourse = subAdminSession.courseTitle || '';
         convPayload.userId =
           targetConv?.userId || selectedConvId.replace(`substudent__${subAdminSession.code}__`, '');
         convPayload.userName =
@@ -670,18 +679,36 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             ? targetConv.userEmail.split('@')[0]
             : 'Student';
         convPayload.userEmail = targetConv?.userEmail || '';
-        if (targetConv?.userAvatar) {
+        if (targetConv?.userAvatar && targetConv.userAvatar.length <= 200000) {
           convPayload.userAvatar = targetConv.userAvatar;
         }
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);
       }
 
-      await setDoc(convRef, convPayload, { merge: true });
-      showToast(isSubViewingMainAdmin ? `${brandName} लाई म्यासेज पठाइयो!` : 'जवाफ पठाइयो!', 'success');
-    } catch (err) {
+      const batch = writeBatch(db);
+      batch.set(msgRef, msgPayload);
+      batch.set(convRef, convPayload, { merge: true });
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        batch.commit().catch((offlineErr) => {
+          console.warn('Queued offline admin reply sync failed:', offlineErr);
+        });
+        showToast('अफलाइन मोड: इन्टरनेट जोडिएपछि म्यासेज पठाइनेछ।', 'info');
+      } else {
+        await batch.commit();
+        showToast(isSubViewingMainAdmin ? `${brandName} लाई म्यासेज पठाइयो!` : 'जवाफ पठाइयो!', 'success');
+      }
+    } catch (err: any) {
       console.error('Failed to send reply:', err);
-      showToast('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      const errMsg = String(err?.message || '');
+      if (errMsg.includes('exceeds') || err?.code === 'invalid-argument' || err?.code === 'resource-exhausted') {
+        showToast('फाइल वा फोटोको साइज धेरै ठूलो छ। कृपया सानो साइज पठाउनुहोस्।', 'error');
+      } else if (err?.code === 'permission-denied') {
+        showToast('डाटाबेस अनुमति समस्या आयो। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      } else {
+        showToast('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      }
       setReplyText(text);
       setAdminPendingAttachment(attachmentToSend);
     } finally {
@@ -1264,7 +1291,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           </div>
                           <div>
                             <p className="font-semibold text-white">Document / PDF</p>
-                            <p className="text-[10px] text-zinc-400">कागजात / फाइल (&lt;700KB)</p>
+                            <p className="text-[10px] text-zinc-400">कागजात / फाइल (&lt;620KB)</p>
                           </div>
                         </button>
                       </div>

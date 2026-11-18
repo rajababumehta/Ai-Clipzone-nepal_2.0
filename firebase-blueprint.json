@@ -334,8 +334,16 @@
         "conversationId": { "type": "string" },
         "sender": { "type": "string" },
         "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
         "text": { "type": "string" },
-        "timestamp": { "type": "number" }
+        "timestamp": { "type": "number" },
+        "isSeen": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["sent", "delivered", "seen"] },
+        "seenAt": { "type": "number" },
+        "attachmentType": { "type": "string", "enum": ["image", "document"] },
+        "attachmentUrl": { "type": "string" },
+        "attachmentName": { "type": "string" },
+        "attachmentSize": { "type": "number" }
       },
       "required": ["conversationId", "sender", "senderName", "text", "timestamp"]
     }

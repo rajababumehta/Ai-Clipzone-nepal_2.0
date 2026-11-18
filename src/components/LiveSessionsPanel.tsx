@@ -17,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
-import { db } from '../firebase';
+import { auth, db, reportFirestoreNonFatal, OperationType } from '../firebase';
 import { Course, LiveSession, SubAdminAccount } from '../types';
 
 function toBase64Utf8(str: string): string {
@@ -167,26 +167,47 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
         setResolvingIds((prev) => ({ ...prev, [session.id]: true }));
         const secretRef = doc(db, 'live_session_secrets', session.id);
         let secretSnap = await getDoc(secretRef).catch(() => null);
-        if (!secretSnap || !secretSnap.exists() || !secretSnap.data()?.zoomLink) {
+        const secretData = secretSnap?.exists() ? secretSnap.data() : null;
+        if (!secretSnap || !secretSnap.exists() || (!secretData?.encryptedZoomLink && !secretData?.zoomLink)) {
           secretSnap = await getDocFromServer(secretRef).catch(() => null);
         }
         if (!secretSnap || !secretSnap.exists()) {
           return null;
         }
-        const rawZoom = String(secretSnap.data()?.zoomLink || '').trim();
+        const data = secretSnap.data() || {};
+        const encryptedZoomLink = typeof data.encryptedZoomLink === 'string' ? data.encryptedZoomLink.trim() : '';
+        const rawZoom = String(data.zoomLink || '').trim();
         const urlMatch = rawZoom.match(/https?:\/\/\S+/i);
         const zoomLink = urlMatch ? urlMatch[0] : rawZoom;
-        if (!zoomLink) return null;
+        if (!encryptedZoomLink && !zoomLink) return null;
 
         const cleanStudentName = (studentName || 'Student').trim() || 'Student';
-
-        // Primary: server-encrypted short-lived opaque embed route (/api/live-embed?t=...)
+        const idToken = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
+        let activeCodesHeader = '';
+        let deviceIdHeader = '';
+        let studentUidHeader = '';
         try {
+          const codes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+          if (Array.isArray(codes)) activeCodesHeader = codes.join(',');
+          deviceIdHeader = localStorage.getItem('clipzone_device_id') || '';
+          studentUidHeader = localStorage.getItem('clipzone_student_uid') || '';
+        } catch {}
+
+        // Primary: server-side AES-256-GCM decryption & short-lived opaque embed token
+        try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+          if (activeCodesHeader) headers['x-activation-codes'] = activeCodesHeader;
+          if (deviceIdHeader) headers['x-device-id'] = deviceIdHeader;
+          if (studentUidHeader) headers['x-student-uid'] = studentUidHeader;
+
           const resp = await fetch('/api/live-join-token', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
-              zoomLink,
+              sessionId: session.id,
+              courseId: session.courseId,
+              ...(encryptedZoomLink ? { encryptedZoomLink } : { zoomLink }),
               studentName: cleanStudentName,
               sessionTitle: session.title,
               courseTitle: session.courseTitle
@@ -194,25 +215,28 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
           });
 
           if (resp.ok) {
-            const data = await resp.json().catch(() => null);
-            const resolved = data?.embedUrl || data?.launchUrl;
+            const respData = await resp.json().catch(() => null);
+            const resolved = respData?.embedUrl || respData?.launchUrl;
             if (resolved) {
               setLaunchUrls((prev) => ({ ...prev, [session.id]: resolved }));
               return resolved;
             }
           }
         } catch {
-          // Fall through to in-memory web client URL
+          // Fall through only for legacy unencrypted fallback when offline/serverless unreachable
         }
 
-        const clientUrls = buildClientZoomUrls(zoomLink, cleanStudentName);
-        if (clientUrls?.embedUrl) {
-          setLaunchUrls((prev) => ({ ...prev, [session.id]: clientUrls.embedUrl }));
-          return clientUrls.embedUrl;
+        if (zoomLink) {
+          const clientUrls = buildClientZoomUrls(zoomLink, cleanStudentName);
+          if (clientUrls?.embedUrl) {
+            setLaunchUrls((prev) => ({ ...prev, [session.id]: clientUrls.embedUrl }));
+            return clientUrls.embedUrl;
+          }
         }
 
         return null;
-      } catch {
+      } catch (err) {
+        reportFirestoreNonFatal(err, OperationType.GET, `live_session_secrets/${session.id}`);
         return null;
       } finally {
         delete inFlightRef.current[session.id];
@@ -344,7 +368,34 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     try {
       const secretSnap = await getDoc(doc(db, 'live_session_secrets', session.id));
       if (secretSnap.exists()) {
-        setFormZoomLink(String(secretSnap.data()?.zoomLink || ''));
+        const sData = secretSnap.data() || {};
+        if (sData.encryptedZoomLink) {
+          const idToken = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+          try {
+            const adminSessId = localStorage.getItem('clipzone_admin_session_id') || '';
+            const devId = localStorage.getItem('clipzone_device_id') || '';
+            if (adminSessId) headers['x-admin-session-id'] = adminSessId;
+            if (subAdminSession?.code) headers['x-subadmin-code'] = subAdminSession.code;
+            if (devId) headers['x-device-id'] = devId;
+          } catch {}
+          const decResp = await fetch('/api/live-decrypt-admin', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ encryptedZoomLink: sData.encryptedZoomLink }),
+          }).catch(() => null);
+          if (decResp && decResp.ok) {
+            const decJson = await decResp.json().catch(() => null);
+            if (decJson?.zoomLink) {
+              setFormZoomLink(String(decJson.zoomLink));
+              return;
+            }
+          }
+        }
+        if (sData.zoomLink) {
+          setFormZoomLink(String(sData.zoomLink));
+        }
       }
     } catch {}
   };

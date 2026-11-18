@@ -33,19 +33,21 @@ import {
   formatFileSize, 
   compressImageFile, 
   readDocumentFile, 
-  downloadFileAttachment 
+  downloadFileAttachment,
+  sanitizeMessageAvatar,
+  assertFirestoreMessageSize
 } from '../utils/chatMedia';
 import { 
   collection, 
   doc, 
   onSnapshot, 
-  setDoc, 
-  addDoc, 
   updateDoc, 
   query, 
+  where,
   orderBy,
   increment,
-  limit
+  limit,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { VerifiedBadge } from './VerifiedBadge';
@@ -249,21 +251,69 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // --------------------------------------------------------------------------
   // STUDENT ROUTING TO ASSIGNED COURSE SUB-ADMIN (NEVER TO MAIN ADMIN)
   // --------------------------------------------------------------------------
+  const [fallbackActiveSubAdmins, setFallbackActiveSubAdmins] = useState<SubAdminAccount[]>([]);
+  const [isLoadingSubAdmins, setIsLoadingSubAdmins] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || isAdmin) return;
+    if (Array.isArray(subAdmins) && subAdmins.length > 0) {
+      setIsLoadingSubAdmins(false);
+      return;
+    }
+    setIsLoadingSubAdmins(true);
+    const activeSubsQuery = query(collection(db, 'sub_admins'), where('status', '==', 'active'));
+    const unsub = onSnapshot(
+      activeSubsQuery,
+      (snapshot) => {
+        const list: SubAdminAccount[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
+        });
+        setFallbackActiveSubAdmins(list);
+        setIsLoadingSubAdmins(false);
+      },
+      (err) => {
+        console.warn('AskChatModal sub_admins fallback listener error:', err);
+        setIsLoadingSubAdmins(false);
+      }
+    );
+    return () => unsub();
+  }, [isOpen, isAdmin, subAdmins]);
+
   const studentSubAdminTargets = useMemo(() => {
     if (isAdmin) return [];
-    const activeSubs = (subAdmins || []).filter(s => s.status === 'active');
+    const subPool = (subAdmins && subAdmins.length > 0 ? subAdmins : fallbackActiveSubAdmins) || [];
+    const activeSubs = subPool.filter(s => s.status === 'active');
     if (activeSubs.length === 0) return [];
+
+    const normText = (v?: string) => (v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const resolveCourseAliases = (cid: string): string[] => {
+      const aliases = [cid];
+      if (cid === 'al-master-class-course-by-al-clipzone') {
+        aliases.push('Ai master class course by Ai clipzone');
+      } else if (cid === 'Ai master class course by Ai clipzone') {
+        aliases.push('al-master-class-course-by-al-clipzone');
+      }
+      return aliases;
+    };
+
+    const expandedCourseIds = new Set<string>();
+    (activeCourseIds || []).forEach((cid) => {
+      resolveCourseAliases(cid).forEach((alias) => expandedCourseIds.add(alias));
+    });
 
     const targets: { courseId: string; courseTitle: string; courseWhatsapp?: string; subAdmin: SubAdminAccount }[] = [];
     const seenSubCodes = new Set<string>();
 
-    const checkCourseList = activeCourseIds.includes('course-all')
+    const checkCourseList = expandedCourseIds.has('course-all')
       ? courses
-      : courses.filter(c => activeCourseIds.includes(c.id));
+      : courses.filter(c => expandedCourseIds.has(c.id));
 
     checkCourseList.forEach((crs) => {
+      const crsAliases = resolveCourseAliases(crs.id);
+      const crsTitleNorm = normText(crs.title);
       const matchedSub = activeSubs.find(
-        s => s.courseId === crs.id || s.courseTitle.trim().toLowerCase() === crs.title.trim().toLowerCase()
+        s => crsAliases.includes(s.courseId) || (crsTitleNorm && normText(s.courseTitle) === crsTitleNorm)
       );
       if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
         seenSubCodes.add(matchedSub.code);
@@ -277,7 +327,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     });
 
     // Fallback check against activeCourseIds directly if course object wasn't in prop
-    activeCourseIds.forEach((cid) => {
+    expandedCourseIds.forEach((cid) => {
       if (cid === 'course-all') return;
       const matchedSub = activeSubs.find(s => s.courseId === cid);
       if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
@@ -290,8 +340,28 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       }
     });
 
+    // Additional fallback check against student's activation keys (handles renamed/legacy course titles)
+    if (Array.isArray(allActivationKeys)) {
+      allActivationKeys.forEach((k: any) => {
+        if (!k || k.status === 'expired' || k.status === 'deleted') return;
+        const kAliases = k.courseId ? resolveCourseAliases(k.courseId) : [];
+        const kTitleNorm = normText(k.courseTitle);
+        const matchedSub = activeSubs.find(
+          s => kAliases.includes(s.courseId) || (kTitleNorm && normText(s.courseTitle) === kTitleNorm)
+        );
+        if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
+          seenSubCodes.add(matchedSub.code);
+          targets.push({
+            courseId: k.courseId || matchedSub.courseId,
+            courseTitle: k.courseTitle || matchedSub.courseTitle,
+            subAdmin: matchedSub
+          });
+        }
+      });
+    }
+
     return targets;
-  }, [isAdmin, subAdmins, activeCourseIds, courses]);
+  }, [isAdmin, subAdmins, fallbackActiveSubAdmins, activeCourseIds, courses, allActivationKeys]);
 
   const [selectedStudentSubCode, setSelectedStudentSubCode] = useState<string>('');
 
@@ -350,18 +420,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
   }, [studentConvId]);
 
-  // Sync student avatar to Sub-Admin conversation in Firestore
+  // Sync student avatar only to an already-existing Sub-Admin conversation in Firestore (prevents partial skeleton docs)
   useEffect(() => {
     const effectivePhoto = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
-    if (!isAdmin && studentConvId && effectivePhoto) {
+    if (!isAdmin && studentConvId && effectivePhoto && effectivePhoto.length <= 200000 && studentMessages.length > 0) {
       try {
-        setDoc(doc(db, 'support_conversations', studentConvId), {
+        updateDoc(doc(db, 'support_conversations', studentConvId), {
           userAvatar: effectivePhoto,
           updatedAt: Date.now()
-        }, { merge: true }).catch(() => {});
+        }).catch(() => {});
       } catch (e) {}
     }
-  }, [isOpen, isAdmin, studentConvId, studentAvatar]);
+  }, [isOpen, isAdmin, studentConvId, studentAvatar, studentMessages.length]);
 
   // Listen to student conversation doc for remote cleared timestamp
   useEffect(() => {
@@ -477,13 +547,18 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   //    - Main Admin: All Sub-Admins ONLY (never student chats)
   //    - Sub-Admin: Official Main Admin (pinned top) + ONLY course students
   // ==========================================================================
+  const selectedAdminConvIdRef = useRef<string | null>(selectedAdminConvId);
+  useEffect(() => {
+    selectedAdminConvIdRef.current = selectedAdminConvId;
+  }, [selectedAdminConvId]);
+
   useEffect(() => {
     if (!isOpen || !isAdmin) return;
 
     setIsLoadingAdminConvs(true);
     const convsRef = collection(db, 'support_conversations');
-    const q = query(convsRef, orderBy('lastMessageAt', 'desc'), limit(300));
-    const normTitle = (t?: string) => (t || '').trim().toLowerCase();
+    const q = query(convsRef, limit(500));
+    const normTitle = (t?: string) => (t || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
     const unsubscribe = onSnapshot(
       q,
@@ -565,7 +640,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
           setAdminConversations(list);
           setIsLoadingAdminConvs(false);
-          if (!selectedAdminConvId && list.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+          if (!selectedAdminConvIdRef.current && list.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
             setSelectedAdminConvId(list[0].id);
           }
           return;
@@ -763,7 +838,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           const combined = [officialConv, ...studentsList];
           setAdminConversations(combined);
           setIsLoadingAdminConvs(false);
-          if (!selectedAdminConvId && combined.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+          if (!selectedAdminConvIdRef.current && combined.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
             setSelectedAdminConvId(combined[0].id);
           }
           return;
@@ -779,7 +854,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, selectedAdminConvId, brandName, officialLogoUrl]);
+  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, brandName, officialLogoUrl]);
 
   // ==========================================================================
   // 3. ADMIN / SUB-ADMIN MODE: Listener for messages in selected conversation
@@ -1046,6 +1121,35 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     const text = (textToSend !== undefined ? textToSend : studentInputText).trim();
     if ((!text && !studentPendingAttachment) || isStudentSending || !targetUid) return;
 
+    const now = Date.now();
+    let finalStudentName = cleanRealName(studentName) || cleanRealName(initialStudentName);
+    if (!finalStudentName) {
+      finalStudentName = userEmail ? (userEmail.split('@')[0].charAt(0).toUpperCase() + userEmail.split('@')[0].slice(1)) : 'Student';
+    }
+
+    const effectiveAvatar = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
+    const msgPayload: Record<string, any> = {
+      conversationId: studentConvId,
+      sender: 'user',
+      senderName: finalStudentName,
+      senderAvatar: sanitizeMessageAvatar(effectiveAvatar),
+      text,
+      timestamp: now,
+      isSeen: false,
+      status: 'sent',
+      attachmentType: studentPendingAttachment?.type || undefined,
+      attachmentUrl: studentPendingAttachment?.url || undefined,
+      attachmentName: studentPendingAttachment?.name || undefined,
+      attachmentSize: studentPendingAttachment?.size || undefined
+    };
+
+    try {
+      assertFirestoreMessageSize(msgPayload);
+    } catch (sizeErr: any) {
+      showToast?.(sizeErr?.message || 'फाइल धेरै ठूलो छ। कृपया सानो फाइल पठाउनुहोस्।', 'error');
+      return;
+    }
+
     setIsStudentSending(true);
     const attachmentToSend = studentPendingAttachment;
     setStudentInputText('');
@@ -1053,58 +1157,56 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     setShowEmojiBar(false);
     setShowStudentAttachMenu(false);
 
-    const now = Date.now();
-    let finalStudentName = cleanRealName(studentName) || cleanRealName(initialStudentName);
-    if (!finalStudentName) {
-      finalStudentName = userEmail ? (userEmail.split('@')[0].charAt(0).toUpperCase() + userEmail.split('@')[0].slice(1)) : 'Student';
-    }
-
     try {
-      const effectiveAvatar = studentAvatar || localStorage.getItem('clipzone_student_avatar') || '';
       const messagesRef = collection(db, 'support_conversations', studentConvId, 'messages');
-      await addDoc(messagesRef, {
-        conversationId: studentConvId,
-        sender: 'user',
-        senderName: finalStudentName,
-        senderAvatar: effectiveAvatar || undefined,
-        text,
-        timestamp: now,
-        isSeen: false,
-        status: 'sent',
-        attachmentType: attachmentToSend?.type || undefined,
-        attachmentUrl: attachmentToSend?.url || undefined,
-        attachmentName: attachmentToSend?.name || undefined,
-        attachmentSize: attachmentToSend?.size || undefined
-      });
-
+      const msgRef = doc(messagesRef);
       const summaryText = text || (attachmentToSend?.type === 'image' ? '📷 Photo' : `📄 ${attachmentToSend?.name || 'Document'}`);
 
       const convRef = doc(db, 'support_conversations', studentConvId);
-      await setDoc(
-        convRef,
-        {
-          id: studentConvId,
-          userId: targetUid,
-          userName: finalStudentName,
-          userEmail: userEmail || '',
-          userAvatar: effectiveAvatar || undefined,
-          channelType: 'student_subadmin',
-          subAdminCode: activeStudentTarget.subAdmin.code,
-          subAdminName: activeStudentTarget.subAdmin.name,
-          courseId: activeStudentTarget.courseId,
-          activeCourse: activeStudentTarget.courseTitle || activeCourseName || '',
-          lastMessage: summaryText,
-          lastMessageAt: now,
-          lastSender: 'user',
-          unreadAdminCount: increment(1),
-          unreadUserCount: 0,
-          updatedAt: now
-        },
-        { merge: true }
-      );
-    } catch (error) {
+      const safeConvAvatar = effectiveAvatar && effectiveAvatar.length <= 200000 ? effectiveAvatar : undefined;
+      const resolvedCourseTitle = activeStudentTarget.courseTitle || activeCourseName || '';
+      const convPayload: Record<string, any> = {
+        id: studentConvId,
+        userId: targetUid,
+        userName: finalStudentName,
+        userEmail: userEmail || '',
+        ...(safeConvAvatar ? { userAvatar: safeConvAvatar } : {}),
+        channelType: 'student_subadmin',
+        subAdminCode: activeStudentTarget.subAdmin.code,
+        subAdminName: activeStudentTarget.subAdmin.name || 'Support',
+        courseId: activeStudentTarget.courseId || activeStudentTarget.subAdmin.courseId || '',
+        activeCourse: resolvedCourseTitle,
+        ...(resolvedCourseTitle ? { purchasedCourses: [resolvedCourseTitle] } : {}),
+        lastMessage: summaryText,
+        lastMessageAt: now,
+        lastSender: 'user',
+        unreadAdminCount: increment(1),
+        unreadUserCount: 0,
+        updatedAt: now
+      };
+
+      const batch = writeBatch(db);
+      batch.set(msgRef, msgPayload);
+      batch.set(convRef, convPayload, { merge: true });
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        batch.commit().catch((offlineErr) => {
+          console.warn('Queued offline student message sync failed:', offlineErr);
+        });
+        showToast?.('अफलाइन मोड: इन्टरनेट जोडिएपछि म्यासेज पठाइनेछ।', 'info');
+      } else {
+        await batch.commit();
+      }
+    } catch (error: any) {
       console.error('Failed to send student message:', error);
-      showToast?.('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      const errMsg = String(error?.message || '');
+      if (errMsg.includes('exceeds') || error?.code === 'invalid-argument' || error?.code === 'resource-exhausted') {
+        showToast?.('फाइल वा फोटोको साइज धेरै ठूलो छ। कृपया सानो साइज पठाउनुहोस्।', 'error');
+      } else if (error?.code === 'permission-denied') {
+        showToast?.('डाटाबेस अनुमति समस्या आयो। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      } else {
+        showToast?.('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      }
       setStudentInputText(text);
       setStudentPendingAttachment(attachmentToSend);
     } finally {
@@ -1119,12 +1221,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     const text = (textToSend !== undefined ? textToSend : adminReplyText).trim();
     if ((!text && !adminPendingAttachment) || isAdminSending || !selectedAdminConvId) return;
 
-    setIsAdminSending(true);
-    const attachmentToSend = adminPendingAttachment;
-    setAdminReplyText('');
-    setAdminPendingAttachment(null);
-    setShowAdminAttachMenu(false);
-
     const now = Date.now();
     const targetConv = adminConversations.find(c => c.id === selectedAdminConvId);
     const isSubViewingMainAdmin = isSubAdminMode && selectedAdminConvId.startsWith('subadmin_main__');
@@ -1134,23 +1230,37 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     const senderLabel = isSubAdminMode && subAdminSession ? subAdminSession.name : brandName;
     const senderPhoto = isSubAdminMode && subAdminSession ? subAdminSession.avatarUrl || '' : officialLogoUrl;
 
+    const msgPayload: Record<string, any> = {
+      conversationId: selectedAdminConvId,
+      sender: msgSender,
+      senderName: senderLabel,
+      senderAvatar: sanitizeMessageAvatar(senderPhoto),
+      text,
+      timestamp: now,
+      isSeen: false,
+      status: 'sent',
+      attachmentType: adminPendingAttachment?.type || undefined,
+      attachmentUrl: adminPendingAttachment?.url || undefined,
+      attachmentName: adminPendingAttachment?.name || undefined,
+      attachmentSize: adminPendingAttachment?.size || undefined
+    };
+
+    try {
+      assertFirestoreMessageSize(msgPayload);
+    } catch (sizeErr: any) {
+      showToast?.(sizeErr?.message || 'फाइल धेरै ठूलो छ। कृपया सानो फाइल पठाउनुहोस्।', 'error');
+      return;
+    }
+
+    setIsAdminSending(true);
+    const attachmentToSend = adminPendingAttachment;
+    setAdminReplyText('');
+    setAdminPendingAttachment(null);
+    setShowAdminAttachMenu(false);
+
     try {
       const messagesRef = collection(db, 'support_conversations', selectedAdminConvId, 'messages');
-      await addDoc(messagesRef, {
-        conversationId: selectedAdminConvId,
-        sender: msgSender,
-        senderName: senderLabel,
-        senderAvatar: senderPhoto || undefined,
-        text,
-        timestamp: now,
-        isSeen: false,
-        status: 'sent',
-        attachmentType: attachmentToSend?.type || undefined,
-        attachmentUrl: attachmentToSend?.url || undefined,
-        attachmentName: attachmentToSend?.name || undefined,
-        attachmentSize: attachmentToSend?.size || undefined
-      });
-
+      const msgRef = doc(messagesRef);
       const summaryText = text || (attachmentToSend?.type === 'image' ? 'Photo' : attachmentToSend?.name || 'Document');
 
       let realUserName = cleanRealName(targetConv?.userName);
@@ -1173,11 +1283,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         convPayload.channelType = 'subadmin_mainadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId;
-        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.courseId = subAdminSession.courseId || '';
+        convPayload.activeCourse = subAdminSession.courseTitle || '';
         convPayload.userId = subAdminSession.code;
         convPayload.userName = subAdminSession.name;
-        if (subAdminSession.avatarUrl) {
+        if (subAdminSession.avatarUrl && subAdminSession.avatarUrl.length <= 200000) {
           convPayload.userAvatar = subAdminSession.avatarUrl;
         }
         convPayload.unreadAdminCount = increment(1);
@@ -1197,23 +1307,44 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         convPayload.channelType = 'student_subadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId;
-        convPayload.activeCourse = subAdminSession.courseTitle;
+        convPayload.courseId = subAdminSession.courseId || '';
+        convPayload.activeCourse = subAdminSession.courseTitle || '';
         convPayload.userId = targetConv?.userId || selectedAdminConvId.replace(`substudent__${subAdminSession.code}__`, '');
         convPayload.userName = realUserName;
         convPayload.userEmail = targetConv?.userEmail || '';
-        if (targetConv?.userAvatar) {
+        if (targetConv?.userAvatar && targetConv.userAvatar.length <= 200000) {
           convPayload.userAvatar = targetConv.userAvatar;
         }
-        convPayload.purchasedCourses = targetConv?.purchasedCourses || [subAdminSession.courseTitle];
+        const safeCourses = (targetConv?.purchasedCourses && targetConv.purchasedCourses.length > 0)
+          ? targetConv.purchasedCourses.filter(Boolean)
+          : (subAdminSession.courseTitle ? [subAdminSession.courseTitle] : []);
+        convPayload.purchasedCourses = safeCourses;
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);
       }
 
-      await setDoc(convRef, convPayload, { merge: true });
-    } catch (error) {
+      const batch = writeBatch(db);
+      batch.set(msgRef, msgPayload);
+      batch.set(convRef, convPayload, { merge: true });
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        batch.commit().catch((offlineErr) => {
+          console.warn('Queued offline admin reply sync failed:', offlineErr);
+        });
+        showToast?.('अफलाइन मोड: इन्टरनेट जोडिएपछि जवाफ पठाइनेछ।', 'info');
+      } else {
+        await batch.commit();
+      }
+    } catch (error: any) {
       console.error('Failed to send reply:', error);
-      showToast?.('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      const errMsg = String(error?.message || '');
+      if (errMsg.includes('exceeds') || error?.code === 'invalid-argument' || error?.code === 'resource-exhausted') {
+        showToast?.('फाइल वा फोटोको साइज धेरै ठूलो छ। कृपया सानो साइज पठाउनुहोस्।', 'error');
+      } else if (error?.code === 'permission-denied') {
+        showToast?.('डाटाबेस अनुमति समस्या आयो। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      } else {
+        showToast?.('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+      }
       setAdminReplyText(text);
       setAdminPendingAttachment(attachmentToSend);
     } finally {
@@ -1948,7 +2079,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                   </div>
                                   <div>
                                     <p className="font-semibold text-white">Document / PDF</p>
-                                    <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;700KB)</p>
+                                    <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;620KB)</p>
                                   </div>
                                 </button>
                               </div>
@@ -2242,17 +2373,24 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                     )}
                   </div>
                 ) : !activeStudentTarget ? (
-                  <div className="bg-[#151f26]/95 border border-white/10 rounded-2xl p-6 text-center space-y-3 shadow-xl my-6 max-w-md mx-auto">
-                    <div className="w-14 h-14 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center mx-auto text-[#00a884]">
-                      <MessageCircle className="w-7 h-7" />
+                  isLoadingSubAdmins ? (
+                    <div className="py-16 text-center text-[#8696a0] text-xs space-y-2">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#00a884]" />
+                      <p>सपोर्ट च्यानल जोडिँदैछ...</p>
                     </div>
-                    <div className="space-y-1.5">
-                      <h4 className="font-bold text-base text-[#e9edef]">च्याट हाल उपलब्ध छैन</h4>
-                      <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                        सपोर्ट प्रतिनिधि उपलब्ध भएपछि यहाँबाट सिधै म्यासेज पठाउन मिल्नेछ।
-                      </p>
+                  ) : (
+                    <div className="bg-[#151f26]/95 border border-white/10 rounded-2xl p-6 text-center space-y-3 shadow-xl my-6 max-w-md mx-auto">
+                      <div className="w-14 h-14 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center mx-auto text-[#00a884]">
+                        <MessageCircle className="w-7 h-7" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h4 className="font-bold text-base text-[#e9edef]">च्याट हाल उपलब्ध छैन</h4>
+                        <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
+                          यस कोर्षको लागि सपोर्ट प्रतिनिधि उपलब्ध भएपछि यहाँबाट सिधै म्यासेज पठाउन मिल्नेछ।
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )
                 ) : (
                   <>
                     {/* Clean Privacy Pill */}
@@ -2643,7 +2781,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 </div>
                                 <div>
                                   <p className="font-semibold text-white">Document / PDF</p>
-                                  <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;700KB)</p>
+                                  <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;620KB)</p>
                                 </div>
                               </button>
                             </div>

@@ -38,7 +38,7 @@ import {
   Video
 } from 'lucide-react';
 
-import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount, LiveSession } from '../types';
+import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount, SubAdminPublicProfile, LiveSession } from '../types';
 import { DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, FAQS as INITIAL_DEFAULT_FAQS, cleanLegacyLogoUrl } from '../data';
 import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
@@ -52,8 +52,8 @@ interface AdminDashboardModalProps {
   courses: Course[];
   adminRole?: 'main_admin' | 'sub_admin';
   subAdminSession?: SubAdminAccount | null;
-  onLogoutAdminSession?: () => void;
-  subAdmins?: SubAdminAccount[];
+  onLogoutAdminSession?: () => void | Promise<void>;
+  subAdmins?: (SubAdminAccount | SubAdminPublicProfile)[];
   onCreateSubAdmin?: (name: string, courseId: string, customCode?: string, avatarUrl?: string) => Promise<SubAdminAccount | null>;
   onToggleSubAdminStatus?: (subAdmin: SubAdminAccount) => Promise<void>;
   onUpdateSubAdminCourse?: (subAdmin: SubAdminAccount, courseId: string) => Promise<void>;
@@ -96,6 +96,11 @@ interface AdminDashboardModalProps {
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   initialTab?: 'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask';
   adminUnreadAskCount?: number;
+  isGoogleAdminVerified?: boolean;
+  onVerifyGoogleAdmin?: () => Promise<void>;
+  hasMoreKeys?: boolean;
+  onLoadMoreKeys?: () => Promise<void>;
+  isLoadingMoreKeys?: boolean;
 }
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
@@ -140,7 +145,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onUpdateLiveSessionStatus,
   showToast: showToastProp,
   initialTab = 'keys',
-  adminUnreadAskCount = 0
+  adminUnreadAskCount = 0,
+  isGoogleAdminVerified = false,
+  onVerifyGoogleAdmin,
+  hasMoreKeys = false,
+  onLoadMoreKeys,
+  isLoadingMoreKeys = false
 }) => {
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     if (typeof showToastProp === 'function') {
@@ -892,7 +902,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {isMainAdmin && onVerifyGoogleAdmin && (
+              isGoogleAdminVerified ? (
+                <span className="px-2.5 py-1.5 rounded-xl bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Cloud Verified</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onVerifyGoogleAdmin}
+                  className="px-3 py-2 rounded-xl bg-blue-950/70 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Verify with Google Admin account for protected Firestore cloud writes"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Verify Cloud Admin</span>
+                </button>
+              )
+            )}
             {onLogoutAdminSession && (
               <button
                 type="button"
@@ -1380,6 +1408,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
                       );
                     })}
+                    {hasMoreKeys && onLoadMoreKeys && (
+                      <div className="pt-2 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={onLoadMoreKeys}
+                          disabled={isLoadingMoreKeys}
+                          className="px-4 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-black transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMoreKeys ? 'animate-spin' : ''}`} />
+                          <span>{isLoadingMoreKeys ? 'Loading More Keys...' : 'Load More Keys'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1420,7 +1461,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {isMainAdmin && activeTab === 'subadmins' && onCreateSubAdmin && onToggleSubAdminStatus && onUpdateSubAdminCourse && onDeleteSubAdmin && (
             <AdminSubAdminsTab
               courses={courses}
-              subAdmins={subAdmins}
+              subAdmins={subAdmins.filter((s): s is SubAdminAccount => 'code' in s)}
               allActivationKeys={allActivationKeys}
               onCreateSubAdmin={onCreateSubAdmin}
               onToggleStatus={onToggleSubAdminStatus}
@@ -3588,7 +3629,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       try {
                         setIsExecutingSecurityAction(true);
                         if (securityConfirmAction.type === 'admin_logout') {
-                          onLogoutAdminSession?.();
+                          await onLogoutAdminSession?.();
                         } else if (securityConfirmAction.type === 'expire_key' && securityConfirmAction.code && onExpireKey) {
                           await onExpireKey(securityConfirmAction.code);
                         } else if (securityConfirmAction.type === 'logout_key' && securityConfirmAction.code && onLogoutKey) {
