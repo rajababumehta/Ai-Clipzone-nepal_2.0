@@ -1,8 +1,6 @@
 // Ai Clipzone - High-Speed PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v34';
+const CACHE_NAME = 'aiclipzone-pwa-v36';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/logo.png',
   '/institute-logo.png',
@@ -30,7 +28,7 @@ const STATIC_ASSETS = [
   '/sitemap.xml'
 ];
 
-// 1. Install Event: Pre-cache static app shell assets
+// 1. Install Event: Pre-cache static icon/manifest assets & activate immediately
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -40,7 +38,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Activate Event: Clean old cache versions & take immediate control
+// 2. Activate Event: Clean ALL old cache versions & take immediate control
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -55,24 +53,27 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Instant cache-first for immutable assets & stale-while-revalidate for shell
+// 3. Fetch Event: Network-First for HTML & non-hashed code so app updates always appear immediately
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
   if (!url.protocol.startsWith('http')) return;
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('ais-dev-')) return;
   if (url.pathname.startsWith('/api/')) return;
   if (
     url.pathname.startsWith('/@') ||
     url.pathname.startsWith('/src/') ||
-    url.pathname.startsWith('/node_modules/')
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.ts')
   ) {
     return;
   }
   if (url.pathname.endsWith('sw.js') || url.pathname.endsWith('firebase-messaging-sw.js')) return;
 
-  // A. HTML Page Navigation requests (Stale-While-Revalidate for instant open)
+  // A. HTML Page Navigation requests (Network-First so new builds never get stuck on old HTML)
   const isNavigation =
     event.request.mode === 'navigate' ||
     event.request.destination === 'document' ||
@@ -81,58 +82,48 @@ self.addEventListener('fetch', (event) => {
   if (isNavigation) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = (await cache.match(event.request)) || (await cache.match('/')) || (await cache.match('/index.html'));
-        const networkPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(() => null);
-
-        if (cached) {
-          event.waitUntil(networkPromise);
-          return cached;
+        try {
+          const networkResponse = await fetch(event.request, { cache: 'no-store' });
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch {
+          const cached = (await cache.match(event.request)) || (await cache.match('/')) || (await cache.match('/index.html'));
+          return cached || Response.error();
         }
-        const net = await networkPromise;
-        return net || Response.error();
       })
     );
     return;
   }
 
-  // B. Hashed Vite Code & Style Assets (/assets/*.js, /assets/*.css) - Cache-First for 0ms boot
-  const isHashedAsset = url.pathname.startsWith('/assets/');
+  // B. Hashed Vite Code & Style Assets (/assets/*.js, /assets/*.css) - Cache-First; unhashed JS/CSS - Network-First
+  const isHashedAsset = url.pathname.startsWith('/assets/') && /-[a-zA-Z0-9_-]{6,}\.(js|css)$/.test(url.pathname);
   const isScriptOrStyle =
     event.request.destination === 'script' ||
     event.request.destination === 'style' ||
     url.pathname.endsWith('.js') ||
     url.pathname.endsWith('.css') ||
-    isHashedAsset;
+    url.pathname.startsWith('/assets/');
 
   if (isScriptOrStyle) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached && isHashedAsset) {
-          return cached;
+        if (isHashedAsset) {
+          const cached = await cache.match(event.request);
+          if (cached) return cached;
         }
-        const networkPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(() => null);
 
-        if (cached) {
-          event.waitUntil(networkPromise);
-          return cached;
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch {
+          const cached = await cache.match(event.request);
+          return cached || Response.error();
         }
-        const net = await networkPromise;
-        return net || Response.error();
       })
     );
     return;

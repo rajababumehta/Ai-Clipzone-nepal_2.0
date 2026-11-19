@@ -4963,8 +4963,12 @@ export default function App() {
     return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
   };
 
-  // Open QR modal from Course Modal
+  // Open dedicated Course Enroll page from Course Modal
   const handleOpenFonePayQR = () => {
+    if (selectedCourse) {
+      handleEnrollCourse(selectedCourse);
+      return;
+    }
     setShowQrModal(true);
   };
 
