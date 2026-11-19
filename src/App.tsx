@@ -83,6 +83,7 @@ import { PdfViewerModal } from './components/PdfViewerModal';
 import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
+import { CourseEnrollPage } from './components/CourseEnrollPage';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 
@@ -3570,26 +3571,17 @@ export default function App() {
     }
   };
 
-  // Course details modal state
+  // Course details modal state & dedicated Enroll page state
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [enrollCourse, setEnrollCourse] = useState<Course | null>(null);
 
-  // Smoothly scroll to the specific course card/section and open the details modal
+  // Open dedicated Course Enroll & QR Payment verification page
   const handleEnrollCourse = (course: Course) => {
-    if (currentView !== 'home') {
-      setCurrentView('home');
-    }
-    setSelectedCourse(course);
-    setTimeout(() => {
-      const cardEl = document.getElementById(`course-card-${course.id}`);
-      if (cardEl) {
-        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        const coursesSec = document.getElementById('courses-section');
-        if (coursesSec) {
-          coursesSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    }, 80);
+    setSelectedCourse(null);
+    setShowQrModal(false);
+    setEnrollCourse(course);
+    setCurrentView('enroll');
+    window.scrollTo({ top: 0, behavior: 'auto' });
   };
   // QR modal state
   const [showQrModal, setShowQrModal] = useState(false);
@@ -3639,7 +3631,7 @@ export default function App() {
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'course-live' | 'live' | 'ask' | 'account'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'course-live' | 'live' | 'ask' | 'account' | 'enroll'>('home');
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
   const [selectedLiveCourseId, setSelectedLiveCourseId] = useState<string | null>(null);
 
@@ -4988,9 +4980,9 @@ export default function App() {
   };
 
   return (
-    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
-      {/* Sleek Pure Black Ambient Lighting: Hidden in Ask view so background stays simple pure black */}
-      {!(currentView === 'ask' && isCourseActiveUser) && (
+    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
+      {/* Sleek Pure Black Ambient Lighting: Hidden in Ask and Enroll views */}
+      {!(currentView === 'ask' && isCourseActiveUser) && !(currentView === 'enroll' && enrollCourse) && (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
           <div className="absolute -top-32 -left-32 w-[550px] h-[550px] bg-blue-600/10 rounded-full blur-[140px]" />
           <div className="absolute top-1/4 -right-32 w-[500px] h-[500px] bg-emerald-600/8 rounded-full blur-[140px]" />
@@ -5020,8 +5012,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Top Header & Navigation Container (hidden in Ask view so Ask covers full top area) */}
-      {!(currentView === 'ask' && isCourseActiveUser) && (
+      {/* Top Header & Navigation Container (hidden in Ask and Enroll views) */}
+      {!(currentView === 'ask' && isCourseActiveUser) && !(currentView === 'enroll' && enrollCourse) && (
       <div className="sticky top-0 z-[100] w-full shrink-0 shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
         {/* Dynamic Global Notice Banner from Admin Settings (Red Urgency Notice) */}
         {siteSettings.showNoticeBanner && siteSettings.noticeBannerText && (
@@ -5233,11 +5225,31 @@ export default function App() {
       </div>
       )}
 
-      {/* Main Container for Course List / Classroom / Account / Ask */}
-      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
+      {/* Main Container for Course List / Classroom / Account / Ask / Enroll */}
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
 
-        {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / HOME VIEWS */}
-        {currentView === 'live' && (canSubAdminAccessLive || isMainAdmin) ? (
+        {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / ENROLL / HOME VIEWS */}
+        {currentView === 'enroll' && enrollCourse ? (
+          <CourseEnrollPage
+            course={enrollCourse}
+            paymentConfig={getEffectivePaymentConfig(enrollCourse)}
+            initialName={
+              cleanRealName(currentUser?.displayName) ||
+              cleanRealName(authName) ||
+              cleanRealName(localStorage.getItem('clipzone_student_name')) ||
+              ''
+            }
+            initialEmail={
+              currentUser?.email && !currentUser.isAnonymous ? currentUser.email : ''
+            }
+            onBack={() => {
+              setEnrollCourse(null);
+              setCurrentView('home');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+            showToast={showToast}
+          />
+        ) : currentView === 'live' && (canSubAdminAccessLive || isMainAdmin) ? (
           <section id="live-manager-view" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-6">
             <LiveSessionsPanel
               mode="manager"
@@ -5989,9 +6001,9 @@ export default function App() {
                                 setShowCodeInputModal(true);
                               }}
                               className="bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-amber-500/30 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
-                              title="Unlock another course code"
+                              title="Add course"
                             >
-                              🔑 Add Course Code
+                              + Add course
                             </button>
 
                             {(canEditCourse(currentClassroomCourse.id) || isMainAdmin) && (
@@ -6351,36 +6363,19 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="max-w-xl mx-auto bg-black p-8 rounded-3xl border border-zinc-800 shadow-2xl text-center space-y-6 my-8">
-                  <div className="w-16 h-16 bg-blue-500/15 border border-blue-500/30 text-blue-400 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
-                    🗝️
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-extrabold text-white font-sans">Activate Your Premium Course Access</h4>
-                    <p className="text-xs text-zinc-400 mt-2 max-w-sm mx-auto leading-relaxed font-semibold">
-                      तपाईंसँग भएको Secret Activation Code यहाँ राखी आफ्नो कोर्ष अनलक गर्नुहोस्।
+                <div className="max-w-md mx-auto bg-zinc-950 p-6 sm:p-8 rounded-3xl border border-zinc-800 shadow-2xl text-center space-y-5 my-8">
+                  <div className="space-y-1.5">
+                    <h4 className="text-xl font-extrabold text-white font-sans">Add course</h4>
+                    <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed font-medium">
+                      Enter course ID shared by your instructor to enroll in a course
                     </p>
                   </div>
 
-                  <form onSubmit={handleClaimActivationCode} className="space-y-3 text-left">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
-                        Secret Activation Code (सेक्रेट कोड) *
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePasteCodeToInput()}
-                        className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-                        title="Clipboard बाट कोड Paste गर्नुहोस्"
-                      >
-                        <ClipboardPaste className="w-3.5 h-3.5" />
-                        <span>📋 Paste</span>
-                      </button>
-                    </div>
-
+                  <form onSubmit={handleClaimActivationCode} className="space-y-4">
                     <div className="relative flex items-center">
-                      <input 
+                      <input
                         type="text"
+                        required
                         value={activationCodeInput}
                         onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
                         onPaste={(e) => {
@@ -6389,15 +6384,15 @@ export default function App() {
                             e.preventDefault();
                             const clean = extractAndCleanCode(pasted);
                             setActivationCodeInput(clean);
-                            showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
                           }
                         }}
-                        placeholder="CLIP-XXXXXX"
+                        placeholder="Course ID"
+                        aria-label="Course ID"
                         autoComplete="off"
                         autoCorrect="off"
                         spellCheck={false}
                         autoCapitalize="characters"
-                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl pl-4 pr-24 py-3.5 text-sm sm:text-base font-mono font-black uppercase outline-hidden text-white text-center tracking-widest transition shadow-inner placeholder:text-zinc-600"
+                        className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-2xl pl-4 pr-20 py-3.5 text-sm sm:text-base font-mono font-bold uppercase outline-hidden text-white text-center tracking-widest transition placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal placeholder:font-sans placeholder:font-medium"
                       />
 
                       <div className="absolute right-2 flex items-center gap-1">
@@ -6414,11 +6409,10 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => handlePasteCodeToInput()}
-                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer active:scale-95"
-                          title="Paste from clipboard"
+                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer active:scale-95"
+                          title="Paste"
                         >
                           <ClipboardPaste className="w-3.5 h-3.5" />
-                          <span>Paste</span>
                         </button>
                       </div>
                     </div>
@@ -6426,23 +6420,11 @@ export default function App() {
                     <button
                       type="submit"
                       disabled={isActivating || !activationCodeInput.trim()}
-                      className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-3.5 rounded-2xl text-xs transition cursor-pointer shadow-lg shadow-blue-500/20 font-sans active:scale-[0.99]"
+                      className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-2xl text-sm transition cursor-pointer shadow-lg shadow-blue-500/20 font-sans active:scale-[0.99]"
                     >
-                      {isActivating ? 'Activating Course...' : 'Unlock Instant Access ⚡'}
+                      {isActivating ? 'Enrolling...' : 'Add course'}
                     </button>
                   </form>
-
-                  <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-center gap-2">
-                    <button 
-                      onClick={() => {
-                        setCurrentView('home');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="text-xs font-black text-blue-400 hover:text-blue-300 transition flex items-center gap-1 cursor-pointer font-sans"
-                    >
-                      🌐 Browse All Available Courses First
-                    </button>
-                  </div>
                 </div>
               );
             })()
@@ -7217,14 +7199,6 @@ export default function App() {
                   >
                     <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)</span>
                   </button>
-                  <a
-                    href={getWhatsappPurchaseUrl(selectedCourse)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 text-sm"
-                  >
-                    <span>💬 WhatsApp मा किन्नुहोस् / सन्देश पठाउनुहोस्</span>
-                  </a>
                 </div>
               </motion.div>
             )}
@@ -7357,114 +7331,83 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="w-14 h-14 bg-blue-500/15 text-blue-400 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 shadow-inner border border-blue-500/30">
-                🔑
+              <div className="space-y-1.5 text-center pt-1">
+                <h3 className="text-xl font-extrabold text-white leading-tight">
+                  Add course
+                </h3>
+                <p className="text-xs sm:text-sm text-zinc-400 font-medium">
+                  Enter course ID shared by your instructor to enroll in a course
+                </p>
               </div>
-
-              <h3 className="text-xl font-extrabold text-white leading-tight text-center">
-                Add New Course to Student ID
-              </h3>
-              <p className="text-xs text-zinc-400 mt-1.5 text-center font-medium">
-                तपाईंसँग भएको सेक्रेट कोड (CLIP-XXXXXX) यहाँ राखी आफ्नो यही एकाउन्टमा नयाँ कोर्स जोड्नुहोस्।
-              </p>
 
               <form 
                 onSubmit={async (e) => {
                   await handleClaimActivationCode(e);
                   setShowCodeInputModal(false);
                 }} 
-                className="mt-6 space-y-4 text-left"
+                className="mt-5 space-y-4"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-black uppercase tracking-wider text-blue-400">
-                      Secret Activation Code (सेक्रेट कोड) *
-                    </label>
+                <div className="relative flex items-center">
+                  <input 
+                    type="text"
+                    required
+                    autoFocus
+                    value={activationCodeInput}
+                    onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData?.getData('text');
+                      if (pasted) {
+                        e.preventDefault();
+                        const clean = extractAndCleanCode(pasted);
+                        setActivationCodeInput(clean);
+                      }
+                    }}
+                    placeholder="Course ID"
+                    aria-label="Course ID"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoCapitalize="characters"
+                    className="w-full bg-zinc-900 border border-zinc-750 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl pl-4 pr-20 py-3.5 text-base font-mono font-bold uppercase outline-hidden text-center tracking-widest text-white transition shadow-inner placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal placeholder:font-sans placeholder:font-medium"
+                  />
+
+                  <div className="absolute right-2 flex items-center gap-1">
+                    {activationCodeInput && (
+                      <button
+                        type="button"
+                        onClick={() => setActivationCodeInput('')}
+                        className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                        title="Clear"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handlePasteCodeToInput()}
-                      className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                      title="Clipboard बाट कोड Paste गर्नुहोस्"
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer active:scale-95"
+                      title="Paste"
                     >
-                      <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
-                      <span>📋 Paste Code</span>
+                      <ClipboardPaste className="w-3.5 h-3.5" />
                     </button>
                   </div>
-
-                  <div className="relative flex items-center">
-                    <input 
-                      type="text"
-                      required
-                      autoFocus
-                      value={activationCodeInput}
-                      onChange={(e) => setActivationCodeInput(e.target.value.toUpperCase())}
-                      onPaste={(e) => {
-                        const pasted = e.clipboardData?.getData('text');
-                        if (pasted) {
-                          e.preventDefault();
-                          const clean = extractAndCleanCode(pasted);
-                          setActivationCodeInput(clean);
-                          showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
-                        }
-                      }}
-                      placeholder="CLIP-XXXXXX"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      autoCapitalize="characters"
-                      className="w-full bg-zinc-900 border border-zinc-750 focus:border-blue-500 focus:bg-zinc-950 rounded-2xl pl-4 pr-24 py-3.5 text-base font-mono font-black uppercase outline-hidden text-center tracking-widest text-white transition shadow-inner placeholder-zinc-600"
-                    />
-
-                    <div className="absolute right-2 flex items-center gap-1">
-                      {activationCodeInput && (
-                        <button
-                          type="button"
-                          onClick={() => setActivationCodeInput('')}
-                          className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
-                          title="Clear input"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handlePasteCodeToInput()}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer active:scale-95"
-                        title="Paste from clipboard"
-                      >
-                        <ClipboardPaste className="w-3.5 h-3.5" />
-                        <span>Paste</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-400 font-medium">
-                    💡 सजिलै <strong>Paste</strong> बटन थिच्नुहोस् वा आफ्नो कोड टाइप गर्नुहोस्।
-                  </p>
                 </div>
 
                 <button
                   type="submit"
                   disabled={isActivating || !activationCodeInput.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-xs uppercase tracking-wider transition cursor-pointer shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-2xl text-sm transition cursor-pointer shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
                 >
                   {isActivating ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Linking Course to Student ID...
+                      Enrolling...
                     </>
                   ) : (
-                    '➕ Unlock & Add Course to My Account 🚀'
+                    'Add course'
                   )}
                 </button>
               </form>
-
-              <div className="mt-5 pt-4 border-t border-zinc-800 text-left">
-                <p className="text-[11px] text-zinc-400 font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  Linked to Student Profile: <span className="text-blue-400 font-extrabold">{currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Account'}</span>
-                </p>
-              </div>
             </motion.div>
           </div>
         )}
@@ -8943,6 +8886,7 @@ export default function App() {
       />
 
       {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA WITH EXPANDED FULL-SCREEN DESKTOP VIEW */}
+      {!(currentView === 'enroll' && enrollCourse) && (
       <nav 
         id="native-app-bottom-bar"
         aria-label="App Navigation Bar" 
@@ -9086,6 +9030,7 @@ export default function App() {
           </button>
         </div>
       </nav>
+      )}
 
     </div>
   );

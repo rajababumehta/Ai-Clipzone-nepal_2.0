@@ -3146,7 +3146,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               allActivationKeys={allActivationKeys}
               adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
               subAdminSession={isMainAdmin ? null : subAdminSession}
-              subAdmins={subAdmins}
+              subAdmins={(subAdmins || []).filter(
+                (s): s is SubAdminAccount => 'code' in s && typeof s.code === 'string'
+              )}
               courses={courses}
             />
           )}
