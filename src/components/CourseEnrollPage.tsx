@@ -59,6 +59,11 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{
+    fullName?: string;
+    phone?: string;
+    screenshot?: string;
+  }>({});
 
   const cleanPhoneNumber = (raw?: string) => {
     const digits = (raw || '9763323268').replace(/\D/g, '');
@@ -144,6 +149,7 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
     }
 
     setScreenshotFile(file);
+    setFieldErrors((prev) => ({ ...prev, screenshot: undefined }));
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
@@ -160,6 +166,46 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const validateRequiredFields = () => {
+    const nextErrors: {
+      fullName?: string;
+      phone?: string;
+      screenshot?: string;
+    } = {};
+
+    if (!fullName.trim()) {
+      nextErrors.fullName = 'Full Name is required.';
+    }
+
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (!phone.trim()) {
+      nextErrors.phone = 'Phone Number is required.';
+    } else if (phoneDigits.length < 7) {
+      nextErrors.phone = 'Please enter a valid Phone Number.';
+    }
+
+    if (!screenshotFile) {
+      nextErrors.screenshot = 'QR Payment Screenshot is required.';
+    }
+
+    setFieldErrors(nextErrors);
+
+    const missingLabels: string[] = [];
+    if (nextErrors.fullName) missingLabels.push('Full Name');
+    if (nextErrors.phone) missingLabels.push('Phone Number');
+    if (nextErrors.screenshot) missingLabels.push('QR Payment Screenshot');
+
+    if (missingLabels.length > 0) {
+      showToast(
+        `Please provide: ${missingLabels.join(', ')} before continuing.`,
+        'error'
+      );
+      return false;
+    }
+
+    return true;
   };
 
   const saveEnrollmentRequestInBackground = async (capturedScreenshotFile: File | null) => {
@@ -203,14 +249,21 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      showToast('Please enter your Full Name.', 'error');
+  const handleWhatsappClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!validateRequiredFields()) {
+      e.preventDefault();
       return;
     }
-    if (!phone.trim()) {
-      showToast('Please enter your Phone Number.', 'error');
+
+    showToast(
+      'Opening WhatsApp — please attach your payment screenshot in chat to complete verification.',
+      'success'
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateRequiredFields()) {
       return;
     }
 
@@ -223,9 +276,7 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
     });
 
     showToast(
-      screenshotFile
-        ? 'Opening WhatsApp — please attach your payment screenshot in chat to complete verification.'
-        : 'Opening WhatsApp with your enrollment details!',
+      'Opening WhatsApp — please attach your payment screenshot in chat to complete verification.',
       'success'
     );
   };
@@ -278,24 +329,42 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
         </div>
 
         {/* Enrollment & Payment Form */}
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} noValidate className="space-y-3">
           {/* Full Name */}
-          <label className="flex items-center gap-3.5 bg-zinc-950/90 border border-zinc-800/90 focus-within:border-zinc-600 rounded-xl px-4 py-3 transition">
-            <User className="w-4 h-4 text-rose-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="block text-[11px] font-semibold text-zinc-300 leading-tight mb-0.5">
-                Full Name
-              </span>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Enter your full name"
-                className="w-full bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
-                required
-              />
-            </div>
-          </label>
+          <div>
+            <label
+              className={`flex items-center gap-3.5 bg-zinc-950/90 border rounded-xl px-4 py-3 transition ${
+                fieldErrors.fullName
+                  ? 'border-rose-500/80 focus-within:border-rose-400'
+                  : 'border-zinc-800/90 focus-within:border-zinc-600'
+              }`}
+            >
+              <User className="w-4 h-4 text-rose-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="block text-[11px] font-semibold text-zinc-300 leading-tight mb-0.5">
+                  Full Name <span className="text-rose-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (fieldErrors.fullName && e.target.value.trim()) {
+                      setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+                    }
+                  }}
+                  placeholder="Enter your full name"
+                  className="w-full bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
+                  required
+                />
+              </div>
+            </label>
+            {fieldErrors.fullName && (
+              <p className="mt-1 px-1 text-[11px] text-rose-400 font-medium">
+                {fieldErrors.fullName}
+              </p>
+            )}
+          </div>
 
           {/* Email Address */}
           <label className="flex items-center gap-3.5 bg-zinc-950/90 border border-zinc-800/90 focus-within:border-zinc-600 rounded-xl px-4 py-3 transition">
@@ -315,22 +384,40 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
           </label>
 
           {/* Phone Number */}
-          <label className="flex items-center gap-3.5 bg-zinc-950/90 border border-zinc-800/90 focus-within:border-zinc-600 rounded-xl px-4 py-3 transition">
-            <Phone className="w-4 h-4 text-rose-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="block text-[11px] font-semibold text-zinc-300 leading-tight mb-0.5">
-                Phone Number
-              </span>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="98XXXXXXXX"
-                className="w-full bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none tabular-nums"
-                required
-              />
-            </div>
-          </label>
+          <div>
+            <label
+              className={`flex items-center gap-3.5 bg-zinc-950/90 border rounded-xl px-4 py-3 transition ${
+                fieldErrors.phone
+                  ? 'border-rose-500/80 focus-within:border-rose-400'
+                  : 'border-zinc-800/90 focus-within:border-zinc-600'
+              }`}
+            >
+              <Phone className="w-4 h-4 text-rose-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="block text-[11px] font-semibold text-zinc-300 leading-tight mb-0.5">
+                  Phone Number <span className="text-rose-500">*</span>
+                </span>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (fieldErrors.phone && e.target.value.replace(/\D/g, '').length >= 7) {
+                      setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                    }
+                  }}
+                  placeholder="98XXXXXXXX"
+                  className="w-full bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none tabular-nums"
+                  required
+                />
+              </div>
+            </label>
+            {fieldErrors.phone && (
+              <p className="mt-1 px-1 text-[11px] text-rose-400 font-medium">
+                {fieldErrors.phone}
+              </p>
+            )}
+          </div>
 
           {/* QR Transaction ID (Optional) */}
           <label className="flex items-center gap-3.5 bg-zinc-950/90 border border-zinc-800/90 focus-within:border-zinc-600 rounded-xl px-4 py-3 transition">
@@ -352,7 +439,7 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
           {/* QR Payment Screenshot */}
           <div className="pt-2 space-y-2">
             <p className="text-xs font-semibold text-zinc-200">
-              QR Payment Screenshot
+              QR Payment Screenshot <span className="text-rose-500">*</span>
             </p>
 
             <input
@@ -373,7 +460,11 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
                   fileInputRef.current?.click();
                 }
               }}
-              className="w-full border border-dashed border-rose-500/45 bg-rose-950/10 hover:bg-rose-950/20 rounded-xl p-4 sm:p-5 transition cursor-pointer flex items-center justify-center gap-3.5 text-left min-h-[72px]"
+              className={`w-full border border-dashed rounded-xl p-4 sm:p-5 transition cursor-pointer flex items-center justify-center gap-3.5 text-left min-h-[72px] ${
+                fieldErrors.screenshot
+                  ? 'border-rose-500 bg-rose-950/25 hover:bg-rose-950/35'
+                  : 'border-rose-500/45 bg-rose-950/10 hover:bg-rose-950/20'
+              }`}
             >
               {screenshotPreview && screenshotFile ? (
                 <div className="w-full flex items-center justify-between gap-3">
@@ -418,6 +509,11 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
                 </div>
               )}
             </div>
+            {fieldErrors.screenshot && (
+              <p className="px-1 text-[11px] text-rose-400 font-medium">
+                {fieldErrors.screenshot}
+              </p>
+            )}
           </div>
 
           {/* Bottom Dual CTA Row: WhatsApp + Submit -> */}
@@ -426,9 +522,7 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
               href={buildWhatsappUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => {
-                showToast('Opening WhatsApp chat...', 'info');
-              }}
+              onClick={handleWhatsappClick}
               className="min-h-[48px] rounded-xl border border-emerald-500/60 bg-emerald-950/15 hover:bg-emerald-950/35 text-emerald-400 font-semibold text-sm flex items-center justify-center gap-2 transition whitespace-nowrap active:scale-[0.98]"
             >
               <WhatsAppIcon className="w-4 h-4 shrink-0" />
