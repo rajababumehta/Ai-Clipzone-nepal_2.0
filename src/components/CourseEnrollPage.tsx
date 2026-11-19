@@ -262,7 +262,7 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
         </div>
 
         {/* Centered QR Payment Card */}
-        <div className="flex flex-col items-center gap-3 pt-1">
+        <div className="flex flex-col items-center pt-1">
           <div className="w-56 h-56 sm:w-64 sm:h-64 bg-white rounded-2xl p-3.5 sm:p-4 flex items-center justify-center shadow-[0_0_85px_-14px_rgba(220,38,38,0.45)]">
             {paymentConfig.qrImageUrl ? (
               <img
@@ -275,13 +275,6 @@ export const CourseEnrollPage: React.FC<CourseEnrollPageProps> = ({
               <canvas ref={qrCanvasRef} className="w-full h-full object-contain" />
             )}
           </div>
-
-          <p className="text-xs text-zinc-400 text-center tabular-nums">
-            {paymentConfig.accountName || 'Ayush Chaurasiya'} · eSewa:{' '}
-            <span className="text-zinc-200 font-medium select-all">
-              {paymentConfig.esewaId || '9763323268'}
-            </span>
-          </p>
         </div>
 
         {/* Enrollment & Payment Form */}

@@ -3231,6 +3231,9 @@ export default function App() {
     if (selectedCourse && selectedCourse.id === safeCourse.id) {
       setSelectedCourse(safeCourse);
     }
+    if (enrollCourse && enrollCourse.id === safeCourse.id) {
+      setEnrollCourse(safeCourse);
+    }
 
     try {
       await setDoc(doc(db, 'courses', safeCourse.id), cleaned, { merge: true });

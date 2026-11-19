@@ -356,17 +356,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const targetId = isSubAdmin ? assignedCourseId : scopeId;
       const crs = courses.find((c) => c.id === targetId);
       const cp = crs?.paymentConfig;
-      setQrEsewaId(cp?.esewaId ?? (isMainAdmin ? '' : paymentConfig.esewaId || ''));
-      setQrAccountName(cp?.accountName ?? (isMainAdmin ? '' : paymentConfig.accountName || ''));
-      setQrWhatsappNumber(cp?.whatsappNumber ?? (isMainAdmin ? '' : paymentConfig.whatsappNumber || ''));
-      setQrWhatsappMessage(crs?.message || (crs ? `I want to buy ${crs.title}` : ''));
-      setQrBankName(cp?.bankName ?? '');
-      setQrBankAccountNo(cp?.bankAccountNo ?? '');
-      setQrBankBranch(cp?.bankBranch ?? '');
-      setQrImageUrl(cp?.qrImageUrl ?? '');
-      setQrPaymentInstruction(
-        cp?.paymentInstruction ?? '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
-      );
+      if (isSubAdmin) {
+        setQrEsewaId('');
+        setQrAccountName('');
+        setQrWhatsappNumber(cp?.whatsappNumber ?? '');
+        setQrWhatsappMessage(crs?.message || (crs ? `I want to buy ${crs.title}` : ''));
+        setQrBankName('');
+        setQrBankAccountNo('');
+        setQrBankBranch('');
+        setQrImageUrl(cp?.qrImageUrl ?? '');
+        setQrPaymentInstruction(cp?.paymentInstruction ?? '');
+      } else {
+        setQrEsewaId(cp?.esewaId ?? '');
+        setQrAccountName(cp?.accountName ?? '');
+        setQrWhatsappNumber(cp?.whatsappNumber ?? '');
+        setQrWhatsappMessage(crs?.message || (crs ? `I want to buy ${crs.title}` : ''));
+        setQrBankName(cp?.bankName ?? '');
+        setQrBankAccountNo(cp?.bankAccountNo ?? '');
+        setQrBankBranch(cp?.bankBranch ?? '');
+        setQrImageUrl(cp?.qrImageUrl ?? '');
+        setQrPaymentInstruction(
+          cp?.paymentInstruction ?? '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
+        );
+      }
     }
   }, [isMainAdmin, isSubAdmin, assignedCourseId, courses, paymentConfig]);
 
@@ -440,8 +452,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     e.preventDefault();
     const effectiveScope = isSubAdmin ? assignedCourseId : selectedPaymentScope;
 
-    if (!qrEsewaId.trim() || !qrAccountName.trim()) {
-      showToast('eSewa ID and Account Name are required!', 'error');
+    if (isSubAdmin) {
+      if (!qrImageUrl.trim()) {
+        showToast('कृपया Payment QR फोटो अपलोड गर्नुहोस्!', 'error');
+        return;
+      }
+    } else if (!qrImageUrl.trim() && (!qrEsewaId.trim() || !qrAccountName.trim())) {
+      showToast('Please upload a QR image or enter eSewa ID and Account Name!', 'error');
       return;
     }
 
@@ -470,17 +487,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         const updatedCourse: Course = {
           ...targetCourse,
           message: qrWhatsappMessage.trim() || targetCourse.message || `I want to buy ${targetCourse.title}`,
-          paymentConfig: {
-            esewaId: qrEsewaId.trim(),
-            accountName: qrAccountName.trim(),
-            whatsappNumber: qrWhatsappNumber.trim(),
-            bankName: qrBankName.trim(),
-            bankAccountNo: qrBankAccountNo.trim(),
-            bankBranch: qrBankBranch.trim(),
-            qrImageUrl: qrImageUrl.trim(),
-            paymentInstruction: qrPaymentInstruction.trim(),
-            updatedAt: Date.now()
-          }
+          paymentConfig: isSubAdmin
+            ? {
+                esewaId: '',
+                accountName: '',
+                whatsappNumber: qrWhatsappNumber.trim(),
+                bankName: '',
+                bankAccountNo: '',
+                bankBranch: '',
+                qrImageUrl: qrImageUrl.trim(),
+                paymentInstruction: qrPaymentInstruction.trim(),
+                updatedAt: Date.now()
+              }
+            : {
+                esewaId: qrEsewaId.trim(),
+                accountName: qrAccountName.trim(),
+                whatsappNumber: qrWhatsappNumber.trim(),
+                bankName: qrBankName.trim(),
+                bankAccountNo: qrBankAccountNo.trim(),
+                bankBranch: qrBankBranch.trim(),
+                qrImageUrl: qrImageUrl.trim(),
+                paymentInstruction: qrPaymentInstruction.trim(),
+                updatedAt: Date.now()
+              }
         };
         await onSaveCourse(updatedCourse);
         showToast(`"${targetCourse.title}" को Payment र WhatsApp विवरण सुरक्षित भयो! 💳`, 'success');
@@ -801,9 +830,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Handle Local Image Upload for QR Code
-  const handleQrImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleImageFileUpload(e, setQrImageUrl, 'Payment QR image');
+  // Handle Local Image Upload for QR Code (compressed so it always fits safely inside Firestore)
+  const handleQrImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('QR image size exceeds 5MB limit.', 'error');
+      e.target.value = '';
+      return;
+    }
+    try {
+      const compressed = await compressImageFile(file, 900, 0.8);
+      if (compressed.url.length > 400000) {
+        const tighter = await compressImageFile(file, 650, 0.65);
+        setQrImageUrl(tighter.url);
+      } else {
+        setQrImageUrl(compressed.url);
+      }
+      showToast('Payment QR image uploaded! Click Save to apply changes.', 'success');
+    } catch {
+      handleImageFileUpload(e, setQrImageUrl, 'Payment QR image');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   return (
@@ -1488,7 +1537,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <p className="mt-0.5 text-indigo-800">
                     {isMainAdmin
                       ? 'Global Default वा कुनै पनि कोर्षको व्यक्तिगत eSewa ID, खातावालाको नाम, WhatsApp नम्बर, QR Code र WhatsApp म्यासेज यहाँबाट फेर्न सक्नुहुन्छ।'
-                      : 'तपाईंले केवल आफ्नो तोकिएको यही कोर्षको eSewa/Bank Payment विवरण, QR र WhatsApp नम्बर/म्यासेज मात्र परिवर्तन गर्न सक्नुहुन्छ।'}
+                      : 'तपाईंले सिधै आफ्नो कोर्षको Payment QR फोटो अपलोड र WhatsApp नम्बर/म्यासेज सेट गर्न सक्नुहुन्छ।'}
                   </p>
                 </div>
               </div>
@@ -1567,131 +1616,183 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Form Fields Column */}
                 <div className="lg:col-span-7 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                        eSewa ID / Mobile Number *
-                      </label>
-                      <input 
-                        type="text"
-                        required
-                        value={qrEsewaId}
-                        onChange={(e) => setQrEsewaId(e.target.value)}
-                        placeholder="उदा: 9763323268"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-                      />
-                    </div>
+                  {isMainAdmin && (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                            eSewa ID / Mobile Number *
+                          </label>
+                          <input 
+                            type="text"
+                            value={qrEsewaId}
+                            onChange={(e) => setQrEsewaId(e.target.value)}
+                            placeholder="उदा: 9763323268"
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
+                          />
+                        </div>
 
-                    <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                        Account Holder Name *
-                      </label>
-                      <input 
-                        type="text"
-                        required
-                        value={qrAccountName}
-                        onChange={(e) => setQrAccountName(e.target.value)}
-                        placeholder="उदा: Ayush Chaurasiya"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-                      />
-                    </div>
-                  </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                            Account Holder Name *
+                          </label>
+                          <input 
+                            type="text"
+                            value={qrAccountName}
+                            onChange={(e) => setQrAccountName(e.target.value)}
+                            placeholder="उदा: Ayush Chaurasiya"
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 flex items-center justify-between">
-                        <span>WhatsApp Number (WhatsApp बाट किन्नुहोस् / Support) *</span>
-                      </label>
-                      <input 
-                        type="text"
-                        required
-                        value={qrWhatsappNumber}
-                        onChange={(e) => setQrWhatsappNumber(e.target.value)}
-                        placeholder="उदा: 9763323268 वा 9779763323268"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-                      />
-                      <span className="text-[9.5px] text-slate-400 mt-1 block font-medium">
-                        यो नम्बर "WhatsApp बाट किन्नुहोस्" बटन, Checkout र Chatbot मा प्रयोग हुन्छ।
-                      </span>
-                    </div>
+                  {isSubAdmin ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5">
+                          Direct Payment QR Upload (सिधै QR फोटो अपलोड गर्नुहोस्) *
+                        </label>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/40">
+                          <label className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-3 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm">
+                            <Upload className="w-4 h-4" />
+                            <span>{qrImageUrl ? 'Change QR Image (QR परिवर्तन गर्नुहोस्)' : 'Upload Payment QR Image'}</span>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              onChange={handleQrImageFileUpload}
+                              className="hidden" 
+                            />
+                          </label>
+                          {qrImageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrImageUrl('');
+                                showToast('QR image cleared. Upload a new QR image before saving.', 'info');
+                              }}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-4 py-3 rounded-xl text-xs transition cursor-pointer border border-rose-200"
+                            >
+                              Remove QR
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                        Bank Name (वैकल्पिक बैंक ट्रान्सफर)
-                      </label>
-                      <input 
-                        type="text"
-                        value={qrBankName}
-                        onChange={(e) => setQrBankName(e.target.value)}
-                        placeholder="उदा: Global IME Bank / Nabil Bank"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                        Bank Account Number (वैकल्पिक)
-                      </label>
-                      <input 
-                        type="text"
-                        value={qrBankAccountNo}
-                        onChange={(e) => setQrBankAccountNo(e.target.value)}
-                        placeholder="उदा: 01234567890123"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                        Bank Branch (वैकल्पिक)
-                      </label>
-                      <input 
-                        type="text"
-                        value={qrBankBranch}
-                        onChange={(e) => setQrBankBranch(e.target.value)}
-                        placeholder="उदा: Kathmandu Branch"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                      Custom QR Code Image URL (वा तल फाइल अपलोड गर्नुहोस्)
-                    </label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text"
-                        value={qrImageUrl}
-                        onChange={(e) => setQrImageUrl(e.target.value)}
-                        placeholder="खाली छाडेमा स्वतः eSewa QR कोड जेनेरेट हुनेछ"
-                        className="grow bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-medium text-slate-800"
-                      />
-                      <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shrink-0 border border-slate-200">
-                        <Upload className="w-3.5 h-3.5" /> Upload QR
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                          WhatsApp Number (विद्यार्थीले Submit / WhatsApp थिच्दा जाने नम्बर) *
+                        </label>
                         <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={handleQrImageFileUpload}
-                          className="hidden" 
+                          type="text"
+                          required
+                          value={qrWhatsappNumber}
+                          onChange={(e) => setQrWhatsappNumber(e.target.value)}
+                          placeholder="उदा: 9763323268 वा 9779763323268"
+                          className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                         />
-                      </label>
-                      {qrImageUrl && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQrImageUrl('');
-                            showToast('Custom QR removed. Using dynamic eSewa QR.', 'info');
-                          }}
-                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-2 rounded-xl text-xs transition cursor-pointer border border-rose-200"
-                        >
-                          Clear
-                        </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 flex items-center justify-between">
+                            <span>WhatsApp Number (WhatsApp बाट किन्नुहोस् / Support) *</span>
+                          </label>
+                          <input 
+                            type="text"
+                            required
+                            value={qrWhatsappNumber}
+                            onChange={(e) => setQrWhatsappNumber(e.target.value)}
+                            placeholder="उदा: 9763323268 वा 9779763323268"
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
+                          />
+                          <span className="text-[9.5px] text-slate-400 mt-1 block font-medium">
+                            यो नम्बर "WhatsApp" र "Submit" बटनमा प्रयोग हुन्छ।
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                            Bank Name (वैकल्पिक बैंक ट्रान्सफर)
+                          </label>
+                          <input 
+                            type="text"
+                            value={qrBankName}
+                            onChange={(e) => setQrBankName(e.target.value)}
+                            placeholder="उदा: Global IME Bank / Nabil Bank"
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                            Bank Account Number (वैकल्पिक)
+                          </label>
+                          <input 
+                            type="text"
+                            value={qrBankAccountNo}
+                            onChange={(e) => setQrBankAccountNo(e.target.value)}
+                            placeholder="उदा: 01234567890123"
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                            Bank Branch (वैकल्पिक)
+                          </label>
+                          <input 
+                            type="text"
+                            value={qrBankBranch}
+                            onChange={(e) => setQrBankBranch(e.target.value)}
+                            placeholder="उदा: Kathmandu Branch"
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
+                          Custom QR Code Image URL (वा तल फाइल अपलोड गर्नुहोस्)
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={qrImageUrl}
+                            onChange={(e) => setQrImageUrl(e.target.value)}
+                            placeholder="खाली छाडेमा स्वतः eSewa QR कोड जेनेरेट हुनेछ"
+                            className="grow bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-medium text-slate-800"
+                          />
+                          <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shrink-0 border border-slate-200">
+                            <Upload className="w-3.5 h-3.5" /> Upload QR
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              onChange={handleQrImageFileUpload}
+                              className="hidden" 
+                            />
+                          </label>
+                          {qrImageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrImageUrl('');
+                                showToast('Custom QR removed. Using dynamic eSewa QR.', 'info');
+                              }}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-2.5 py-2 rounded-xl text-xs transition cursor-pointer border border-rose-200"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
@@ -1708,7 +1809,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   {(isSubAdmin || selectedPaymentScope !== 'global') && (
                     <div>
                       <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5">
-                        WhatsApp Purchase Message (विद्यार्थीले "WhatsApp बाट किन्नुहोस्" थिच्दा जाने म्यासेज)
+                        WhatsApp Purchase Message (विद्यार्थीले पठाउने म्यासेज)
                       </label>
                       <textarea 
                         rows={2}
@@ -1734,25 +1835,32 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         alt="Custom QR Preview" 
                         className="w-full h-44 object-contain rounded-xl shadow-xs mx-auto"
                       />
+                    ) : isSubAdmin ? (
+                      <div className="w-full h-44 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center p-4 text-slate-500 text-xs font-semibold gap-2">
+                        <QrIcon className="w-8 h-8 text-slate-400" />
+                        <span>QR अपलोड गरिएको छैन</span>
+                      </div>
                     ) : (
                       <canvas ref={previewCanvasRef} className="mx-auto rounded-lg shadow-xs" />
                     )}
 
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 text-center">
-                      <span className="inline-block text-[9px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                        eSewa Official
-                      </span>
-                      <h4 className="text-xs font-black text-slate-900 mt-1 truncate">
-                        👤 {qrAccountName || 'Ayush Chaurasiya'}
-                      </h4>
-                      <p className="text-[11px] font-black text-slate-700 mt-0.5">
-                        📱 eSewa ID: <span className="font-mono text-purple-900 bg-purple-100 px-1.5 py-0.2 rounded text-[10px]">{qrEsewaId || '9763323268'}</span>
-                      </p>
-                    </div>
+                    {isMainAdmin && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 text-center">
+                        <span className="inline-block text-[9px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                          eSewa Official
+                        </span>
+                        <h4 className="text-xs font-black text-slate-900 mt-1 truncate">
+                          👤 {qrAccountName || 'Ayush Chaurasiya'}
+                        </h4>
+                        <p className="text-[11px] font-black text-slate-700 mt-0.5">
+                          📱 eSewa ID: <span className="font-mono text-purple-900 bg-purple-100 px-1.5 py-0.2 rounded text-[10px]">{qrEsewaId || '9763323268'}</span>
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <p className="text-[10px] text-slate-400 mt-3 font-medium px-2">
-                    विद्यार्थीहरूले "QR स्क्यान गरी तत्काल भुक्तानी" थिच्दा ठ्याक्कै यस्तो QR कोड र खाता देख्नेछन्।
+                    विद्यार्थीहरूले "Enroll & Activate Course" थिच्दा ठ्याक्कै यही QR कोड देख्नेछन्।
                   </p>
                 </div>
               </div>
