@@ -103,6 +103,14 @@
           "type": "string",
           "description": "Student name assigned to this activation key"
         },
+        "studentPhone": {
+          "type": "string",
+          "description": "Student phone number captured during enrollment"
+        },
+        "isFreeEnrollment": {
+          "type": "boolean",
+          "description": "Whether this key was automatically issued for a free course enrollment"
+        },
         "studentAvatar": {
           "type": "string",
           "description": "Saved profile photo or logo data URI/URL for the student"
@@ -149,6 +157,10 @@
         "amount": {
           "type": "number",
           "description": "Numerical price value for calculation"
+        },
+        "isFree": {
+          "type": "boolean",
+          "description": "Whether this course is free (no payment QR or screenshot required)"
         },
         "message": {
           "type": "string",

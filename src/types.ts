@@ -17,6 +17,7 @@ export interface Course {
   title: string;
   price: string;
   amount: number;
+  isFree?: boolean;
   message: string;
   learn: string[];
   image: string;
@@ -160,6 +161,7 @@ export interface ActivationKey {
   duration: '1day' | '1month' | '1year';
   createdAt: number;
   studentName?: string;
+  studentPhone?: string;
   claimedByName?: string;
   claimedByEmail?: string;
   claimedByUid?: string;
@@ -170,6 +172,7 @@ export interface ActivationKey {
   activeDeviceId?: string;
   studentAvatar?: string;
   studentAvatarUpdatedAt?: number;
+  isFreeEnrollment?: boolean;
   createdByRole?: 'main_admin' | 'sub_admin';
   createdBySubAdminCode?: string;
   createdByName?: string;

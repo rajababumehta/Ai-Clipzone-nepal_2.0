@@ -70,7 +70,7 @@ import {
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
-import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession } from './types';
+import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -186,9 +186,18 @@ function getSecureYouTubeEmbedUrl(url: string, autoplay: boolean = false): strin
   return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}&autoplay=${autoplay ? 1 : 0}`;
 }
 
+export function isCourseFree(course?: Partial<Course> | null): boolean {
+  if (!course) return false;
+  if (course.isFree === true) return true;
+  if (typeof course.amount === 'number' && course.amount === 0) return true;
+  if (typeof course.price === 'string' && /^free$/i.test(course.price.trim())) return true;
+  return false;
+}
+
 export function isCourseKeyExpired(key: any): boolean {
   if (!key) return true;
   if (key.status === 'expired' || key.isExpired === true) return true;
+  if (key.isFreeEnrollment === true) return false;
   const now = Date.now();
   if (key.expiresAt && Number(key.expiresAt) > 0 && now >= Number(key.expiresAt)) {
     return true;
@@ -768,6 +777,7 @@ export default function App() {
   const [formTitle, setFormTitle] = useState('');
   const [formPrice, setFormPrice] = useState('Rs. ');
   const [formAmount, setFormAmount] = useState(299);
+  const [formIsFree, setFormIsFree] = useState(false);
   const [formMessage, setFormMessage] = useState('');
   const [formImage, setFormImage] = useState('');
   const [formIsPopular, setFormIsPopular] = useState(false);
@@ -3586,6 +3596,162 @@ export default function App() {
     setCurrentView('enroll');
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
+
+  // Free Course Enrollment: capture compulsory Name & Phone, activate course immediately, and open Classroom
+  const handleFreeEnrollComplete = async (
+    course: Course,
+    details: { fullName: string; phone: string }
+  ) => {
+    const cleanName = cleanRealName(details.fullName) || details.fullName.trim();
+    const cleanPhone = details.phone.trim();
+    const now = Date.now();
+    const deviceId = getOrCreateDeviceId();
+
+    let activeUser: any = currentUser || auth.currentUser;
+    if (!activeUser) {
+      try {
+        const authTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('AUTH_TIMEOUT')), 2000)
+        );
+        const cred: any = await Promise.race([signInAnonymously(auth), authTimeout]);
+        activeUser = cred?.user;
+      } catch {
+        activeUser = getOrCreateLocalUser(cleanName);
+      }
+    }
+
+    if (activeUser && activeUser.uid && !activeUser.uid.startsWith('local_') && auth.currentUser) {
+      try {
+        await updateProfile(auth.currentUser, { displayName: cleanName });
+      } catch {
+        // Ignore profile update failures
+      }
+    }
+
+    const permanentStudentUid =
+      (activeUser?.uid && !String(activeUser.uid).startsWith('local_') ? activeUser.uid : '') ||
+      localStorage.getItem('clipzone_student_uid') ||
+      activeUser?.uid ||
+      `local_${Math.random().toString(36).substring(2, 11)}`;
+
+    if (activeUser) {
+      setCurrentUser({ ...activeUser, displayName: cleanName });
+    }
+    setAuthName(cleanName);
+    try {
+      localStorage.setItem('clipzone_student_name', cleanName);
+      localStorage.setItem('clipzone_student_uid', permanentStudentUid);
+    } catch {}
+
+    const slugPrefix = (course.id || 'COURSE')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase()
+      .slice(0, 6) || 'COURSE';
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const freeKeyCode = `FREE-${slugPrefix}-${randomSuffix}`;
+    const expiresAt = now + 10 * 365 * 24 * 60 * 60 * 1000;
+
+    const keyPayload: ActivationKey & { isFreeEnrollment: boolean; deviceClaimedAt: number; forceLogoutAt: number } = {
+      id: freeKeyCode,
+      code: freeKeyCode,
+      status: 'used',
+      duration: '1year',
+      createdAt: now,
+      claimedAt: now,
+      expiresAt,
+      courseId: course.id,
+      courseTitle: course.title,
+      studentName: cleanName,
+      studentPhone: cleanPhone,
+      claimedByName: cleanName,
+      claimedByEmail:
+        activeUser?.email && !activeUser.isAnonymous ? activeUser.email : cleanPhone,
+      claimedByUid: permanentStudentUid,
+      activeDeviceId: deviceId,
+      deviceClaimedAt: now,
+      forceLogoutAt: 0,
+      isFreeEnrollment: true,
+      createdByRole: 'main_admin',
+      createdByName: 'Free Enrollment',
+    };
+
+    try {
+      await Promise.race([
+        setDoc(doc(db, 'activation_keys', freeKeyCode), {
+          ...keyPayload,
+          originalOwnerUid: permanentStudentUid,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('KEY_SYNC_TIMEOUT')), 2500)),
+      ]);
+    } catch (err) {
+      console.warn('Free enrollment key cloud sync deferred/offline:', err);
+    }
+
+    if (auth.currentUser?.uid) {
+      try {
+        const reqRef = doc(collection(db, 'course_requests'));
+        await setDoc(reqRef, {
+          id: reqRef.id,
+          userId: auth.currentUser.uid,
+          userEmail:
+            auth.currentUser.email && !auth.currentUser.isAnonymous
+              ? auth.currentUser.email
+              : cleanPhone,
+          courseId: course.id,
+          courseTitle: course.title,
+          coursePrice: 'FREE',
+          fullName: cleanName,
+          phone: cleanPhone,
+          status: 'accepted',
+          requestedAt: now,
+          createdAt: now,
+        });
+      } catch {
+        // Non-fatal enrollment log
+      }
+    }
+
+    // Update local persistent storage before updating activeCourseIds state
+    try {
+      localStorage.setItem('clipzone_session_login_time', String(now));
+      localStorage.setItem('clipzone_last_session_reset', String(now));
+
+      const activeCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+      if (!activeCodes.includes(freeKeyCode)) {
+        activeCodes.push(freeKeyCode);
+        localStorage.setItem('clipzone_active_codes', JSON.stringify(activeCodes));
+      }
+
+      const localActivated: string[] = JSON.parse(
+        localStorage.getItem('clipzone_local_activated_courses') || '[]'
+      );
+      if (!localActivated.includes(course.id)) {
+        localActivated.push(course.id);
+        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(localActivated));
+      }
+      setActiveCourseIds(localActivated);
+
+      const localKeysInfo: any[] = JSON.parse(
+        localStorage.getItem('clipzone_activated_keys_info') || '[]'
+      );
+      const updatedKeysInfo = [
+        keyPayload,
+        ...localKeysInfo.filter((k: any) => k.courseId !== course.id && k.code !== freeKeyCode),
+      ];
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeysInfo));
+      setUserActivationKeys(updatedKeysInfo);
+    } catch {
+      setActiveCourseIds((prev) => (prev.includes(course.id) ? prev : [...prev, course.id]));
+    }
+
+    // Automatically enter the enrolled course classroom
+    setEnrollCourse(null);
+    setSelectedClassroomCourseId(course.id);
+    setCurrentVideoIndex(0);
+    setCurrentView('classroom');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast(`Enrolled in "${course.title}"! Welcome, ${cleanName}!`, 'success');
+  };
   // QR modal state
   const [showQrModal, setShowQrModal] = useState(false);
   // Quick Code Activation Modal State for Students
@@ -4473,11 +4639,13 @@ export default function App() {
       showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
       return;
     }
+    const freeCourse = isCourseFree(course);
     setEditingCourse(course);
     setFormId(course.id);
     setFormTitle(course.title);
-    setFormPrice(course.price);
-    setFormAmount(course.amount);
+    setFormIsFree(freeCourse);
+    setFormPrice(freeCourse ? 'FREE' : course.price);
+    setFormAmount(freeCourse ? 0 : course.amount);
     setFormMessage(course.message || `I want to buy ${course.title}`);
     setFormImage(course.image);
     setFormIsPopular(!!course.isPopular);
@@ -4500,6 +4668,7 @@ export default function App() {
     setEditingCourse(null);
     setFormId('');
     setFormTitle('');
+    setFormIsFree(false);
     setFormPrice('Rs. ');
     setFormAmount(299);
     setFormMessage('');
@@ -4526,7 +4695,23 @@ export default function App() {
       showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
       return;
     }
-    if (!formTitle.trim() || !formPrice.trim() || !formImage.trim()) {
+
+    // Strictly Main-Admin-only control over Free Course pricing option
+    const resolvedIsFree = isMainAdmin
+      ? Boolean(formIsFree || Number(formAmount) === 0 || /^free$/i.test(formPrice.trim()))
+      : Boolean(editingCourse && isCourseFree(editingCourse));
+    const resolvedPrice = resolvedIsFree
+      ? 'FREE'
+      : isMainAdmin
+        ? formPrice.trim()
+        : (editingCourse?.price || formPrice.trim());
+    const resolvedAmount = resolvedIsFree
+      ? 0
+      : isMainAdmin
+        ? (Number(formAmount) > 0 ? Number(formAmount) : 299)
+        : (typeof editingCourse?.amount === 'number' ? editingCourse.amount : 299);
+
+    if (!formTitle.trim() || (!resolvedIsFree && !resolvedPrice) || !formImage.trim()) {
       showToast('Please fill in all required fields (Title, Price, Image URL)', 'error');
       return;
     }
@@ -4553,8 +4738,9 @@ export default function App() {
       ...(editingCourse || {}),
       id: finalId,
       title: formTitle,
-      price: formPrice,
-      amount: Number(formAmount) || 299,
+      price: resolvedPrice,
+      amount: resolvedAmount,
+      isFree: resolvedIsFree,
       message: formMessage || `I want to buy ${formTitle}`,
       learn: learnArray.length > 0 ? learnArray : ['Interactive AI Learning', 'Certificate of Completion Included', 'Lifetime Updates Access'],
       image: formImage,
@@ -5168,8 +5354,8 @@ export default function App() {
                                       Enrolled ✓
                                     </span>
                                   ) : (
-                                    <span className="text-blue-400 font-bold">
-                                      Rs. {c.price || '999'}
+                                    <span className={`font-bold ${isCourseFree(c) ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                      {isCourseFree(c) ? 'FREE' : (c.price || 'Rs. 999')}
                                     </span>
                                   )}
                                 </div>
@@ -5261,6 +5447,7 @@ export default function App() {
               setCurrentView('home');
               window.scrollTo({ top: 0, behavior: 'auto' });
             }}
+            onFreeEnrollComplete={handleFreeEnrollComplete}
             showToast={showToast}
           />
         ) : currentView === 'live' && (canSubAdminAccessLive || isMainAdmin) ? (
@@ -6544,9 +6731,9 @@ export default function App() {
                           ) : (
                             <div className="flex items-baseline gap-2.5">
                               <span className="text-2xl md:text-3xl font-black text-emerald-400">
-                                {course.price}
+                                {isCourseFree(course) ? 'FREE' : course.price}
                               </span>
-                              {course.isPopular && (
+                              {course.isPopular && !isCourseFree(course) && (
                                 <span className="text-zinc-500 line-through text-sm md:text-base font-semibold">
                                   Price Rs. 1000
                                 </span>
@@ -7180,7 +7367,7 @@ export default function App() {
                 </div>
                 
                 <p className="text-3xl font-black text-emerald-400 mt-3 text-left">
-                  {selectedCourse.price}
+                  {isCourseFree(selectedCourse) ? 'FREE' : selectedCourse.price}
                 </p>
 
                 <div className="mt-6 text-left">
@@ -7203,16 +7390,28 @@ export default function App() {
                 {/* Secure purchase assurances */}
                 <div className="mt-6 p-4 bg-zinc-900/90 rounded-2xl border border-zinc-800 flex items-center gap-3 text-xs text-zinc-300 font-semibold text-left">
                   <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
-                  <span>Payment गरेपछि payment screenshot send our WhatsApp and get your course access</span>
+                  <span>
+                    {isCourseFree(selectedCourse)
+                      ? 'यो कोर्ष निःशुल्क (FREE) छ — नाम र फोन नम्बर भरेर सिधै Enroll गर्न सक्नुहुन्छ।'
+                      : 'Payment गरेपछि payment screenshot send our WhatsApp and get your course access'}
+                  </span>
                 </div>
 
                 {/* Purchase options CTA */}
                 <div className="mt-8 flex flex-col gap-3">
                   <button 
                     onClick={handleOpenFonePayQR}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 px-6 rounded-2xl text-center shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full font-black py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                      isCourseFree(selectedCourse)
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/25'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/25'
+                    }`}
                   >
-                    <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)</span>
+                    <span>
+                      {isCourseFree(selectedCourse)
+                        ? 'Enroll & Activate Free Course'
+                        : 'QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)'}
+                    </span>
                   </button>
                 </div>
               </motion.div>
@@ -7989,32 +8188,97 @@ export default function App() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Price Display Tag */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Price Display tag *</label>
-                    <input 
-                      type="text"
-                      required
-                      value={formPrice}
-                      onChange={(e) => setFormPrice(e.target.value)}
-                      placeholder="e.g. Rs. 549"
-                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600"
-                    />
+                {/* Course Price & Main-Admin-Only Free Option */}
+                <div className="bg-zinc-900/90 p-3.5 rounded-xl border border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-400">
+                      Course Price {isMainAdmin ? '' : '(Locked • Main Admin Only)'}
+                    </span>
+                    {isMainAdmin ? (
+                      <div className="inline-flex rounded-lg bg-black border border-zinc-800 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormIsFree(false);
+                            setFormPrice((prev) =>
+                              !prev.trim() || /^free$/i.test(prev.trim()) ? 'Rs. ' : prev
+                            );
+                            setFormAmount((prev) => (prev === 0 ? 299 : prev));
+                          }}
+                          className={`px-3 py-1 rounded-md text-[10px] font-black transition cursor-pointer ${
+                            !formIsFree
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          Paid Course
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormIsFree(true);
+                            setFormPrice('FREE');
+                            setFormAmount(0);
+                          }}
+                          className={`px-3 py-1 rounded-md text-[10px] font-black transition cursor-pointer ${
+                            formIsFree
+                              ? 'bg-emerald-500 text-zinc-950 shadow-xs'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          FREE Option
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        Main Admin Only
+                      </span>
+                    )}
                   </div>
 
-                  {/* Numerical Price Value */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Amount for QR Checkout *</label>
-                    <input 
-                      type="number"
-                      required
-                      value={formAmount}
-                      onChange={(e) => setFormAmount(Number(e.target.value))}
-                      placeholder="e.g. 549"
-                      className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600"
-                    />
-                  </div>
+                  {formIsFree ? (
+                    <div className="bg-emerald-950/40 border border-emerald-500/35 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black text-emerald-400">FREE Course (निःशुल्क)</p>
+                        <p className="text-[10px] text-emerald-200/80 font-medium mt-0.5">
+                          Students enter only Name &amp; Phone Number and click Enroll to open the course immediately.
+                        </p>
+                      </div>
+                      <span className="bg-emerald-500 text-zinc-950 text-[10px] font-black px-2.5 py-1 rounded-lg shrink-0">
+                        FREE
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Price Display Tag */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Price Display tag *</label>
+                        <input 
+                          type="text"
+                          required
+                          disabled={!isMainAdmin}
+                          value={formPrice}
+                          onChange={(e) => setFormPrice(e.target.value)}
+                          placeholder="e.g. Rs. 549"
+                          className={`w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600 ${!isMainAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+
+                      {/* Numerical Price Value */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Amount for QR Checkout *</label>
+                        <input 
+                          type="number"
+                          required
+                          disabled={!isMainAdmin}
+                          value={formAmount}
+                          onChange={(e) => setFormAmount(Number(e.target.value))}
+                          placeholder="e.g. 549"
+                          className={`w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600 ${!isMainAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* WhatsApp Message */}
