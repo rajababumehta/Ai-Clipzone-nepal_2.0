@@ -86,6 +86,7 @@ import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessio
 import { CourseEnrollPage } from './components/CourseEnrollPage';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
+import { compressImageFile } from './utils/chatMedia';
 
 enum OperationType {
   CREATE = 'create',
@@ -780,6 +781,8 @@ export default function App() {
   const [formIsFree, setFormIsFree] = useState(false);
   const [formMessage, setFormMessage] = useState('');
   const [formImage, setFormImage] = useState('');
+  const [isUploadingCourseThumbnail, setIsUploadingCourseThumbnail] = useState(false);
+  const courseThumbnailInputRef = useRef<HTMLInputElement>(null);
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
   const [formIncludeLive, setFormIncludeLive] = useState(false);
@@ -4648,6 +4651,7 @@ export default function App() {
     setFormAmount(freeCourse ? 0 : course.amount);
     setFormMessage(course.message || `I want to buy ${course.title}`);
     setFormImage(course.image);
+    setIsUploadingCourseThumbnail(false);
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
     setFormIncludeLive(Boolean(course.includeLive));
@@ -4673,6 +4677,7 @@ export default function App() {
     setFormAmount(299);
     setFormMessage('');
     setFormImage('');
+    setIsUploadingCourseThumbnail(false);
     setFormIsPopular(false);
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
     setFormIncludeLive(false);
@@ -4682,6 +4687,41 @@ export default function App() {
     setFormVideos([]);
     setFormPdfs([]);
     setShowCourseFormModal(true);
+  };
+
+  // Direct Course Thumbnail Upload Handler (compresses to fit safely inside Firestore)
+  const handleCourseThumbnailFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      showToast('Please choose a PNG, JPG, or WEBP image.', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Course thumbnail must be 5MB or smaller.', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingCourseThumbnail(true);
+    try {
+      let compressed = await compressImageFile(file, 960, 0.78);
+      if (compressed.url.length > 260000) {
+        compressed = await compressImageFile(file, 720, 0.62);
+      }
+      setFormImage(compressed.url);
+      showToast('Course thumbnail uploaded successfully!', 'success');
+    } catch (err) {
+      console.error('Thumbnail upload error:', err);
+      showToast('Failed to process image. Please try a smaller photo.', 'error');
+    } finally {
+      setIsUploadingCourseThumbnail(false);
+      e.target.value = '';
+    }
   };
 
   // Submit Course Form (Create/Edit)
@@ -4712,7 +4752,7 @@ export default function App() {
         : (typeof editingCourse?.amount === 'number' ? editingCourse.amount : 299);
 
     if (!formTitle.trim() || (!resolvedIsFree && !resolvedPrice) || !formImage.trim()) {
-      showToast('Please fill in all required fields (Title, Price, Image URL)', 'error');
+      showToast('Please fill in all required fields (Course Title, Price, and Course Thumbnail Image)', 'error');
       return;
     }
 
@@ -4769,8 +4809,10 @@ export default function App() {
         } else {
           updatedList = [...prev, updatedCourse];
         }
-        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
-        localStorage.setItem('clipzone_courses_initialized', 'true');
+        try {
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+          localStorage.setItem('clipzone_courses_initialized', 'true');
+        } catch {}
         return updatedList;
       });
 
@@ -8322,17 +8364,81 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Course Thumbnail Image URL */}
+                {/* Course Thumbnail Direct Image Upload */}
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Thumbnail Image URL *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={formImage}
-                    onChange={(e) => setFormImage(e.target.value)}
-                    placeholder="https://example.com/course-thumbnail.jpg"
-                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-medium text-white transition outline-hidden placeholder-zinc-600 font-mono"
+                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">
+                    Course Thumbnail Image *
+                  </label>
+
+                  <input
+                    ref={courseThumbnailInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    onChange={handleCourseThumbnailFileChange}
+                    className="hidden"
                   />
+
+                  {formImage ? (
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2.5">
+                      <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-black border border-zinc-800">
+                        <img
+                          src={formImage}
+                          alt="Course thumbnail preview"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isUploadingCourseThumbnail}
+                          onClick={() => courseThumbnailInputRef.current?.click()}
+                          className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-700"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-blue-400" />
+                          <span>{isUploadingCourseThumbnail ? 'Uploading...' : 'Change Image'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormImage('');
+                            if (courseThumbnailInputRef.current) {
+                              courseThumbnailInputRef.current.value = '';
+                            }
+                          }}
+                          className="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-bold py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-rose-800/70"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => !isUploadingCourseThumbnail && courseThumbnailInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && !isUploadingCourseThumbnail) {
+                          e.preventDefault();
+                          courseThumbnailInputRef.current?.click();
+                        }
+                      }}
+                      className="w-full border border-dashed border-blue-500/50 bg-zinc-900/90 hover:bg-zinc-900 hover:border-blue-400 rounded-xl p-5 transition cursor-pointer flex flex-col items-center justify-center text-center gap-2"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">
+                          {isUploadingCourseThumbnail ? 'Uploading & Optimizing...' : 'Upload Course Thumbnail'}
+                        </p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          Direct upload from device • PNG, JPG or WEBP (Max 5MB)
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Popular Badge Configuration */}
