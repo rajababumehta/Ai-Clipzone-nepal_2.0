@@ -37,6 +37,19 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "aiclipzone.vercel.app"
+        }
+      ],
+      "destination": "https://hamrolms.vercel.app/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/.well-known/assetlinks.json",

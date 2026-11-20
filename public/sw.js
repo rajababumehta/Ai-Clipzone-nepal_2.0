@@ -1,5 +1,5 @@
 // HamroLms - High-Speed PWA Service Worker
-const CACHE_NAME = 'hamrolms-pwa-v37';
+const CACHE_NAME = 'hamrolms-pwa-v38';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/logo.png',
