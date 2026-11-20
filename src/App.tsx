@@ -4028,8 +4028,15 @@ export default function App() {
   const [adminSearchKeyQuery, setAdminSearchKeyQuery] = useState('');
   const [isAdminLoadingKeys, setIsAdminLoadingKeys] = useState(false);
 
-  // Top Navigation Course Search Bar states
-  const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  // Top Navigation Course Search Bar states (supports ?search= for Google Sitelinks SearchAction)
+  const [courseSearchQuery, setCourseSearchQuery] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        return new URLSearchParams(window.location.search).get('search') || '';
+      }
+    } catch {}
+    return '';
+  });
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -5247,6 +5254,127 @@ export default function App() {
     showToast('Payment confirmation message sent on WhatsApp!', 'success');
   };
 
+  // Dynamic SPA SEO metadata, canonical URL, and live Firestore JSON-LD sync
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+    const brand = siteSettings.instituteName?.trim() || 'HamroLms';
+    const origin = window.location.origin;
+    const cleanPath = window.location.pathname === '/index.html' ? '/' : window.location.pathname;
+    const canonicalUrl = `${origin}${cleanPath}`;
+
+    let pageTitle = `${brand} – Online Learning & AI Courses in Nepal`;
+    let pageDescription = `Learn AI tools, video editing, graphic design & web development in Nepal with lifetime access and verified certificates on ${brand}. Enroll today!`;
+
+    if (currentView === 'enroll' && enrollCourse) {
+      const priceLabel = isCourseFree(enrollCourse) ? 'Free' : (enrollCourse.price || 'Affordable');
+      pageTitle = `Enroll: ${enrollCourse.title} | ${brand}`.slice(0, 60);
+      pageDescription = `Enroll in ${enrollCourse.title} (${priceLabel}) on ${brand} Nepal. Get instant course access, practical lessons, and a verified completion certificate.`;
+    } else if (currentView === 'classroom') {
+      pageTitle = `Student Classroom & Video Lectures | ${brand}`.slice(0, 60);
+      pageDescription = `Watch your unlocked HD video lectures, download PDF study notes, and earn verified digital certificates inside the ${brand} online classroom.`;
+    } else if (currentView === 'account') {
+      pageTitle = `Student Profile & Course Activation | ${brand}`.slice(0, 60);
+      pageDescription = `Activate your course secret key, manage your student profile, and access your verified certificates on ${brand} Nepal.`;
+    } else if (currentView === 'ask') {
+      pageTitle = `Mentor Support & Course Chat | ${brand}`.slice(0, 60);
+      pageDescription = `Connect directly with your ${brand} course mentors and instructors for instant help, feedback, and learning guidance.`;
+    } else if (currentView === 'live' || currentView === 'course-live') {
+      pageTitle = `Live Interactive Sessions | ${brand}`.slice(0, 60);
+      pageDescription = `Join scheduled live mentoring sessions and interactive Q&A workshops for your enrolled courses on ${brand}.`;
+    }
+
+    document.title = pageTitle;
+
+    const setMetaTag = (attr: 'name' | 'property', key: string, content: string) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+
+    setMetaTag('name', 'title', pageTitle);
+    setMetaTag('name', 'description', pageDescription);
+    setMetaTag('property', 'og:title', pageTitle);
+    setMetaTag('property', 'og:description', pageDescription);
+    setMetaTag('property', 'og:url', canonicalUrl);
+    setMetaTag('name', 'twitter:title', pageTitle);
+    setMetaTag('name', 'twitter:description', pageDescription);
+    setMetaTag('name', 'twitter:url', canonicalUrl);
+
+    let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
+    }
+    canonicalLink.setAttribute('href', canonicalUrl);
+
+    // Live Course Catalog & FAQ structured data synced from Firestore
+    const liveCoursesList = (courses || []).slice(0, 20).map((course, idx) => {
+      const free = isCourseFree(course);
+      const parsedNumericPrice = free
+        ? 0
+        : Number(course.amount ?? String(course.price || '').replace(/[^\d.]/g, '')) || 0;
+      const summary =
+        course.learn && course.learn.length > 0
+          ? `${course.title} on ${brand}: ${course.learn.slice(0, 4).join(', ')}.`
+          : `Learn ${course.title} online with lifetime access and certificate on ${brand}.`;
+
+      return {
+        '@type': 'ListItem',
+        position: idx + 1,
+        item: {
+          '@type': 'Course',
+          name: course.title,
+          description: summary,
+          url: `${origin}/#course-card-${encodeURIComponent(course.id)}`,
+          image: course.image || `${origin}/institute-logo.png`,
+          provider: {
+            '@type': 'EducationalOrganization',
+            name: brand,
+            url: `${origin}/`,
+          },
+          inLanguage: course.language ? [course.language] : ['ne', 'en'],
+          educationalCredentialAwarded:
+            course.includeCertificate !== false ? 'Certificate of Completion' : undefined,
+          offers: {
+            '@type': 'Offer',
+            category: free ? 'Free' : 'Paid',
+            priceCurrency: 'NPR',
+            price: parsedNumericPrice,
+            availability: 'https://schema.org/InStock',
+            url: `${origin}/`,
+          },
+          hasCourseInstance: {
+            '@type': 'CourseInstance',
+            courseMode: course.includeLive ? 'Blended' : 'Online',
+          },
+        },
+      };
+    });
+
+    const dynamicSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: `${brand} Live Course Catalog`,
+      numberOfItems: liveCoursesList.length,
+      itemListElement: liveCoursesList,
+    };
+
+    let ldScript = document.getElementById('dynamic-hamrolms-jsonld') as HTMLScriptElement | null;
+    if (!ldScript) {
+      ldScript = document.createElement('script');
+      ldScript.id = 'dynamic-hamrolms-jsonld';
+      ldScript.type = 'application/ld+json';
+      document.head.appendChild(ldScript);
+    }
+    ldScript.textContent = JSON.stringify(dynamicSchema);
+  }, [currentView, enrollCourse, siteSettings.instituteName, courses]);
+
   return (
     <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
       {/* Sleek Pure Black Ambient Lighting: Hidden in Ask and Enroll views */}
@@ -5282,7 +5410,7 @@ export default function App() {
 
       {/* Top Header & Navigation Container (hidden in Ask and Enroll views) */}
       {!(currentView === 'ask' && isCourseActiveUser) && !(currentView === 'enroll' && enrollCourse) && (
-      <div className="sticky top-0 z-[100] w-full shrink-0 shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
+      <header className="sticky top-0 z-[100] w-full shrink-0 shadow-2xl bg-black/95 backdrop-blur-md border-b border-zinc-800">
         {/* Dynamic Global Notice Banner from Admin Settings (Red Urgency Notice) */}
         {siteSettings.showNoticeBanner && siteSettings.noticeBannerText && (
           <div className="w-full bg-gradient-to-r from-black via-rose-950/90 to-black text-rose-200 text-xs font-bold py-1.5 px-4 text-center border-b border-rose-500/30 flex items-center justify-center gap-2 shadow-md">
@@ -5490,7 +5618,7 @@ export default function App() {
             </div>
           </div>
         </div>
-      </div>
+      </header>
       )}
 
       {/* Main Container for Course List / Classroom / Account / Ask / Enroll */}
@@ -6160,10 +6288,10 @@ export default function App() {
                 <div className="text-center mb-10">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center gap-2">
                     <BookOpen className="w-7 h-7 text-blue-400 shrink-0" />
-                    <span>Our Premium Courses</span>
+                    <span>{siteSettings.instituteName || 'HamroLms'} – Online Learning &amp; AI Courses</span>
                   </h1>
-                  <h2 className="text-xs sm:text-sm font-semibold text-zinc-400 mt-2 max-w-xl mx-auto">
-                    Nepal's #1 Digital Skills &amp; Practical Online Learning Platform
+                  <h2 className="text-xs sm:text-sm font-semibold text-zinc-400 mt-2 max-w-2xl mx-auto">
+                    Nepal's Premier Digital Skills, Video Editing, Design &amp; Verified Certificate Platform
                   </h2>
                   <div className="w-24 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-3 shadow-sm shadow-blue-500/50"></div>
                   <p className="text-zinc-400 mt-3 text-sm md:text-base max-w-xl mx-auto font-medium">
@@ -6765,7 +6893,8 @@ export default function App() {
                     <div className="relative aspect-video overflow-hidden bg-black">
                       <img 
                         src={course.image} 
-                        alt={course.title}
+                        alt={`${course.title} – Online Course on HamroLms Nepal`}
+                        loading={index > 1 ? 'lazy' : 'eager'}
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
@@ -6780,9 +6909,9 @@ export default function App() {
                     {/* Course Info */}
                     <div className="p-6 md:p-8 flex flex-col grow justify-between">
                       <div className="text-left font-sans">
-                        <h4 className="text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors">
+                        <h3 className="text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors">
                           {course.title}
-                        </h4>
+                        </h3>
                         
                         {/* Prices or Active status badge */}
                         <div className="mt-4 flex items-center justify-between">
@@ -6961,6 +7090,81 @@ export default function App() {
             </div>
           )}
         </section>
+
+            {/* Home SEO & Trust Sections: Visible FAQ Accordion & Semantic Footer */}
+            {currentView === 'home' && (
+              <>
+                {faqs && faqs.length > 0 && (
+                  <section id="faq-section" aria-labelledby="faq-section-heading" className="mt-14 pt-10 border-t border-zinc-900/90 max-w-4xl mx-auto">
+                    <div className="text-center mb-6">
+                      <h2 id="faq-section-heading" className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
+                        <HelpCircle className="w-5 h-5 text-blue-400 shrink-0" />
+                        <span>Frequently Asked Questions (प्रायः सोधिने प्रश्नहरू)</span>
+                      </h2>
+                      <p className="text-xs sm:text-sm text-zinc-400 mt-1.5">
+                        {siteSettings.instituteName || 'HamroLms'} कोर्ष, सर्टिफिकेट र भुक्तानी सम्बन्धी मुख्य जानकारीहरू
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {faqs.map((faq, idx) => {
+                        const isOpen = Boolean(openFaqs[idx]);
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-zinc-950/90 border border-zinc-800/90 rounded-2xl overflow-hidden transition-colors hover:border-zinc-700"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleFaq(idx)}
+                              aria-expanded={isOpen}
+                              className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left cursor-pointer"
+                            >
+                              <h3 className="text-sm sm:text-base font-bold text-zinc-100 leading-snug">
+                                {faq.question}
+                              </h3>
+                              <ChevronDown
+                                className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-400' : ''}`}
+                              />
+                            </button>
+                            {isOpen && (
+                              <div className="px-5 pb-4 pt-0 text-xs sm:text-sm text-zinc-400 leading-relaxed border-t border-zinc-900/80">
+                                <p className="pt-3">{faq.answer}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                <footer className="mt-12 pt-8 pb-4 border-t border-zinc-900 text-center sm:text-left">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-zinc-400">
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-black text-white">{siteSettings.instituteName || 'HamroLms'}</p>
+                      <p className="leading-relaxed text-zinc-400">
+                        Practical online courses in AI tools, video editing, graphic design, YouTube growth, and web development across Nepal.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Location &amp; Credentials</p>
+                      <p>Birgunj, Madhesh Province, Nepal</p>
+                      <p>Verified QR Digital Certificates • Lifetime Access</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Official Support</p>
+                      <p>Email: {siteSettings.supportEmail || 'support@hamrolms.com'}</p>
+                      <p>Website: https://hamrolms.vercel.app/</p>
+                    </div>
+                  </div>
+                  <div className="mt-6 pt-4 border-t border-zinc-900/80 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <span>© {new Date().getFullYear()} {siteSettings.instituteName || 'HamroLms'}. All rights reserved.</span>
+                    <span>Online Learning &amp; AI Skills Platform — Nepal</span>
+                  </div>
+                </footer>
+              </>
+            )}
 
           </>
         )}
