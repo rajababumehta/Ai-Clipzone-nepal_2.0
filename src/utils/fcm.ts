@@ -99,7 +99,7 @@ export async function registerFcmPushToken(options: {
         const deliveryKey = data.deliveryKey;
         if (markDeliverySeen(deliveryKey)) return;
 
-        const title = notif.title || data.title || 'AI Clipzone Live Class';
+        const title = notif.title || data.title || 'HamroLms Live Class';
         const body = notif.body || data.body || 'A live class update is available.';
         const url = data.url || (data.liveClassId ? `/?tab=live&classId=${encodeURIComponent(data.liveClassId)}` : '/?tab=live');
 

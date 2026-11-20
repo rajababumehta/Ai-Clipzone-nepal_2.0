@@ -102,7 +102,7 @@ const isRenderableAvatar = (url?: string): boolean => {
 
 export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   showToast,
-  instituteName = 'AI Clipzone',
+  instituteName = 'HamroLms',
   instituteLogoUrl = '',
   allActivationKeys = [],
   adminRole = 'main_admin',
@@ -113,7 +113,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
   const isMainAdmin = adminRole === 'main_admin';
   const isSubAdmin = adminRole === 'sub_admin' && Boolean(subAdminSession?.code);
 
-  const brandName = (instituteName && !/official|admin/i.test(instituteName) ? instituteName : 'AI Clipzone').trim() || 'AI Clipzone';
+  const brandName = (instituteName && !/official|admin/i.test(instituteName) ? instituteName : 'HamroLms').trim() || 'HamroLms';
   const officialLogoUrl = cleanLegacyLogoUrl(instituteLogoUrl);
 
   const [conversations, setConversations] = useState<SupportConversation[]>([]);
@@ -232,7 +232,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
         if (isSubAdmin && subAdminSession) {
           // =================================================================
-          // SUB-ADMIN: AI Clipzone (Official Logo & Name Only) + Course Students
+          // SUB-ADMIN: HamroLms (Official Logo & Name Only) + Course Students
           // =================================================================
           const officialThreadId = `subadmin_main__${subAdminSession.code}`;
           let officialRemote: any = null;
@@ -877,7 +877,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                     <div className="grow min-w-0">
                       {isSubMainThread ? (
                         <>
-                          {/* Sub-Admin viewing Main Admin: ONLY AI Clipzone Name + Logo */}
+                          {/* Sub-Admin viewing Main Admin: ONLY HamroLms Name + Logo */}
                           <div className="flex items-center justify-between gap-2 mb-0.5">
                             <h5 className="font-bold text-[13.5px] text-white flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{brandName}</span>
@@ -956,7 +956,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
                   <div className="min-w-0">
                     {isSelectedMainAdminChat ? (
-                      /* Sub-Admin viewing Main Admin: ONLY "AI Clipzone" */
+                      /* Sub-Admin viewing Main Admin: ONLY "HamroLms" */
                       <h4 className="font-bold text-sm sm:text-base text-white tracking-tight flex items-center gap-1.5 min-w-0">
                         <span className="truncate">{brandName}</span>
                         <VerifiedBadge variant="main_admin" className="w-4 h-4" />

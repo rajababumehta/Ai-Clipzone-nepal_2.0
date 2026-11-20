@@ -29,40 +29,51 @@ export const cleanLegacyLogoUrl = (url?: string): string => {
   return trimmed;
 };
 
+export const normalizeLegacyBrandText = (val?: string): string => {
+  if (!val || typeof val !== 'string') return '';
+  return val
+    .replace(/AI\s*CLIPZONE\s*NEPAL/g, 'HAMROLMS')
+    .replace(/AI\s*CLIPZONE/g, 'HAMROLMS')
+    .replace(/a[il]\s*clipzone\s*nepal/gi, 'HamroLms')
+    .replace(/a[il]\s*clipzone/gi, 'HamroLms')
+    .replace(/clipzone\s*nepal/gi, 'HamroLms')
+    .replace(/clipzone/gi, 'HamroLms');
+};
+
 export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
   siteTitle: "TOP AI COURSE NEPAL 🇳🇵",
   siteTagline: "Nepal's #1  AI  course  & Learning Platform",
-  instituteName: "Ai Clipzone",
+  instituteName: "HamroLms",
   instituteLogoUrl: "/logo.png",
   noticeBannerText: "🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.",
   showNoticeBanner: false,
-  supportEmail: "ai.clipzone.edu@gmail.com",
+  supportEmail: "support@hamrolms.com",
   supportPhone: "9763323268",
   certificateTitle: "CERTIFICATE",
   certificateSubtitle: "OF ACHIEVEMENT",
-  certificateInstituteName: "AI CLIPZONE NEPAL",
+  certificateInstituteName: "HAMROLMS",
   certificateLogoUrl: "",
   certificateDescription: "an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.",
   certificateDirectorName: "Director",
   certificateDirectorTitle: "Program Director",
   certificateDirectorSignatureUrl: "",
-  certificateCeoName: "Founder & CEO (AI Clipzone)",
-  certificateCeoTitle: "Founder & CEO, AI Clipzone",
+  certificateCeoName: "Founder & CEO (HamroLms)",
+  certificateCeoTitle: "Founder & CEO, HamroLms",
   certificateCeoSignatureUrl: "",
   certificateTheme: "blue",
   certificateStampUrl: "",
-  certificateSealText: "OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL",
+  certificateSealText: "OFFICIAL VERIFIED CERTIFICATE • HAMROLMS",
   apkDownloadUrl: "",
 };
 
 export const COURSES: Course[] = [
   {
     id: "Ai master class course by Ai clipzone",
-    title: "Ai master class course  by ai clipzone",
+    title: "AI Master Class Course by HamroLms",
     order: 0,
     price: "Rs. 449",
     amount: 449,
-    message: "I want to buy ai master class course by ai clipzone",
+    message: "I want to buy AI Master Class Course by HamroLms",
     learn: [
       "30+ Al Tools Mastery",
       "Al Video & Image Generation",
@@ -77,11 +88,11 @@ export const COURSES: Course[] = [
       {
         videoUrl: "https://youtu.be/QivoSbWmD9o?si=34&t=34",
         chapterTitle: "Chapter 1: Course Introduction",
-        title: "Ai master class full course by ai clipzone(2026 september 6) ",
+        title: "AI Master Class Full Course by HamroLms (2026 September 6)",
         duration: "3:07:37"
       },
       {
-        title: "Ai master class full course by ai clipzone ( 2026 January) ",
+        title: "AI Master Class Full Course by HamroLms (2026 January)",
         videoUrl: "https://youtu.be/EqbNaDUVdqA?si=A-5giAweE0pRsPPm",
         duration: "3:11:13",
         chapterTitle: "Chapter 1: Course Introduction"
@@ -104,7 +115,7 @@ export const COURSES: Course[] = [
   },
   {
     id: "youtube-blueprint-course-by-al-clipzone",
-    title: "YouTube Blueprint Course by Al Clipzone",
+    title: "YouTube Blueprint Course by HamroLms",
     order: 1,
     price: "Rs. 849",
     amount: 849,
@@ -157,7 +168,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Priya Shrestha",
     location: "Biratnagar",
     course: "AI Presentation",
-    text: "Office presentation हरू अब 10 मिनेटमै तयार हुन्छन्। Boss ले पनि praise गर्नुभयो। धन्यवाद Clipzone!",
+    text: "Office presentation हरू अब 10 मिनेटमै तयार हुन्छन्। Boss ले पनि praise गर्नुभयो। धन्यवाद HamroLms!",
     avatar: "👩‍💼",
     rating: 5
   },

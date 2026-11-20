@@ -124,7 +124,7 @@ export function mountSharedApiMiddlewareAndRoutes(app: Express) {
         e: urls.embedUrl,
         s: String(studentName || 'Student').slice(0, 60),
         t: String(sessionTitle || 'Live Class Session').slice(0, 100),
-        c: String(courseTitle || 'AI Clipzone Live').slice(0, 100),
+        c: String(courseTitle || 'HamroLms Live').slice(0, 100),
         exp: Date.now() + 15 * 60 * 1000,
       });
       const encoded = encodeURIComponent(token);
@@ -231,7 +231,7 @@ export function mountSharedApiMiddlewareAndRoutes(app: Express) {
       if (!ai) {
         return res.json({
           reply:
-            'नमस्ते! 🙏 AI Clipzone Nepal मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।',
+            'नमस्ते! 🙏 HamroLms मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।',
         });
       }
 
@@ -253,10 +253,10 @@ export function mountSharedApiMiddlewareAndRoutes(app: Express) {
         parts: [{ text: message }],
       });
 
-      const systemInstruction = `You are "AI Clipzone Assistant" 🤖, a helpful, smart, and friendly customer support representative for "AI Clipzone Nepal", Nepal's premier online AI Academy.
+      const systemInstruction = `You are "HamroLms Assistant" 🤖, a helpful, smart, and friendly customer support representative for "HamroLms", Nepal's premier online AI & Digital Skills Academy.
 
 Our Course Catalog:
-1. "AI Master Class by AI Clipzone" — Rs. 449
+1. "AI Master Class by HamroLms" — Rs. 449
 2. "AI Video, Image & Song Creation" — Rs. 350
 3. "AI Song Creation Course" — Rs. 299
 4. "AI Presentation Making Course" — Rs. 199
@@ -287,7 +287,7 @@ Respond concisely and politely in the user's language (Nepali or English).`;
       console.error('Gemini API Error:', error);
       res.json({
         reply:
-          'नमस्ते! 🙏 AI Clipzone Nepal मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।',
+          'नमस्ते! 🙏 HamroLms मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।',
       });
     }
   });

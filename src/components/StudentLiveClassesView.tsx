@@ -368,7 +368,7 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock className="w-4 h-4 text-purple-400" />
-                {cls.durationMinutes || 40} min • Mentor: {cls.instructorName || 'AI Clipzone'}
+                {cls.durationMinutes || 40} min • Mentor: {cls.instructorName || 'HamroLms'}
               </span>
               <span className="flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-emerald-400" />
@@ -522,14 +522,14 @@ export const StudentLiveClassesView: React.FC<StudentLiveClassesViewProps> = ({
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-blue-400">
               <Sparkles className="w-4 h-4" />
-              <span>AI Clipzone Interactive Workshops</span>
+              <span>HamroLms Interactive Workshops</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
               <Video className="w-7 h-7 text-blue-400 shrink-0" />
               <span>Interactive Live Classes</span>
             </h1>
             <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl">
-              Exclusive live workshops for enrolled AI Clipzone students. Reserve your seat early (max 80 learners per session) and join straight from your PWA.
+              Exclusive live workshops for enrolled HamroLms students. Reserve your seat early (max 80 learners per session) and join straight from your PWA.
             </p>
           </div>
 

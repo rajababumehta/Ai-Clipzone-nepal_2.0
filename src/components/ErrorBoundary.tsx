@@ -26,7 +26,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error caught by AI Clipzone ErrorBoundary:', error, errorInfo);
+    console.error('Uncaught error caught by HamroLms ErrorBoundary:', error, errorInfo);
     this.setState({ errorInfo });
   }
 

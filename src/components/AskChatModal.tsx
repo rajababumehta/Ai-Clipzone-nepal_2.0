@@ -128,8 +128,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   const brandName =
     (siteSettings.instituteName && !/official|admin/i.test(siteSettings.instituteName)
       ? siteSettings.instituteName
-      : 'AI Clipzone'
-    ).trim() || 'AI Clipzone';
+      : 'HamroLms'
+    ).trim() || 'HamroLms';
   const officialLogoUrl = cleanLegacyLogoUrl(siteSettings.instituteLogoUrl);
   const isRenderableAvatar = (url?: string): boolean => {
     if (!url || typeof url !== 'string') return false;
@@ -150,7 +150,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       lower === 'student learner' ||
       lower === 'student' ||
       lower === 'learner' ||
-      lower === 'clipzone student'
+      lower === 'clipzone student' ||
+      lower === 'hamrolms student'
     ) {
       return '';
     }

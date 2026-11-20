@@ -644,7 +644,7 @@ export const LiveClassroomModal: React.FC<LiveClassroomModalProps> = ({
           <div className="min-w-0">
             <h2 className="text-sm sm:text-base font-black truncate">{session.title}</h2>
             <p className="text-[11px] text-zinc-400 truncate">
-              {session.courseTitle} • Mentor: {session.instructorName || 'AI Clipzone Mentor'} •{' '}
+              {session.courseTitle} • Mentor: {session.instructorName || 'HamroLms Mentor'} •{' '}
               <span className="text-emerald-400 font-semibold">
                 Zero-Login Room ({selfRole === 'mentor' ? 'Host' : 'Student'}: {selfName})
               </span>

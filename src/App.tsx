@@ -69,7 +69,7 @@ import {
   Cpu
 } from 'lucide-react';
 
-import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl } from './data';
+import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl, normalizeLegacyBrandText } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
@@ -366,6 +366,14 @@ export default function App() {
         const cleanedLogo = cleanLegacyLogoUrl(parsed.instituteLogoUrl);
         return {
           ...parsed,
+          instituteName: normalizeLegacyBrandText(parsed.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
+          siteTitle: normalizeLegacyBrandText(parsed.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
+          siteTagline: normalizeLegacyBrandText(parsed.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
+          certificateInstituteName: normalizeLegacyBrandText(parsed.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
+          certificateCeoName: normalizeLegacyBrandText(parsed.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
+          certificateCeoTitle: normalizeLegacyBrandText(parsed.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
+          certificateSealText: normalizeLegacyBrandText(parsed.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
+          supportEmail: parsed.supportEmail === 'ai.clipzone.edu@gmail.com' ? DEFAULT_SITE_SETTINGS.supportEmail : parsed.supportEmail,
           instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
           certificateLogoUrl: cleanLegacyLogoUrl(parsed.certificateLogoUrl),
         };
@@ -377,7 +385,7 @@ export default function App() {
   // Student Authentication & Course Activation states
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(() => {
     const localName = localStorage.getItem('clipzone_student_name');
-    if (localName === 'Admin (ClipZone)') {
+    if (localName === 'Admin (ClipZone)' || localName === 'Admin (HamroLms)') {
       try { localStorage.removeItem('clipzone_student_name'); } catch {}
       return null;
     }
@@ -394,7 +402,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
     // If student profile already exists in local storage, don't block UI with loading
     const localName = localStorage.getItem('clipzone_student_name');
-    return !localName || localName === 'Admin (ClipZone)';
+    return !localName || localName === 'Admin (ClipZone)' || localName === 'Admin (HamroLms)';
   });
   const [userActivationKeys, setUserActivationKeys] = useState<any[]>(() => {
     try {
@@ -666,6 +674,11 @@ export default function App() {
       return {
         ...c,
         id,
+        title: normalizeLegacyBrandText(c.title) || c.title,
+        message: c.message ? normalizeLegacyBrandText(c.message) : c.message,
+        certificateInstituteName: c.certificateInstituteName ? normalizeLegacyBrandText(c.certificateInstituteName) : c.certificateInstituteName,
+        certificateCeoName: c.certificateCeoName ? normalizeLegacyBrandText(c.certificateCeoName) : c.certificateCeoName,
+        certificateSealText: c.certificateSealText ? normalizeLegacyBrandText(c.certificateSealText) : c.certificateSealText,
         image: img,
         order: typeof c.order === 'number' ? c.order : index
       };
@@ -822,7 +835,12 @@ export default function App() {
             if (!deletedIds.includes(courseId)) {
               dbCourses.push({
                 ...course,
-                id: courseId
+                id: courseId,
+                title: normalizeLegacyBrandText(course.title) || course.title,
+                message: course.message ? normalizeLegacyBrandText(course.message) : course.message,
+                certificateInstituteName: course.certificateInstituteName ? normalizeLegacyBrandText(course.certificateInstituteName) : course.certificateInstituteName,
+                certificateCeoName: course.certificateCeoName ? normalizeLegacyBrandText(course.certificateCeoName) : course.certificateCeoName,
+                certificateSealText: course.certificateSealText ? normalizeLegacyBrandText(course.certificateSealText) : course.certificateSealText,
               });
             } else {
               // Permanently purge from Firestore if still lingering
@@ -1113,6 +1131,14 @@ export default function App() {
         const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
         const cleaned: SiteSettingsConfig = {
           ...data,
+          instituteName: normalizeLegacyBrandText(data.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
+          siteTitle: normalizeLegacyBrandText(data.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
+          siteTagline: normalizeLegacyBrandText(data.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
+          certificateInstituteName: normalizeLegacyBrandText(data.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
+          certificateCeoName: normalizeLegacyBrandText(data.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
+          certificateCeoTitle: normalizeLegacyBrandText(data.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
+          certificateSealText: normalizeLegacyBrandText(data.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
+          supportEmail: data.supportEmail === 'ai.clipzone.edu@gmail.com' ? DEFAULT_SITE_SETTINGS.supportEmail : data.supportEmail,
           instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
           certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
         };
@@ -3924,7 +3950,7 @@ export default function App() {
     const blockCopy = (e: ClipboardEvent) => {
       e.preventDefault();
       if (e.clipboardData) {
-        e.clipboardData.setData('text/plain', 'ClipZone Nepal - Link Sharing Disabled');
+        e.clipboardData.setData('text/plain', 'HamroLms - Link Sharing Disabled');
       }
     };
 
@@ -4322,7 +4348,7 @@ export default function App() {
 
     const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
     const activeCode = getCourseActivationCode(currentCourse.id) || (userActivationKeys[0]?.code || 'AICLIP-ACTIVE');
-    const cleanTitle = (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+    const cleanTitle = (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by HamroLms').replace(/Dhruv Rathee/gi, 'HamroLms');
 
     setSelectedCertCourseId(currentCourse.id);
     setCertificateCourseTitle(cleanTitle);
@@ -4567,7 +4593,7 @@ export default function App() {
     const handleAppInstalled = () => {
       setIsAppInstalled(true);
       setDeferredPrompt(null);
-      showToast(`🎉 ${siteSettings.instituteName || 'Ai Clipzone'} App Successfully Installed!`, 'success');
+      showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Successfully Installed!`, 'success');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -4581,7 +4607,7 @@ export default function App() {
 
   const handleInstallPwa = async () => {
     if (isAppInstalled) {
-      showToast(`✅ ${siteSettings.instituteName || 'AI Clipzone'} App is already installed on your device!`, 'success');
+      showToast(`✅ ${siteSettings.instituteName || 'HamroLms'} App is already installed on your device!`, 'success');
       return;
     }
     if (deferredPrompt) {
@@ -4589,7 +4615,7 @@ export default function App() {
         deferredPrompt.prompt();
         const choiceResult = await deferredPrompt.userChoice;
         if (choiceResult?.outcome === 'accepted') {
-          showToast(`🎉 ${siteSettings.instituteName || 'AI Clipzone'} App Added to Home Screen!`, 'success');
+          showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
           setIsAppInstalled(true);
         }
         setDeferredPrompt(null);
@@ -4607,7 +4633,7 @@ export default function App() {
         deferredPrompt.prompt();
         const choiceResult = await deferredPrompt.userChoice;
         if (choiceResult?.outcome === 'accepted') {
-          showToast(`🎉 ${siteSettings.instituteName || 'AI Clipzone'} App Added to Home Screen!`, 'success');
+          showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
           setIsAppInstalled(true);
           setShowPwaInstallModal(false);
           setDeferredPrompt(null);
@@ -4632,7 +4658,7 @@ export default function App() {
       setIsInstallingPwa(false);
       setShowPwaInstallModal(false);
       setIsAppInstalled(true);
-      showToast(`🎉 ${siteSettings.instituteName || 'AI Clipzone'} App Added to Home Screen!`, 'success');
+      showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
     }, 1000);
   };
 
@@ -5279,7 +5305,7 @@ export default function App() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className="flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
-              title="AI Clipzone Nepal - Home"
+              title="HamroLms - Home"
             >
               {/* Institute Official Logo */}
               <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
@@ -5438,7 +5464,7 @@ export default function App() {
               <div className="relative shrink-0">
                 <div
                   className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
-                  title={hasStudentProfile && currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'AI Clipzone'}
+                  title={hasStudentProfile && currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'HamroLms'}
                 >
                   {hasStudentProfile && userAvatar ? (
                     userAvatar.startsWith('http') || userAvatar.startsWith('data:') ? (
@@ -5700,7 +5726,7 @@ export default function App() {
                     VIP Student Access
                   </span>
                   <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                    {siteSettings.instituteName || 'AI Clipzone Nepal'} 🇳🇵
+                    {siteSettings.instituteName || 'HamroLms'} 🇳🇵
                   </h3>
                   <p className="text-xs text-zinc-400 leading-relaxed max-w-sm mx-auto">
                     तपाईंको भिडियो कोर्सहरू अनलक गर्न र विद्यार्थी खाता खोल्न एडमिनबाट प्राप्त <strong>Secret Activation Code</strong> यहाँ राख्नुहोस्:
@@ -5859,7 +5885,7 @@ export default function App() {
                           <VerifiedBadge variant="student" className="w-4.5 h-4.5" title="Verified User" />
                         </div>
                         <p className="text-xs text-zinc-400 font-medium truncate">
-                          {siteSettings.instituteName || 'AI Clipzone'} • {activeCourseIds.length} Active {activeCourseIds.length === 1 ? 'Course' : 'Courses'}
+                          {siteSettings.instituteName || 'HamroLms'} • {activeCourseIds.length} Active {activeCourseIds.length === 1 ? 'Course' : 'Courses'}
                         </p>
                         {userAvatar && (
                           <button
@@ -5952,7 +5978,7 @@ export default function App() {
                           const durationMs = keyInfo?.duration === '1month' ? (30 * 24 * 60 * 60 * 1000) : (365 * 24 * 60 * 60 * 1000);
                           const expiresTimestamp = keyInfo?.expiresAt || (enrolledTimestamp + durationMs);
                           const daysLeft = Math.ceil((expiresTimestamp - Date.now()) / (1000 * 60 * 60 * 24));
-                          const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                          const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by HamroLms').replace(/Dhruv Rathee/gi, 'HamroLms');
                           const keyCode = keyInfo?.code || getCourseActivationCode(course.id);
 
                           return (
@@ -6075,7 +6101,7 @@ export default function App() {
                           );
                           const expiresTimestamp = keyInfo?.expiresAt || keyInfo?.claimedAt || Date.now();
                           const expiredDateStr = new Date(expiresTimestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                          const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                          const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by HamroLms').replace(/Dhruv Rathee/gi, 'HamroLms');
 
                           return (
                             <div
@@ -8937,7 +8963,7 @@ export default function App() {
 
             {/* Audio watermark / security controls info */}
             <div className="absolute bottom-4 right-4 text-[9px] text-slate-500 font-mono select-none pointer-events-none">
-              IP Security Monitored • {siteSettings.instituteName || 'AI Clipzone Nepal'}
+              IP Security Monitored • {siteSettings.instituteName || 'HamroLms'}
             </div>
           </div>
 
@@ -9019,7 +9045,7 @@ export default function App() {
           enrolledCourses[0];
 
         const effectiveCourseTitle = targetedCourse?.certificateCourseTitle || targetedCourse?.title || certificateCourseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS';
-        const effectiveInstituteName = targetedCourse?.certificateInstituteName || siteSettings.certificateInstituteName || siteSettings.instituteName || 'AI CLIPZONE NEPAL';
+        const effectiveInstituteName = targetedCourse?.certificateInstituteName || siteSettings.certificateInstituteName || siteSettings.instituteName || 'HAMROLMS';
         const effectiveLogoUrl = targetedCourse?.certificateLogoUrl || siteSettings.certificateLogoUrl || siteSettings.instituteLogoUrl;
         const effectiveCertTitle = targetedCourse?.certificateTitle || siteSettings.certificateTitle || 'CERTIFICATE';
         const effectiveCertSubtitle = targetedCourse?.certificateSubtitle || siteSettings.certificateSubtitle || 'OF ACHIEVEMENT';
@@ -9027,12 +9053,12 @@ export default function App() {
         const effectiveDirectorName = targetedCourse?.certificateDirectorName || siteSettings.certificateDirectorName || 'Director';
         const effectiveDirectorTitle = targetedCourse?.certificateDirectorTitle || siteSettings.certificateDirectorTitle || 'Course Director';
         const effectiveDirectorSig = targetedCourse?.certificateDirectorSignatureUrl || siteSettings.certificateDirectorSignatureUrl;
-        const effectiveCeoName = targetedCourse?.certificateCeoName || siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)';
+        const effectiveCeoName = targetedCourse?.certificateCeoName || siteSettings.certificateCeoName || 'Founder/CEO (HamroLms)';
         const effectiveCeoTitle = targetedCourse?.certificateCeoTitle || siteSettings.certificateCeoTitle || 'Founder & CEO';
         const effectiveCeoSig = targetedCourse?.certificateCeoSignatureUrl || siteSettings.certificateCeoSignatureUrl;
         const effectiveTheme = targetedCourse?.certificateTheme || siteSettings.certificateTheme || 'blue';
         const effectiveStampUrl = targetedCourse?.certificateStampUrl || siteSettings.certificateStampUrl;
-        const effectiveSealText = targetedCourse?.certificateSealText || siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL';
+        const effectiveSealText = targetedCourse?.certificateSealText || siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS';
 
         return (
           <CertificateModal
@@ -9142,10 +9168,10 @@ export default function App() {
                   </div>
                   <div className="min-w-0 text-left">
                     <h4 className="text-lg font-medium text-white truncate tracking-normal">
-                      {siteSettings.instituteName || 'AI Clipzone'}
+                      {siteSettings.instituteName || 'HamroLms'}
                     </h4>
                     <p className="text-sm text-slate-400 truncate font-normal mt-0.5">
-                      {typeof window !== 'undefined' ? window.location.hostname || 'aiclipzone.vercel.app' : 'aiclipzone.vercel.app'}
+                      {typeof window !== 'undefined' ? window.location.hostname || 'hamrolms.vercel.app' : 'hamrolms.vercel.app'}
                     </p>
                   </div>
                 </div>

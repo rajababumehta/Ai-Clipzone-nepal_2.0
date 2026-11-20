@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Ai Clipzone",
-  "short_name": "Ai Clipzone",
-  "description": "Ai Clipzone - AI powered video and clip generation app",
+  "name": "HamroLms",
+  "short_name": "HamroLms",
+  "description": "HamroLms - Nepal's #1 Online Learning & Course Platform",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/",
@@ -25,7 +25,7 @@
   "related_applications": [
     {
       "platform": "webapp",
-      "url": "https://aiclipzone.vercel.app/manifest.json"
+      "url": "https://hamrolms.vercel.app/manifest.json"
     }
   ],
   "launch_handler": {
@@ -50,7 +50,7 @@
   ],
   "protocol_handlers": [
     {
-      "protocol": "web+clipzone",
+      "protocol": "web+hamrolms",
       "url": "/?url=%s"
     }
   ],
@@ -72,15 +72,15 @@
   },
   "scope_extensions": [
     {
-      "origin": "https://aiclipzone.vercel.app"
+      "origin": "https://hamrolms.vercel.app"
     }
   ],
   "widgets": [
     {
-      "name": "Ai Clipzone",
-      "short_name": "Ai Clipzone",
-      "description": "Quick access to AI video generator and courses",
-      "tag": "clipzone-widget",
+      "name": "HamroLms",
+      "short_name": "HamroLms",
+      "description": "Quick access to HamroLms courses and live classes",
+      "tag": "hamrolms-widget",
       "template": "widget-template",
       "ms_ac_template": "/widget-template.json",
       "data": "/api/health",
@@ -89,7 +89,7 @@
         {
           "src": "/screenshots/screenshot-mobile.png",
           "sizes": "720x1280",
-          "label": "Clipzone Widget"
+          "label": "HamroLms Widget"
         }
       ],
       "icons": [
@@ -201,14 +201,14 @@
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Ai Clipzone Desktop Dashboard"
+      "label": "HamroLms Desktop Dashboard"
     },
     {
       "src": "/screenshots/screenshot-mobile.png",
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Ai Clipzone Mobile App"
+      "label": "HamroLms Mobile App"
     }
   ],
   "shortcuts": [

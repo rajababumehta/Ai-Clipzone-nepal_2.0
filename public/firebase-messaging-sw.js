@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-// AI Clipzone - Firebase Cloud Messaging Background Service Worker
+// HamroLms - Firebase Cloud Messaging Background Service Worker
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
@@ -17,7 +17,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const notif = payload.notification || {};
   const data = payload.data || {};
-  const title = notif.title || data.title || 'AI Clipzone Live Class';
+  const title = notif.title || data.title || 'HamroLms Live Class';
   const body = notif.body || data.body || 'Tap to view your upcoming live session.';
   const liveClassId = data.liveClassId || '';
   const targetUrl = data.url || (liveClassId ? `/?tab=live&classId=${encodeURIComponent(liveClassId)}` : '/?tab=live');

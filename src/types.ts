@@ -145,6 +145,8 @@ export interface SiteSettingsConfig {
   certificateStampUrl?: string;
   certificateSealText?: string;
   apkDownloadUrl?: string;
+  androidPackageName?: string;
+  androidSha256Fingerprints?: string;
   updatedAt?: number;
 }
 

@@ -42,7 +42,7 @@ export const NotificationPromptModal: React.FC<NotificationPromptModalProps> = (
         notify('🎉 Notifications enabled!', 'success');
       }
       showNativeNotification({
-        title: '🎉 AI Clipzone',
+        title: '🎉 HamroLms',
         body: 'Notifications enabled successfully.',
         url: '/'
       });

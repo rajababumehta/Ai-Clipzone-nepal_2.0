@@ -73,7 +73,7 @@ export const showNativeNotification = async (options: ShowNativeNotificationOpti
   }
 
   const iconUrl = options.icon || '/pwa-192x192.png';
-  const notificationTitle = options.title || 'AI Clipzone Nepal';
+  const notificationTitle = options.title || 'HamroLms';
 
   // Try service worker first (best for PWA & mobile)
   if ('serviceWorker' in navigator) {
@@ -84,7 +84,7 @@ export const showNativeNotification = async (options: ShowNativeNotificationOpti
           body: options.body,
           icon: iconUrl,
           badge: '/pwa-192x192.png',
-          tag: options.tag || `clipzone-notif-${Date.now()}`,
+          tag: options.tag || `hamrolms-notif-${Date.now()}`,
           data: {
             url: options.url || '/'
           }
@@ -102,7 +102,7 @@ export const showNativeNotification = async (options: ShowNativeNotificationOpti
     const notif = new Notification(notificationTitle, {
       body: options.body,
       icon: iconUrl,
-      tag: options.tag || `clipzone-notif-${Date.now()}`
+      tag: options.tag || `hamrolms-notif-${Date.now()}`
     });
     notif.onclick = () => {
       window.focus();

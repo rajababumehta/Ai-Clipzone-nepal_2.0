@@ -187,7 +187,7 @@ export async function dispatchLiveClassNotifications(params: {
     liveClassId: classId,
     deliveryKey,
     reminderType,
-    author: classData.instructorName || 'AI Clipzone',
+    author: classData.instructorName || 'HamroLms',
     createdAt: now,
   });
 
@@ -477,7 +477,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
           courseTitle: data.courseTitle,
           title: data.title,
           description: data.description || '',
-          instructorName: data.instructorName || 'AI Clipzone',
+          instructorName: data.instructorName || 'HamroLms',
           provider: normalizeProvider(data.provider, 'zoom'),
           scheduledStartAt: Number(data.scheduledStartAt),
           durationMinutes: Number(data.durationMinutes || 40),
@@ -555,7 +555,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
     const title = String(req.body?.title || '').trim();
     const description = String(req.body?.description || '').trim();
     const courseId = String(req.body?.courseId || '').trim();
-    const instructorName = String(req.body?.instructorName || adminCtx.name || 'AI Clipzone').trim();
+    const instructorName = String(req.body?.instructorName || adminCtx.name || 'HamroLms').trim();
     const scheduledStartAt = Number(req.body?.scheduledStartAt || 0);
     const durationMinutes = Math.min(Math.max(Number(req.body?.durationMinutes || 40), 10), 300);
     const maxCapacity = Math.min(Math.max(Number(req.body?.maxCapacity || 80), 1), 1000);
@@ -1495,7 +1495,7 @@ export function createLiveClassRouter(deps: LiveClassRouterDeps = {}): Router {
       roomToken,
       participantName,
       participantRole,
-      instructorName: classData.instructorName || 'AI Clipzone Mentor',
+      instructorName: classData.instructorName || 'HamroLms Mentor',
     });
     } catch (err: any) {
       console.error('[LiveClasses] Join error:', err);

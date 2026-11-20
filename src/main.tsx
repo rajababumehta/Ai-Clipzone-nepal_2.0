@@ -29,7 +29,7 @@ if ('serviceWorker' in navigator) {
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (refreshing) return;
-          const reloadKey = 'sw_reloaded_v36';
+          const reloadKey = 'sw_reloaded_v37';
           try {
             if (sessionStorage.getItem(reloadKey)) return;
             sessionStorage.setItem(reloadKey, '1');

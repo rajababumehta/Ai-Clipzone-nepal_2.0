@@ -26,12 +26,12 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
 
   const defaultTitle =
     variant === 'main_admin'
-      ? 'AI Clipzone Official Verified Admin'
+      ? 'HamroLms Official Verified Admin'
       : variant === 'sub_admin'
       ? 'Verified Sub-Admin'
       : 'Verified User';
 
-  // 1. Main Admin (AI Clipzone): Elon Musk / Twitter-X Official Gold Verified Badge (flat, no shadow)
+  // 1. Main Admin (HamroLms): Elon Musk / Twitter-X Official Gold Verified Badge (flat, no shadow)
   if (variant === 'main_admin') {
     return (
       <span

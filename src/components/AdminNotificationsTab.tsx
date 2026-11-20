@@ -32,7 +32,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
   onSendNotification,
   onDeleteNotification,
   showToast: showToastProp,
-  instituteName = 'AI Clipzone Nepal',
+  instituteName = 'HamroLms',
   instituteLogoUrl = '/pwa-192x192.png'
 }) => {
   const showToast = (msg: string, type: 'success' | 'info' | 'error' = 'info') => {
@@ -64,7 +64,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
         setUrl('/#courses');
         break;
       case 'welcome':
-        setTitle('✨ AI Clipzone नेपालमा हार्दिक स्वागत छ!');
+        setTitle('✨ HamroLms मा हार्दिक स्वागत छ!');
         setBody('तपाईंको AI सिकाइ यात्रा आजै सुरु गर्नुहोस्। प्रिमियम भिडियोहरू, प्रोम्प्ट प्याक र सर्टिफिकेटहरू अन्लक गर्नुहोस्।');
         setType('welcome');
         setBadge('WELCOME');
@@ -79,7 +79,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
         break;
       case 'announcement':
         setTitle('📢 आवश्यक सूचना: नयाँ फिचर तथा अपडेट!');
-        setBody('AI Clipzone पोर्टलमा नयाँ PDF नोट्स, च्याप्टर प्लेलिस्ट र डिजिटल सर्टिफिकेट भेरिफिकेसन थपिएको छ।');
+        setBody('HamroLms पोर्टलमा नयाँ PDF नोट्स, च्याप्टर प्लेलिस्ट र डिजिटल सर्टिफिकेट भेरिफिकेसन थपिएको छ।');
         setType('announcement');
         setBadge('NOTICE');
         setUrl('/');
@@ -135,7 +135,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
     const perm = await requestNotificationPermission();
     if (perm === 'granted') {
       const delivered = await showNativeNotification({
-        title: title.trim() || '🔔 AI Clipzone Preview Alert',
+        title: title.trim() || '🔔 HamroLms Preview Alert',
         body: body.trim() || 'This is how your broadcast appears on student devices and browsers.',
         url: url.trim() || '/'
       });

@@ -76,7 +76,7 @@ async function dispatchReminder(
     badge,
     url,
     createdAt: Date.now(),
-    author: 'AI Clipzone Live',
+    author: 'HamroLms Live',
     target: 'course_enrolled',
     courseId: classData.courseId,
     courseTitle: classData.courseTitle,

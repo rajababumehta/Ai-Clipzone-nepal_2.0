@@ -143,7 +143,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
   const [formCourseId, setFormCourseId] = useState(assignedCourseId || availableCourses[0]?.id || '');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formInstructor, setFormInstructor] = useState('AI Clipzone Mentor');
+  const [formInstructor, setFormInstructor] = useState('HamroLms Mentor');
   const [formDateTime, setFormDateTime] = useState(() => toDatetimeLocalValue(Date.now() + 2 * 60 * 60 * 1000));
   const [formDuration, setFormDuration] = useState(40);
   const [formCapacity, setFormCapacity] = useState(80);
@@ -250,7 +250,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormCourseId(assignedCourseId || firstLiveCourse?.id || availableCourses[0]?.id || '');
     setFormTitle('');
     setFormDescription('');
-    setFormInstructor('AI Clipzone Mentor');
+    setFormInstructor('HamroLms Mentor');
     setFormDateTime(toDatetimeLocalValue(Date.now() + 2 * 60 * 60 * 1000));
     setFormDuration(40);
     setFormCapacity(80);
@@ -272,7 +272,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
     setFormCourseId(cls.courseId);
     setFormTitle(cls.title);
     setFormDescription(cls.description || '');
-    setFormInstructor(cls.instructorName || 'AI Clipzone Mentor');
+    setFormInstructor(cls.instructorName || 'HamroLms Mentor');
     setFormDateTime(toDatetimeLocalValue(cls.scheduledStartAt));
     setFormDuration(cls.durationMinutes || 40);
     setFormCapacity(cls.maxCapacity || 80);
@@ -324,7 +324,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
         await updateLiveClass(editingClass.id, {
           title: formTitle.trim(),
           description: formDescription.trim(),
-          instructorName: formInstructor.trim() || 'AI Clipzone Mentor',
+          instructorName: formInstructor.trim() || 'HamroLms Mentor',
           scheduledStartAt: scheduledMs,
           durationMinutes: Number(formDuration) || 40,
           maxCapacity: Number(formCapacity) || 80,
@@ -339,7 +339,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
           courseTitle: selectedCourse.title,
           title: formTitle.trim(),
           description: formDescription.trim(),
-          instructorName: formInstructor.trim() || 'AI Clipzone Mentor',
+          instructorName: formInstructor.trim() || 'HamroLms Mentor',
           provider: formProvider,
           manualMeetingUrl: formProvider === 'manual' ? formManualUrl.trim() : undefined,
           manualMeetingId: formProvider === 'manual' ? formManualMeetingId.trim() : undefined,
@@ -696,7 +696,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                     [
                       {
                         id: 'builtin',
-                        title: 'AI Clipzone Live Room',
+                        title: 'HamroLms Live Room',
                         sub: 'Zero Google login for Mentor & Students',
                       },
                       {
@@ -841,7 +841,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                   type="text"
                   value={formInstructor}
                   onChange={(e) => setFormInstructor(e.target.value)}
-                  placeholder="AI Clipzone Mentor"
+                  placeholder="HamroLms Mentor"
                   className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white focus:border-blue-500 outline-none"
                 />
               </div>
@@ -1403,7 +1403,7 @@ export const AdminLiveClassesTab: React.FC<AdminLiveClassesTabProps> = ({
                       className="flex items-center justify-between gap-3 bg-zinc-900/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs"
                     >
                       <div>
-                        <div className="font-bold text-white">{p.studentName || 'AI Clipzone Student'}</div>
+                        <div className="font-bold text-white">{p.studentName || 'HamroLms Student'}</div>
                         <div className="text-[11px] text-zinc-400">
                           {p.studentEmail || p.userId} {p.activationCode ? `• Key: ${p.activationCode}` : ''}
                         </div>

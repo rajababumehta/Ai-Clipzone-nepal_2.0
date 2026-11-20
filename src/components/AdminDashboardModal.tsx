@@ -308,14 +308,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Overall Settings & Institute Branding states
   const [siteTitle, setSiteTitle] = useState(siteSettings.siteTitle || 'TOP AI COURSE NEPAL 🇳🇵');
   const [siteTagline, setSiteTagline] = useState(siteSettings.siteTagline || "Nepal's #1 AI Video Editing & Learning Platform");
-  const [instituteName, setInstituteName] = useState(siteSettings.instituteName || 'AI CLIPZONE NEPAL');
+  const [instituteName, setInstituteName] = useState(siteSettings.instituteName || 'HAMROLMS');
   const [instituteLogoUrl, setInstituteLogoUrl] = useState(cleanLegacyLogoUrl(siteSettings.instituteLogoUrl));
   const [noticeBannerText, setNoticeBannerText] = useState(
     siteSettings.noticeBannerText || '🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.'
   );
   const [showNoticeBanner, setShowNoticeBanner] = useState(siteSettings.showNoticeBanner !== false);
   const [supportPhone, setSupportPhone] = useState(siteSettings.supportPhone || '9763323268');
-  const [supportEmail, setSupportEmail] = useState(siteSettings.supportEmail || 'ai.clipzone.edu@gmail.com');
+  const [supportEmail, setSupportEmail] = useState(siteSettings.supportEmail || 'support@hamrolms.com');
   const [apkDownloadUrl, setApkDownloadUrl] = useState(siteSettings.apkDownloadUrl || '');
 
   // Certificate Designer states (supports 'global' or courseId)
@@ -323,18 +323,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [certCourseTitleOverride, setCertCourseTitleOverride] = useState('');
   const [certificateTitle, setCertificateTitle] = useState(siteSettings.certificateTitle || 'CERTIFICATE');
   const [certificateSubtitle, setCertificateSubtitle] = useState(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
-  const [certificateInstituteName, setCertificateInstituteName] = useState(siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
+  const [certificateInstituteName, setCertificateInstituteName] = useState(siteSettings.certificateInstituteName || 'HAMROLMS');
   const [certificateLogoUrl, setCertificateLogoUrl] = useState(cleanLegacyLogoUrl(siteSettings.certificateLogoUrl));
   const [certificateDescription, setCertificateDescription] = useState(siteSettings.certificateDescription || '');
   const [certificateDirectorName, setCertificateDirectorName] = useState(siteSettings.certificateDirectorName || 'Director');
   const [certificateDirectorTitle, setCertificateDirectorTitle] = useState(siteSettings.certificateDirectorTitle || 'Program Director');
   const [certificateDirectorSignatureUrl, setCertificateDirectorSignatureUrl] = useState(siteSettings.certificateDirectorSignatureUrl || '');
-  const [certificateCeoName, setCertificateCeoName] = useState(siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
+  const [certificateCeoName, setCertificateCeoName] = useState(siteSettings.certificateCeoName || 'Founder/CEO (HamroLms)');
   const [certificateCeoTitle, setCertificateCeoTitle] = useState(siteSettings.certificateCeoTitle || 'Founder & CEO');
   const [certificateCeoSignatureUrl, setCertificateCeoSignatureUrl] = useState(siteSettings.certificateCeoSignatureUrl || '');
   const [certificateTheme, setCertificateTheme] = useState<'blue' | 'cyber-purple' | 'emerald' | 'crimson' | 'gold'>((siteSettings.certificateTheme as any) || 'blue');
   const [certificateStampUrl, setCertificateStampUrl] = useState(siteSettings.certificateStampUrl || '');
-  const [certificateSealText, setCertificateSealText] = useState(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
+  const [certificateSealText, setCertificateSealText] = useState(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS');
 
   const [isSavingSiteSettings, setIsSavingSiteSettings] = useState(false);
 
@@ -395,28 +395,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   useEffect(() => {
     setSiteTitle(siteSettings.siteTitle || 'TOP AI COURSE NEPAL 🇳🇵');
     setSiteTagline(siteSettings.siteTagline || "Nepal's #1 AI Video Editing & Learning Platform");
-    setInstituteName(siteSettings.instituteName || 'AI CLIPZONE NEPAL');
+    setInstituteName(siteSettings.instituteName || 'HAMROLMS');
     setInstituteLogoUrl(cleanLegacyLogoUrl(siteSettings.instituteLogoUrl));
     setNoticeBannerText(
       siteSettings.noticeBannerText || '🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.'
     );
     setShowNoticeBanner(siteSettings.showNoticeBanner !== false);
     setSupportPhone(siteSettings.supportPhone || '9763323268');
-    setSupportEmail(siteSettings.supportEmail || 'ai.clipzone.edu@gmail.com');
+    setSupportEmail(siteSettings.supportEmail || 'support@hamrolms.com');
     setCertificateTitle(siteSettings.certificateTitle || 'CERTIFICATE');
     setCertificateSubtitle(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
-    setCertificateInstituteName(siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
+    setCertificateInstituteName(siteSettings.certificateInstituteName || 'HAMROLMS');
     setCertificateLogoUrl(cleanLegacyLogoUrl(siteSettings.certificateLogoUrl));
     setCertificateDescription(siteSettings.certificateDescription || '');
     setCertificateDirectorName(siteSettings.certificateDirectorName || 'Director');
     setCertificateDirectorTitle(siteSettings.certificateDirectorTitle || 'Program Director');
     setCertificateDirectorSignatureUrl(siteSettings.certificateDirectorSignatureUrl || '');
-    setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
+    setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (HamroLms)');
     setCertificateCeoTitle(siteSettings.certificateCeoTitle || 'Founder & CEO');
     setCertificateCeoSignatureUrl(siteSettings.certificateCeoSignatureUrl || '');
     setCertificateTheme((siteSettings.certificateTheme as any) || 'blue');
     setCertificateStampUrl(siteSettings.certificateStampUrl || '');
-    setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
+    setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS');
     setApkDownloadUrl(siteSettings.apkDownloadUrl || '');
   }, [siteSettings]);
 
@@ -621,37 +621,37 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (scopeId === 'global') {
       setCertificateTitle(siteSettings.certificateTitle || 'CERTIFICATE');
       setCertificateSubtitle(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
-      setCertificateInstituteName(siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
+      setCertificateInstituteName(siteSettings.certificateInstituteName || 'HAMROLMS');
       setCertCourseTitleOverride('');
       setCertificateLogoUrl(siteSettings.certificateLogoUrl || '');
       setCertificateDescription(siteSettings.certificateDescription || '');
       setCertificateDirectorName(siteSettings.certificateDirectorName || 'Director');
       setCertificateDirectorTitle(siteSettings.certificateDirectorTitle || 'Program Director');
       setCertificateDirectorSignatureUrl(siteSettings.certificateDirectorSignatureUrl || '');
-      setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
+      setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (HamroLms)');
       setCertificateCeoTitle(siteSettings.certificateCeoTitle || 'Founder & CEO');
       setCertificateCeoSignatureUrl(siteSettings.certificateCeoSignatureUrl || '');
       setCertificateTheme((siteSettings.certificateTheme as any) || 'blue');
       setCertificateStampUrl(siteSettings.certificateStampUrl || '');
-      setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
+      setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS');
     } else {
       const crs = courses.find((c) => c.id === scopeId);
       if (crs) {
         setCertificateTitle(crs.certificateTitle || siteSettings.certificateTitle || 'CERTIFICATE');
         setCertificateSubtitle(crs.certificateSubtitle || siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
-        setCertificateInstituteName(crs.certificateInstituteName || siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
+        setCertificateInstituteName(crs.certificateInstituteName || siteSettings.certificateInstituteName || 'HAMROLMS');
         setCertCourseTitleOverride(crs.certificateCourseTitle || crs.title || '');
         setCertificateLogoUrl(crs.certificateLogoUrl || siteSettings.certificateLogoUrl || '');
         setCertificateDescription(crs.certificateDescription || siteSettings.certificateDescription || '');
         setCertificateDirectorName(crs.certificateDirectorName || siteSettings.certificateDirectorName || 'Director');
         setCertificateDirectorTitle(crs.certificateDirectorTitle || siteSettings.certificateDirectorTitle || 'Program Director');
         setCertificateDirectorSignatureUrl(crs.certificateDirectorSignatureUrl || siteSettings.certificateDirectorSignatureUrl || '');
-        setCertificateCeoName(crs.certificateCeoName || siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
+        setCertificateCeoName(crs.certificateCeoName || siteSettings.certificateCeoName || 'Founder/CEO (HamroLms)');
         setCertificateCeoTitle(crs.certificateCeoTitle || siteSettings.certificateCeoTitle || 'Founder & CEO');
         setCertificateCeoSignatureUrl(crs.certificateCeoSignatureUrl || siteSettings.certificateCeoSignatureUrl || '');
         setCertificateTheme((crs.certificateTheme as any) || (siteSettings.certificateTheme as any) || 'blue');
         setCertificateStampUrl(crs.certificateStampUrl || siteSettings.certificateStampUrl || '');
-        setCertificateSealText(crs.certificateSealText || siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
+        setCertificateSealText(crs.certificateSealText || siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS');
       }
     }
   };
@@ -666,18 +666,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           ...siteSettings,
           certificateTitle: certificateTitle.trim() || 'CERTIFICATE',
           certificateSubtitle: certificateSubtitle.trim() || 'OF ACHIEVEMENT',
-          certificateInstituteName: certificateInstituteName.trim() || 'AI CLIPZONE NEPAL',
+          certificateInstituteName: certificateInstituteName.trim() || 'HAMROLMS',
           certificateLogoUrl: certificateLogoUrl.trim(),
           certificateDescription: certificateDescription.trim(),
           certificateDirectorName: certificateDirectorName.trim() || 'Director',
           certificateDirectorTitle: certificateDirectorTitle.trim() || 'Program Director',
           certificateDirectorSignatureUrl: certificateDirectorSignatureUrl.trim(),
-          certificateCeoName: certificateCeoName.trim() || 'Founder/CEO (AI Clipzone)',
+          certificateCeoName: certificateCeoName.trim() || 'Founder/CEO (HamroLms)',
           certificateCeoTitle: certificateCeoTitle.trim() || 'Founder & CEO',
           certificateCeoSignatureUrl: certificateCeoSignatureUrl.trim(),
           certificateTheme,
           certificateStampUrl: certificateStampUrl.trim(),
-          certificateSealText: certificateSealText.trim() || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL',
+          certificateSealText: certificateSealText.trim() || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS',
           updatedAt: Date.now()
         };
         await onSaveSiteSettings(updatedSettings);
@@ -746,19 +746,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       // Reload global defaults into form
       setCertificateTitle(siteSettings.certificateTitle || 'CERTIFICATE');
       setCertificateSubtitle(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
-      setCertificateInstituteName(siteSettings.certificateInstituteName || 'AI CLIPZONE NEPAL');
+      setCertificateInstituteName(siteSettings.certificateInstituteName || 'HAMROLMS');
       setCertCourseTitleOverride(targetCourse.title);
       setCertificateLogoUrl(siteSettings.certificateLogoUrl || '');
       setCertificateDescription(siteSettings.certificateDescription || '');
       setCertificateDirectorName(siteSettings.certificateDirectorName || 'Director');
       setCertificateDirectorTitle(siteSettings.certificateDirectorTitle || 'Program Director');
       setCertificateDirectorSignatureUrl(siteSettings.certificateDirectorSignatureUrl || '');
-      setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (AI Clipzone)');
+      setCertificateCeoName(siteSettings.certificateCeoName || 'Founder/CEO (HamroLms)');
       setCertificateCeoTitle(siteSettings.certificateCeoTitle || 'Founder & CEO');
       setCertificateCeoSignatureUrl(siteSettings.certificateCeoSignatureUrl || '');
       setCertificateTheme((siteSettings.certificateTheme as any) || 'blue');
       setCertificateStampUrl(siteSettings.certificateStampUrl || '');
-      setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
+      setCertificateSealText(siteSettings.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS');
       showToast(`"${targetCourse.title}" is now inheriting Global Certificate defaults!`, 'info');
     } catch (e) {
       showToast('Failed to reset course certificate.', 'error');
@@ -881,7 +881,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 overflow-hidden flex items-center justify-center shrink-0 shadow-md">
                 <img
                   src={cleanLegacyLogoUrl(siteSettings.instituteLogoUrl)}
-                  alt={siteSettings.instituteName || 'AI Clipzone'}
+                  alt={siteSettings.instituteName || 'HamroLms'}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
@@ -2098,7 +2098,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div>
                   <strong className="font-black text-purple-900">Institute Branding & Global Website Settings</strong>
                   <p className="mt-0.5 text-purple-800">
-                    यहाँबाट सम्पूर्ण वेबसाइट र प्लेटफर्मभरिको Institute को नाम (AI Clipzone Institute Name), Institute Logo URL, ब्यानर शीर्षक (Headline), सबटाइटल, Notice Announcement Banner, र सपोर्ट सम्पर्क विवरणहरू प्रत्यक्ष रूपमा फेर्न सक्नुहुन्छ।
+                    यहाँबाट सम्पूर्ण वेबसाइट र प्लेटफर्मभरिको Institute को नाम (HamroLms Institute Name), Institute Logo URL, ब्यानर शीर्षक (Headline), सबटाइटल, Notice Announcement Banner, र सपोर्ट सम्पर्क विवरणहरू प्रत्यक्ष रूपमा फेर्न सक्नुहुन्छ।
                   </p>
                 </div>
               </div>
@@ -2120,7 +2120,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       required
                       value={instituteName}
                       onChange={(e) => setInstituteName(e.target.value)}
-                      placeholder="उदा: AI CLIPZONE NEPAL"
+                      placeholder="उदा: HamroLms"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                     />
                     <p className="text-[10px] text-slate-400 mt-1">
@@ -2245,7 +2245,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     required
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
-                    placeholder="उदा: ai.clipzone.edu@gmail.com"
+                    placeholder="उदा: support@hamrolms.com"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
@@ -2272,7 +2272,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     type="text"
                     value={apkDownloadUrl}
                     onChange={(e) => setApkDownloadUrl(e.target.value)}
-                    placeholder="उदा: https://your-server.com/aiclipzone.apk (खाली भएमा PWA Instant Installer स्वतः प्रयोग हुन्छ)"
+                    placeholder="उदा: https://your-server.com/hamrolms.apk (खाली भएमा PWA Instant Installer स्वतः प्रयोग हुन्छ)"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
@@ -2307,7 +2307,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     />
                     <div className="min-w-0">
                       <div className="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-2">
-                        <span>{instituteName || 'AI CLIPZONE NEPAL'}</span>
+                        <span>{instituteName || 'HAMROLMS'}</span>
                         <span className="text-blue-400 text-xs">🇳🇵</span>
                       </div>
                       <p className="text-[10px] text-zinc-300 font-medium truncate max-w-xs">
@@ -2346,14 +2346,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setInstituteName(DEFAULT_SITE_SETTINGS.instituteName || 'AI CLIPZONE NEPAL');
+                    setInstituteName(DEFAULT_SITE_SETTINGS.instituteName || 'HAMROLMS');
                     setInstituteLogoUrl(DEFAULT_SITE_SETTINGS.instituteLogoUrl || '');
                     setSiteTitle(DEFAULT_SITE_SETTINGS.siteTitle || 'TOP AI COURSE NEPAL 🇳🇵');
                     setSiteTagline(DEFAULT_SITE_SETTINGS.siteTagline || "Nepal's #1 AI Video Editing & Learning Platform");
                     setNoticeBannerText(DEFAULT_SITE_SETTINGS.noticeBannerText || '');
                     setShowNoticeBanner(true);
                     setSupportPhone(DEFAULT_SITE_SETTINGS.supportPhone || '9763323268');
-                    setSupportEmail(DEFAULT_SITE_SETTINGS.supportEmail || 'ai.clipzone.edu@gmail.com');
+                    setSupportEmail(DEFAULT_SITE_SETTINGS.supportEmail || 'support@hamrolms.com');
                     showToast('Reset site settings form to default values. Click Save to apply.', 'info');
                   }}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs transition cursor-pointer"
@@ -2436,7 +2436,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
                         }`}
                       >
-                        <span>🎓 {c.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').slice(0, 26)}...</span>
+                        <span>🎓 {c.title.replace(/by Dhruv Rathee/gi, 'by HamroLms').slice(0, 26)}...</span>
                         {hasCustom && (
                           <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-1.5 py-0.2 rounded border border-emerald-400/40">
                             Customized
@@ -2496,7 +2496,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       />
                     ) : (
                       <div className="font-black text-xs uppercase tracking-widest text-slate-800">
-                        {certificateInstituteName || 'AI CLIPZONE'}
+                        {certificateInstituteName || 'HAMROLMS'}
                       </div>
                     )}
                     <span className="text-[9px] font-mono font-black text-slate-500 tracking-wider">
@@ -2521,7 +2521,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     For successfully mastering & completing the verified curriculum of:
                   </p>
                   <h5 className="text-xs sm:text-sm font-black text-purple-900 uppercase tracking-wide max-w-lg mx-auto">
-                    {certCourseTitleOverride || (selectedCertScope !== 'global' ? courses.find(c => c.id === selectedCertScope)?.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone') : 'Master Course Curriculum')}
+                    {certCourseTitleOverride || (selectedCertScope !== 'global' ? courses.find(c => c.id === selectedCertScope)?.title.replace(/by Dhruv Rathee/gi, 'by HamroLms') : 'Master Course Curriculum')}
                   </h5>
                   <p className="text-[10px] text-slate-600 max-w-md mx-auto font-medium leading-relaxed mt-1">
                     {certificateDescription || 'has successfully completed all modules and practical requirements of the course with outstanding performance.'}
@@ -2663,7 +2663,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     required
                     value={certificateInstituteName}
                     onChange={(e) => setCertificateInstituteName(e.target.value)}
-                    placeholder="AI CLIPZONE NEPAL"
+                    placeholder="HAMROLMS"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
@@ -2835,7 +2835,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       type="text"
                       value={certificateCeoName}
                       onChange={(e) => setCertificateCeoName(e.target.value)}
-                      placeholder="उदा: Founder/CEO (AI Clipzone)"
+                      placeholder="उदा: Founder/CEO (HamroLms)"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs transition outline-hidden font-bold text-slate-800"
                     />
                   </div>
@@ -2848,7 +2848,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       type="text"
                       value={certificateCeoTitle}
                       onChange={(e) => setCertificateCeoTitle(e.target.value)}
-                      placeholder="Founder & CEO (AI Clipzone)"
+                      placeholder="Founder & CEO (HamroLms)"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs transition outline-hidden font-semibold text-slate-800"
                     />
                   </div>
@@ -2942,7 +2942,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       type="text"
                       value={certificateSealText}
                       onChange={(e) => setCertificateSealText(e.target.value)}
-                      placeholder="OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL"
+                      placeholder="OFFICIAL VERIFIED CERTIFICATE • HAMROLMS"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800 text-[11px]"
                     />
                   </div>
@@ -2968,18 +2968,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   onClick={() => {
                     setCertificateTitle(DEFAULT_SITE_SETTINGS.certificateTitle || 'CERTIFICATE');
                     setCertificateSubtitle(DEFAULT_SITE_SETTINGS.certificateSubtitle || 'OF ACHIEVEMENT');
-                    setCertificateInstituteName(DEFAULT_SITE_SETTINGS.certificateInstituteName || 'AI CLIPZONE NEPAL');
+                    setCertificateInstituteName(DEFAULT_SITE_SETTINGS.certificateInstituteName || 'HAMROLMS');
                     setCertificateLogoUrl(DEFAULT_SITE_SETTINGS.certificateLogoUrl || '');
                     setCertificateDescription(DEFAULT_SITE_SETTINGS.certificateDescription || '');
                     setCertificateDirectorName(DEFAULT_SITE_SETTINGS.certificateDirectorName || 'Director');
                     setCertificateDirectorTitle(DEFAULT_SITE_SETTINGS.certificateDirectorTitle || 'Program Director');
                     setCertificateDirectorSignatureUrl(DEFAULT_SITE_SETTINGS.certificateDirectorSignatureUrl || '');
-                    setCertificateCeoName(DEFAULT_SITE_SETTINGS.certificateCeoName || 'Founder/CEO (AI Clipzone)');
+                    setCertificateCeoName(DEFAULT_SITE_SETTINGS.certificateCeoName || 'Founder/CEO (HamroLms)');
                     setCertificateCeoTitle(DEFAULT_SITE_SETTINGS.certificateCeoTitle || 'Founder & CEO');
                     setCertificateCeoSignatureUrl(DEFAULT_SITE_SETTINGS.certificateCeoSignatureUrl || '');
                     setCertificateTheme((DEFAULT_SITE_SETTINGS.certificateTheme as any) || 'blue');
                     setCertificateStampUrl(DEFAULT_SITE_SETTINGS.certificateStampUrl || '');
-                    setCertificateSealText(DEFAULT_SITE_SETTINGS.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • AI CLIPZONE NEPAL');
+                    setCertificateSealText(DEFAULT_SITE_SETTINGS.certificateSealText || 'OFFICIAL VERIFIED CERTIFICATE • HAMROLMS');
                     showToast('Reset certificate design parameters to defaults. Click Save to apply.', 'info');
                   }}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs transition cursor-pointer"
@@ -3238,7 +3238,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               onSendNotification={onSendNotification || (async () => {})}
               onDeleteNotification={onDeleteNotification || (async () => {})}
               showToast={showToast}
-              instituteName={siteSettings.instituteName || 'AI Clipzone Nepal'}
+              instituteName={siteSettings.instituteName || 'HamroLms'}
               instituteLogoUrl={siteSettings.instituteLogoUrl || ''}
             />
           )}
@@ -3249,7 +3249,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           {activeTab === 'ask' && (
             <AdminAskTab
               showToast={showToast}
-              instituteName={siteSettings.instituteName || 'AI Clipzone'}
+              instituteName={siteSettings.instituteName || 'HamroLms'}
               instituteLogoUrl={cleanLegacyLogoUrl(siteSettings.instituteLogoUrl)}
               allActivationKeys={allActivationKeys}
               adminRole={isMainAdmin ? 'main_admin' : 'sub_admin'}
@@ -3267,7 +3267,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0 text-xs text-slate-400 font-medium">
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            {isMainAdmin ? 'AI Clipzone Main Admin Console' : `Sub-Admin Course Console (${subAdminSession?.name})`}
+            {isMainAdmin ? 'HamroLms Main Admin Console' : `Sub-Admin Course Console (${subAdminSession?.name})`}
           </span>
           <button
             onClick={onClose}

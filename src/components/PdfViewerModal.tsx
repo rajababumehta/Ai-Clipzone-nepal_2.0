@@ -169,7 +169,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
           <div className="bg-slate-950 px-4 py-2 border-t border-slate-800 text-left text-[10px] text-slate-500 flex items-center justify-between shrink-0">
             <span className="flex items-center gap-1.5 font-medium">
               <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-              AI Clipzone Digital Academy • Student Full Screen Reader
+              HamroLms Digital Academy • Student Full Screen Reader
             </span>
             <span className="text-[10px] text-slate-400 font-bold">
               Protected Learning Material

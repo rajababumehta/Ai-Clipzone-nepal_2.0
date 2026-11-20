@@ -309,6 +309,9 @@
         "certificateTheme": { "type": "string" },
         "certificateStampUrl": { "type": "string" },
         "certificateSealText": { "type": "string" },
+        "apkDownloadUrl": { "type": "string" },
+        "androidPackageName": { "type": "string" },
+        "androidSha256Fingerprints": { "type": "string" },
         "updatedAt": { "type": "number" }
       }
     },

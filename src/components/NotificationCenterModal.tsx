@@ -63,7 +63,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     if (perm === 'granted') {
       notify('🎉 Push Notifications enabled on this device!', 'success');
       showNativeNotification({
-        title: '🔔 AI Clipzone Notifications Active!',
+        title: '🔔 HamroLms Notifications Active!',
         body: 'You will now receive all course discounts and announcements instantly.',
         url: '/'
       });
@@ -187,7 +187,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 onClick={() => {
                   showNativeNotification({
                     title: '🔔 Test Notification',
-                    body: 'AI Clipzone notification delivery is working perfectly on this device!',
+                    body: 'HamroLms notification delivery is working perfectly on this device!',
                     url: '/'
                   });
                   notify('Test push notification sent!', 'info');

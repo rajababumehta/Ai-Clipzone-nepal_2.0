@@ -1,8 +1,8 @@
-# Robots.txt for AI Clipzone
+# Robots.txt for HamroLms
 User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /api/
 
-Sitemap: https://aiclipzone.vercel.app/sitemap.xml
-Host: https://aiclipzone.vercel.app
+Sitemap: https://hamrolms.vercel.app/sitemap.xml
+Host: https://hamrolms.vercel.app

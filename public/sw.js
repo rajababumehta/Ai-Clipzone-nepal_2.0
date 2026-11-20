@@ -1,5 +1,5 @@
-// Ai Clipzone - High-Speed PWA Service Worker
-const CACHE_NAME = 'aiclipzone-pwa-v36';
+// HamroLms - High-Speed PWA Service Worker
+const CACHE_NAME = 'hamrolms-pwa-v37';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/logo.png',
@@ -201,11 +201,11 @@ self.addEventListener('push', (event) => {
 
   const notifPayload = raw.notification || {};
   const dataPayload = raw.data || {};
-  const title = notifPayload.title || raw.title || dataPayload.title || 'AI Clipzone Nepal';
+  const title = notifPayload.title || raw.title || dataPayload.title || 'HamroLms';
   const body = notifPayload.body || raw.body || dataPayload.body || 'New update available!';
   const liveClassId = dataPayload.liveClassId || '';
   const targetUrl = dataPayload.url || raw.url || (liveClassId ? `/?tab=live&classId=${encodeURIComponent(liveClassId)}` : '/');
-  const tag = dataPayload.deliveryKey || raw.tag || (liveClassId ? `live-${liveClassId}` : `clipzone-${Date.now()}`);
+  const tag = dataPayload.deliveryKey || raw.tag || (liveClassId ? `live-${liveClassId}` : `hamrolms-${Date.now()}`);
 
   event.waitUntil(
     self.registration.showNotification(title, {

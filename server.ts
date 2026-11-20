@@ -96,7 +96,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`AI Clipzone Server is live on http://0.0.0.0:${PORT}`);
+    console.log(`HamroLms Server is live on http://0.0.0.0:${PORT}`);
   });
 }
 

@@ -39,8 +39,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   courseTitle,
   issueDate = '2083/01/14',
   certificateId: initialCertId,
-  instituteName = 'AI Clipzone',
-  certificateInstituteName = 'AI CLIPZONE NEPAL',
+  instituteName = 'HamroLms',
+  certificateInstituteName = 'HAMROLMS',
   logoUrl,
   certificateTitle = 'CERTIFICATE',
   certificateSubtitle = 'OF ACHIEVEMENT',
@@ -48,7 +48,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   directorName = 'Director',
   directorTitle = 'Course Director',
   directorSignatureUrl,
-  ceoName = 'Founder/CEO (AI Clipzone)',
+  ceoName = 'Founder/CEO (HamroLms)',
   ceoTitle = 'Founder & CEO',
   ceoSignatureUrl,
   certificateTheme = 'blue',
@@ -192,8 +192,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   });
 
   const cleanCourseTitle = (courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS')
-    .replace(/by Dhruv Rathee/gi, 'by AI Clipzone')
-    .replace(/Dhruv Rathee/gi, 'AI Clipzone');
+    .replace(/by Dhruv Rathee/gi, 'by HamroLms')
+    .replace(/Dhruv Rathee/gi, 'HamroLms');
 
   // Auto-scale certificate canvas to fit user's modal screen clearly (both mobile and desktop)
   useEffect(() => {
@@ -315,7 +315,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         setDownloadError(null);
         const link = document.createElement('a');
         const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
-        link.download = `AI_Clipzone_Certificate_${sanitizedName}.png`;
+        link.download = `HamroLms_Certificate_${sanitizedName}.png`;
         link.href = dataUrl;
         document.body.appendChild(link);
         link.click();
@@ -330,7 +330,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   };
 
   const handleCopyLink = () => {
-    const text = `Verified Certificate of Completion - ${studentName} (${courseTitle}) - ID: ${certId} - AI Clipzone Nepal`;
+    const text = `Verified Certificate of Completion - ${studentName} (${courseTitle}) - ID: ${certId} - HamroLms`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -383,7 +383,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400 font-medium">
-                Verified Certificate issued by AI Clipzone Nepal
+                Verified Certificate issued by HamroLms
               </p>
             </div>
           </div>
@@ -400,7 +400,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 >
                   {courses.map((c) => (
                     <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                      {c.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone')}
+                      {c.title.replace(/by Dhruv Rathee/gi, 'by HamroLms')}
                     </option>
                   ))}
                 </select>
@@ -789,7 +789,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     className="w-32 h-[1px] my-1" 
                   />
                   <span className="font-sans text-sm font-bold text-slate-100 text-center max-w-[160px]">
-                    {ceoName || 'Founder/CEO (AI Clipzone)'}
+                    {ceoName || 'Founder/CEO (HamroLms)'}
                   </span>
                   <span style={{ color: themeColors.primary }} className="text-[10px] font-semibold uppercase tracking-wider">
                     {ceoTitle || 'Founder & CEO'}
@@ -804,7 +804,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         <div className="mt-3 text-center text-xs text-slate-400 font-medium print:hidden">
           <p className="flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Official digital credential verified by AI Clipzone. Download high-resolution PNG image directly.</span>
+            <span>Official digital credential verified by HamroLms. Download high-resolution PNG image directly.</span>
           </p>
         </div>
       </div>
