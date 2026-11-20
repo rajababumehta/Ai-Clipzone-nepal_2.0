@@ -315,7 +315,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   );
   const [showNoticeBanner, setShowNoticeBanner] = useState(siteSettings.showNoticeBanner !== false);
   const [supportPhone, setSupportPhone] = useState(siteSettings.supportPhone || '9763323268');
-  const [supportEmail, setSupportEmail] = useState(siteSettings.supportEmail || 'support@hamrolms.com');
+  const [supportEmail, setSupportEmail] = useState(siteSettings.supportEmail || 'support.hamrolms@gmail.com');
   const [apkDownloadUrl, setApkDownloadUrl] = useState(siteSettings.apkDownloadUrl || '');
 
   // Certificate Designer states (supports 'global' or courseId)
@@ -402,7 +402,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     );
     setShowNoticeBanner(siteSettings.showNoticeBanner !== false);
     setSupportPhone(siteSettings.supportPhone || '9763323268');
-    setSupportEmail(siteSettings.supportEmail || 'support@hamrolms.com');
+    setSupportEmail(siteSettings.supportEmail || 'support.hamrolms@gmail.com');
     setCertificateTitle(siteSettings.certificateTitle || 'CERTIFICATE');
     setCertificateSubtitle(siteSettings.certificateSubtitle || 'OF ACHIEVEMENT');
     setCertificateInstituteName(siteSettings.certificateInstituteName || 'HAMROLMS');
@@ -2245,7 +2245,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     required
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
-                    placeholder="उदा: support@hamrolms.com"
+                    placeholder="उदा: support.hamrolms@gmail.com"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
@@ -2353,7 +2353,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     setNoticeBannerText(DEFAULT_SITE_SETTINGS.noticeBannerText || '');
                     setShowNoticeBanner(true);
                     setSupportPhone(DEFAULT_SITE_SETTINGS.supportPhone || '9763323268');
-                    setSupportEmail(DEFAULT_SITE_SETTINGS.supportEmail || 'support@hamrolms.com');
+                    setSupportEmail(DEFAULT_SITE_SETTINGS.supportEmail || 'support.hamrolms@gmail.com');
                     showToast('Reset site settings form to default values. Click Save to apply.', 'info');
                   }}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-xs transition cursor-pointer"

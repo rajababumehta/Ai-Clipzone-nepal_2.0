@@ -373,7 +373,7 @@ export default function App() {
           certificateCeoName: normalizeLegacyBrandText(parsed.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
           certificateCeoTitle: normalizeLegacyBrandText(parsed.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
           certificateSealText: normalizeLegacyBrandText(parsed.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
-          supportEmail: parsed.supportEmail === 'ai.clipzone.edu@gmail.com' ? DEFAULT_SITE_SETTINGS.supportEmail : parsed.supportEmail,
+          supportEmail: (parsed.supportEmail === 'ai.clipzone.edu@gmail.com' || parsed.supportEmail === 'support@hamrolms.com') ? DEFAULT_SITE_SETTINGS.supportEmail : parsed.supportEmail,
           instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
           certificateLogoUrl: cleanLegacyLogoUrl(parsed.certificateLogoUrl),
         };
@@ -1138,7 +1138,7 @@ export default function App() {
           certificateCeoName: normalizeLegacyBrandText(data.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
           certificateCeoTitle: normalizeLegacyBrandText(data.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
           certificateSealText: normalizeLegacyBrandText(data.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
-          supportEmail: data.supportEmail === 'ai.clipzone.edu@gmail.com' ? DEFAULT_SITE_SETTINGS.supportEmail : data.supportEmail,
+          supportEmail: (data.supportEmail === 'ai.clipzone.edu@gmail.com' || data.supportEmail === 'support@hamrolms.com') ? DEFAULT_SITE_SETTINGS.supportEmail : data.supportEmail,
           instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
           certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
         };
@@ -6288,7 +6288,7 @@ export default function App() {
                 <div className="text-center mb-10">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center gap-2">
                     <BookOpen className="w-7 h-7 text-blue-400 shrink-0" />
-                    <span>{siteSettings.instituteName || 'HamroLms'} – Online Learning &amp; AI Courses</span>
+                    <span>{siteSettings.instituteName || 'HamroLms'} – Online Learning</span>
                   </h1>
                   <h2 className="text-xs sm:text-sm font-semibold text-zinc-400 mt-2 max-w-2xl mx-auto">
                     Nepal's Premier Digital Skills, Video Editing, Design &amp; Verified Certificate Platform
@@ -7091,79 +7091,32 @@ export default function App() {
           )}
         </section>
 
-            {/* Home SEO & Trust Sections: Visible FAQ Accordion & Semantic Footer */}
+            {/* Home Semantic Footer */}
             {currentView === 'home' && (
-              <>
-                {faqs && faqs.length > 0 && (
-                  <section id="faq-section" aria-labelledby="faq-section-heading" className="mt-14 pt-10 border-t border-zinc-900/90 max-w-4xl mx-auto">
-                    <div className="text-center mb-6">
-                      <h2 id="faq-section-heading" className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-                        <HelpCircle className="w-5 h-5 text-blue-400 shrink-0" />
-                        <span>Frequently Asked Questions (प्रायः सोधिने प्रश्नहरू)</span>
-                      </h2>
-                      <p className="text-xs sm:text-sm text-zinc-400 mt-1.5">
-                        {siteSettings.instituteName || 'HamroLms'} कोर्ष, सर्टिफिकेट र भुक्तानी सम्बन्धी मुख्य जानकारीहरू
-                      </p>
-                    </div>
-
-                    <div className="space-y-3">
-                      {faqs.map((faq, idx) => {
-                        const isOpen = Boolean(openFaqs[idx]);
-                        return (
-                          <div
-                            key={idx}
-                            className="bg-zinc-950/90 border border-zinc-800/90 rounded-2xl overflow-hidden transition-colors hover:border-zinc-700"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => toggleFaq(idx)}
-                              aria-expanded={isOpen}
-                              className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left cursor-pointer"
-                            >
-                              <h3 className="text-sm sm:text-base font-bold text-zinc-100 leading-snug">
-                                {faq.question}
-                              </h3>
-                              <ChevronDown
-                                className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-400' : ''}`}
-                              />
-                            </button>
-                            {isOpen && (
-                              <div className="px-5 pb-4 pt-0 text-xs sm:text-sm text-zinc-400 leading-relaxed border-t border-zinc-900/80">
-                                <p className="pt-3">{faq.answer}</p>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
-
-                <footer className="mt-12 pt-8 pb-4 border-t border-zinc-900 text-center sm:text-left">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-zinc-400">
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-black text-white">{siteSettings.instituteName || 'HamroLms'}</p>
-                      <p className="leading-relaxed text-zinc-400">
-                        Practical online courses in AI tools, video editing, graphic design, YouTube growth, and web development across Nepal.
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Location &amp; Credentials</p>
-                      <p>Birgunj, Madhesh Province, Nepal</p>
-                      <p>Verified QR Digital Certificates • Lifetime Access</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Official Support</p>
-                      <p>Email: {siteSettings.supportEmail || 'support@hamrolms.com'}</p>
-                      <p>Website: https://hamrolms.vercel.app/</p>
-                    </div>
+              <footer className="mt-12 pt-8 pb-4 border-t border-zinc-900 text-center sm:text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-zinc-400">
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-black text-white">{siteSettings.instituteName || 'HamroLms'}</p>
+                    <p className="leading-relaxed text-zinc-400">
+                      Practical online courses in AI tools, video editing, graphic design, YouTube growth, and web development across Nepal.
+                    </p>
                   </div>
-                  <div className="mt-6 pt-4 border-t border-zinc-900/80 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-                    <span>© {new Date().getFullYear()} {siteSettings.instituteName || 'HamroLms'}. All rights reserved.</span>
-                    <span>Online Learning &amp; AI Skills Platform — Nepal</span>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Location &amp; Credentials</p>
+                    <p>Birgunj, Madhesh Province, Nepal</p>
+                    <p>Verified QR Digital Certificates • Lifetime Access</p>
                   </div>
-                </footer>
-              </>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Official Support</p>
+                    <p>Email: {siteSettings.supportEmail || 'support.hamrolms@gmail.com'}</p>
+                    <p>Website: https://hamrolms.vercel.app/</p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-4 border-t border-zinc-900/80 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                  <span>© {new Date().getFullYear()} {siteSettings.instituteName || 'HamroLms'}. All rights reserved.</span>
+                  <span>Online Learning &amp; AI Skills Platform — Nepal</span>
+                </div>
+              </footer>
             )}
 
           </>

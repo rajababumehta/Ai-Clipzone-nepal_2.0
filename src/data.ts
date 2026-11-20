@@ -47,7 +47,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
   instituteLogoUrl: "/logo.png",
   noticeBannerText: "🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.",
   showNoticeBanner: false,
-  supportEmail: "support@hamrolms.com",
+  supportEmail: "support.hamrolms@gmail.com",
   supportPhone: "9763323268",
   certificateTitle: "CERTIFICATE",
   certificateSubtitle: "OF ACHIEVEMENT",
