@@ -23,13 +23,12 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
 }) => {
   const uid = useId().replace(/:/g, '');
   const gradId = `xb-grad-${variant}-${uid}`;
-  const rimGradId = `xb-rim-${variant}-${uid}`;
 
   const defaultTitle =
     variant === 'main_admin'
       ? 'AI Clipzone Official Verified Admin'
       : variant === 'sub_admin'
-      ? 'Premium Verified Sub-Admin'
+      ? 'Verified Sub-Admin'
       : 'Verified User';
 
   // 1. Main Admin (AI Clipzone): Elon Musk / Twitter-X Official Gold Verified Badge (flat, no shadow)
@@ -55,7 +54,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
     );
   }
 
-  // 2. Sub-Admin: Premium Crimson-Red Badge with Sharp Metallic Gold Rim (flat, no shadow)
+  // 2. Sub-Admin: Clean Flat Solid Red Verified Tick (no stroke, no shadow)
   if (variant === 'sub_admin') {
     return (
       <span
@@ -64,24 +63,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
         aria-label={title || defaultTitle}
       >
         <svg viewBox="0 0 22 22" className="w-full h-full" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id={gradId} x1="2" y1="2" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#EF4444" />
-              <stop offset="55%" stopColor="#DC2626" />
-              <stop offset="100%" stopColor="#991B1B" />
-            </linearGradient>
-            <linearGradient id={rimGradId} x1="2" y1="2" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#FDE047" />
-              <stop offset="100%" stopColor="#D97706" />
-            </linearGradient>
-          </defs>
-          <path
-            d={TWITTER_SEAL_PATH}
-            fill={`url(#${gradId})`}
-            stroke={`url(#${rimGradId})`}
-            strokeWidth="1.15"
-            strokeLinejoin="round"
-          />
+          <path d={TWITTER_SEAL_PATH} fill="#EF4444" />
           <path d={TWITTER_CHECK_PATH} fill="#FFFFFF" />
         </svg>
       </span>
