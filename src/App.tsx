@@ -3635,8 +3635,15 @@ export default function App() {
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'course-live' | 'live' | 'ask' | 'account' | 'enroll'>('home');
+  const [isAskChatOpen, setIsAskChatOpen] = useState(false);
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
   const [selectedLiveCourseId, setSelectedLiveCourseId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentView !== 'ask') {
+      setIsAskChatOpen(false);
+    }
+  }, [currentView]);
 
   // Automatically route any legacy modal trigger to full screen account view
   useEffect(() => {
@@ -5442,6 +5449,7 @@ export default function App() {
               activeCourseIds={activeCourseIds}
               allActivationKeys={isUserAdminSession ? allActivationKeys : userActivationKeys}
               studentAvatar={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
+              onChatOpenChange={setIsAskChatOpen}
             />
           </section>
         ) : currentView === 'account' ? (
@@ -8893,7 +8901,7 @@ export default function App() {
       />
 
       {/* APP-LIKE BOTTOM NAVIGATION BAR - ACTIVE ACROSS WEBSITE & PWA WITH EXPANDED FULL-SCREEN DESKTOP VIEW */}
-      {!(currentView === 'enroll' && enrollCourse) && (
+      {!(currentView === 'enroll' && enrollCourse) && !(currentView === 'ask' && isAskChatOpen) && (
       <nav 
         id="native-app-bottom-bar"
         aria-label="App Navigation Bar" 

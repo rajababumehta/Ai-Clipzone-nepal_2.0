@@ -11,7 +11,6 @@ import {
   Search,
   ShieldCheck,
   RefreshCw,
-  Phone,
   Smile,
   Paperclip,
   CheckCircle2,
@@ -75,6 +74,7 @@ interface AskChatModalProps {
   onOpenActivationModal?: () => void;
   studentAvatar?: string;
   embedded?: boolean;
+  onChatOpenChange?: (isOpenChat: boolean) => void;
 }
 
 const QUICK_QUESTION_CHIPS = [
@@ -120,7 +120,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   hasActivatedCourse = false,
   onOpenActivationModal,
   studentAvatar = '',
-  embedded = false
+  embedded = false,
+  onChatOpenChange
 }) => {
   const isMainAdminMode = Boolean(isAdmin && adminRole === 'main_admin');
   const isSubAdminMode = Boolean(isAdmin && adminRole === 'sub_admin' && subAdminSession?.code);
@@ -161,6 +162,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // --------------------------------------------------------------------------
   const [studentMessages, setStudentMessages] = useState<SupportMessage[]>([]);
   const [studentInputText, setStudentInputText] = useState('');
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [isStudentSending, setIsStudentSending] = useState(false);
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [studentName, setStudentName] = useState(() => {
@@ -312,32 +314,49 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     checkCourseList.forEach((crs) => {
       const crsAliases = resolveCourseAliases(crs.id);
       const crsTitleNorm = normText(crs.title);
-      const matchedSub = activeSubs.find(
+      const matchedSubs = activeSubs.filter(
         s => crsAliases.includes(s.courseId) || (crsTitleNorm && normText(s.courseTitle) === crsTitleNorm)
       );
-      if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
-        seenSubCodes.add(matchedSub.code);
-        targets.push({
-          courseId: crs.id,
-          courseTitle: crs.title,
-          courseWhatsapp: crs.paymentConfig?.whatsappNumber,
-          subAdmin: matchedSub
-        });
-      }
+      matchedSubs.forEach((matchedSub) => {
+        if (!seenSubCodes.has(matchedSub.code)) {
+          seenSubCodes.add(matchedSub.code);
+          targets.push({
+            courseId: crs.id,
+            courseTitle: crs.title,
+            courseWhatsapp: crs.paymentConfig?.whatsappNumber,
+            subAdmin: matchedSub
+          });
+        }
+      });
     });
+
+    if (expandedCourseIds.has('course-all')) {
+      activeSubs.forEach((matchedSub) => {
+        if (!seenSubCodes.has(matchedSub.code)) {
+          seenSubCodes.add(matchedSub.code);
+          targets.push({
+            courseId: matchedSub.courseId,
+            courseTitle: matchedSub.courseTitle,
+            subAdmin: matchedSub
+          });
+        }
+      });
+    }
 
     // Fallback check against activeCourseIds directly if course object wasn't in prop
     expandedCourseIds.forEach((cid) => {
       if (cid === 'course-all') return;
-      const matchedSub = activeSubs.find(s => s.courseId === cid);
-      if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
-        seenSubCodes.add(matchedSub.code);
-        targets.push({
-          courseId: cid,
-          courseTitle: matchedSub.courseTitle,
-          subAdmin: matchedSub
-        });
-      }
+      const matchedSubs = activeSubs.filter(s => s.courseId === cid);
+      matchedSubs.forEach((matchedSub) => {
+        if (!seenSubCodes.has(matchedSub.code)) {
+          seenSubCodes.add(matchedSub.code);
+          targets.push({
+            courseId: cid,
+            courseTitle: matchedSub.courseTitle,
+            subAdmin: matchedSub
+          });
+        }
+      });
     });
 
     // Additional fallback check against student's activation keys (handles renamed/legacy course titles)
@@ -346,17 +365,19 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         if (!k || k.status === 'expired' || k.status === 'deleted') return;
         const kAliases = k.courseId ? resolveCourseAliases(k.courseId) : [];
         const kTitleNorm = normText(k.courseTitle);
-        const matchedSub = activeSubs.find(
+        const matchedSubs = activeSubs.filter(
           s => kAliases.includes(s.courseId) || (kTitleNorm && normText(s.courseTitle) === kTitleNorm)
         );
-        if (matchedSub && !seenSubCodes.has(matchedSub.code)) {
-          seenSubCodes.add(matchedSub.code);
-          targets.push({
-            courseId: k.courseId || matchedSub.courseId,
-            courseTitle: k.courseTitle || matchedSub.courseTitle,
-            subAdmin: matchedSub
-          });
-        }
+        matchedSubs.forEach((matchedSub) => {
+          if (!seenSubCodes.has(matchedSub.code)) {
+            seenSubCodes.add(matchedSub.code);
+            targets.push({
+              courseId: k.courseId || matchedSub.courseId,
+              courseTitle: k.courseTitle || matchedSub.courseTitle,
+              subAdmin: matchedSub
+            });
+          }
+        });
       });
     }
 
@@ -364,21 +385,69 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   }, [isAdmin, subAdmins, fallbackActiveSubAdmins, activeCourseIds, courses, allActivationKeys]);
 
   const [selectedStudentSubCode, setSelectedStudentSubCode] = useState<string>('');
+  const [studentConvMetaMap, setStudentConvMetaMap] = useState<
+    Record<string, { lastMessage: string; lastMessageAt: number; lastSender: string; unreadUserCount: number; unreadAdminCount: number }>
+  >({});
 
   useEffect(() => {
-    if (!isAdmin && studentSubAdminTargets.length > 0) {
-      const stillValid = studentSubAdminTargets.some(t => t.subAdmin.code === selectedStudentSubCode);
-      if (!stillValid) {
-        setSelectedStudentSubCode(studentSubAdminTargets[0].subAdmin.code);
-      }
-    } else {
+    if (isAdmin || studentSubAdminTargets.length === 0) {
+      if (selectedStudentSubCode) setSelectedStudentSubCode('');
+      return;
+    }
+    if (selectedStudentSubCode && !studentSubAdminTargets.some(t => t.subAdmin.code === selectedStudentSubCode)) {
       setSelectedStudentSubCode('');
     }
   }, [isAdmin, studentSubAdminTargets, selectedStudentSubCode]);
 
+  // Listen to conversation summaries for each Sub-Admin contact so Student Ask list displays WhatsApp-style previews & unread counts
+  useEffect(() => {
+    if (!isOpen || isAdmin || studentSubAdminTargets.length === 0) {
+      setStudentConvMetaMap({});
+      return;
+    }
+    const uid = effectiveUserId || currentUserId;
+    if (!uid) return;
+
+    const unsubs: (() => void)[] = [];
+    studentSubAdminTargets.forEach((target) => {
+      const subCode = target.subAdmin.code;
+      const convDocId = `substudent__${subCode}__${uid}`;
+      const unsub = onSnapshot(
+        doc(db, 'support_conversations', convDocId),
+        (snap) => {
+          setStudentConvMetaMap((prev) => {
+            if (!snap.exists()) {
+              if (!prev[subCode]) return prev;
+              const next = { ...prev };
+              delete next[subCode];
+              return next;
+            }
+            const d = snap.data();
+            return {
+              ...prev,
+              [subCode]: {
+                lastMessage: d.lastMessage || '',
+                lastMessageAt: d.lastMessageAt || 0,
+                lastSender: d.lastSender || 'user',
+                unreadUserCount: d.unreadUserCount || 0,
+                unreadAdminCount: d.unreadAdminCount || 0
+              }
+            };
+          });
+        },
+        () => {}
+      );
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      unsubs.forEach(u => u());
+    };
+  }, [isOpen, isAdmin, studentSubAdminTargets, effectiveUserId, currentUserId]);
+
   const activeStudentTarget = useMemo(() => {
-    if (studentSubAdminTargets.length === 0) return null;
-    return studentSubAdminTargets.find(t => t.subAdmin.code === selectedStudentSubCode) || studentSubAdminTargets[0];
+    if (!selectedStudentSubCode || studentSubAdminTargets.length === 0) return null;
+    return studentSubAdminTargets.find(t => t.subAdmin.code === selectedStudentSubCode) || null;
   }, [studentSubAdminTargets, selectedStudentSubCode]);
 
   const studentConvId = useMemo(() => {
@@ -386,6 +455,17 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     if (!uid || !activeStudentTarget) return '';
     return `substudent__${activeStudentTarget.subAdmin.code}__${uid}`;
   }, [effectiveUserId, currentUserId, activeStudentTarget]);
+
+  const hasActiveChatOpen = Boolean(
+    isOpen && (isAdmin ? selectedAdminConvId : activeStudentTarget)
+  );
+
+  useEffect(() => {
+    onChatOpenChange?.(hasActiveChatOpen);
+    return () => {
+      onChatOpenChange?.(false);
+    };
+  }, [hasActiveChatOpen, onChatOpenChange]);
 
   // --------------------------------------------------------------------------
   // WHATSAPP "CLEAR CHAT FROM OWN ONLY" STATES
@@ -640,9 +720,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
           setAdminConversations(list);
           setIsLoadingAdminConvs(false);
-          if (!selectedAdminConvIdRef.current && list.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-            setSelectedAdminConvId(list[0].id);
-          }
           return;
         }
 
@@ -676,12 +753,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               return;
             }
 
+            const convSubCode = String(d.subAdminCode || '').trim();
+            const belongsToDifferentSub = Boolean(convSubCode && convSubCode !== subAdminSession.code);
             const belongsToSub =
-              (d.channelType === 'student_subadmin' &&
-                (d.subAdminCode === subAdminSession.code ||
+              !belongsToDifferentSub &&
+              ((d.channelType === 'student_subadmin' &&
+                (convSubCode === subAdminSession.code ||
                   d.courseId === subAdminSession.courseId ||
                   (assignedTitleNorm && normTitle(d.activeCourse) === assignedTitleNorm))) ||
-              docSnap.id.startsWith(`substudent__${subAdminSession.code}__`);
+                docSnap.id.startsWith(`substudent__${subAdminSession.code}__`));
 
             if (!belongsToSub) return;
 
@@ -838,9 +918,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           const combined = [officialConv, ...studentsList];
           setAdminConversations(combined);
           setIsLoadingAdminConvs(false);
-          if (!selectedAdminConvIdRef.current && combined.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-            setSelectedAdminConvId(combined[0].id);
-          }
           return;
         }
 
@@ -1465,10 +1542,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-black">
               {/* Master-Detail Split Layout */}
               <div className="grow min-h-0 flex overflow-hidden">
-                {/* 1. CONTACTS SIDEBAR */}
+                {/* 1. CONTACTS SIDEBAR (Full-screen list until a chat is opened, just like WhatsApp) */}
                 <div
-                  className={`flex-col bg-black border-r border-zinc-800 shrink-0 w-full md:w-80 lg:w-96 overflow-hidden ${
-                    selectedAdminConvId ? 'hidden md:flex' : 'flex'
+                  className={`flex-col bg-black shrink-0 w-full overflow-hidden ${
+                    selectedAdminConvId ? 'hidden' : 'flex'
                   }`}
                 >
                   {/* Search Bar Row */}
@@ -1644,10 +1721,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   </div>
                 </div>
 
-                {/* 2. CHAT PANE */}
+                {/* 2. CHAT PANE (Focused full-screen chat when a contact is opened) */}
                 <div
                   className={`grow min-h-0 flex-col overflow-hidden ${
-                    selectedAdminConvId ? 'flex' : 'hidden md:flex'
+                    selectedAdminConvId ? 'flex' : 'hidden'
                   }`}
                   style={whatsappWallpaperStyle}
                 >
@@ -1659,8 +1736,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setSelectedAdminConvId(null)}
-                            className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-900 cursor-pointer shrink-0"
-                            title="Back to Contact List"
+                            className="p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-900 cursor-pointer shrink-0 transition active:scale-95"
+                            title="Back to Contacts"
+                            aria-label="Back to Contacts"
                           >
                             <ArrowLeft className="w-5 h-5" />
                           </button>
@@ -2155,21 +2233,224 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             </div>
           ) : (
             /* =============================================================== */
-            /* CASE B: STUDENT VIEW (Clean Website Black Theme)                */
+            /* CASE B: STUDENT VIEW (WhatsApp-style Contacts -> Fullscreen Chat)*/
             /* =============================================================== */
+            !activeStudentTarget ? (
+              <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-black">
+                {/* Contacts Header + Search */}
+                <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3 space-y-2.5 shrink-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {!embedded && (
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className="p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full hover:bg-zinc-900 transition cursor-pointer shrink-0"
+                          aria-label="Back"
+                        >
+                          <ArrowLeft className="w-5 h-5" />
+                        </button>
+                      )}
+                      <h3 className="text-base font-bold text-white tracking-tight truncate">
+                        Ask &amp; Support
+                      </h3>
+                    </div>
+                    {hasActivatedCourse && studentSubAdminTargets.length > 0 && (
+                      <span className="text-[11px] font-bold text-[#00a884] bg-[#00a884]/10 border border-[#00a884]/30 px-2.5 py-0.5 rounded-full shrink-0">
+                        {studentSubAdminTargets.length} {studentSubAdminTargets.length === 1 ? 'Contact' : 'Contacts'}
+                      </span>
+                    )}
+                  </div>
+
+                  {hasActivatedCourse && studentSubAdminTargets.length > 0 && (
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-[#8696a0] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={studentSearchQuery}
+                        onChange={(e) => setStudentSearchQuery(e.target.value)}
+                        placeholder="Search instructor or course..."
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-[#00a884]/60 rounded-xl pl-9 pr-8 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition"
+                      />
+                      {studentSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setStudentSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Contacts Scroll Area */}
+                <div className="grow min-h-0 overflow-y-auto divide-y divide-zinc-900">
+                  {!hasActivatedCourse ? (
+                    <div className="p-4">
+                      <div className="bg-[#151f26]/95 border border-amber-500/30 rounded-2xl p-6 text-center space-y-4 shadow-xl my-4 max-w-md mx-auto">
+                        <div className="w-14 h-14 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                          <Lock className="w-7 h-7 text-amber-400" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <h4 className="font-bold text-base text-[#e9edef]">एक्टिभेसन आवश्यक छ</h4>
+                          <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
+                            एक्टिभेट गरेका प्रयोगकर्ताहरूले मात्र सिधै म्यासेज पठाउन सक्नुहुन्छ।
+                          </p>
+                        </div>
+                        {onOpenActivationModal && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onOpenActivationModal();
+                            }}
+                            className="inline-flex items-center gap-2 bg-[#00a884] hover:bg-[#02906f] text-[#111b21] font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg cursor-pointer transition active:scale-95"
+                          >
+                            <span>Enter Activation Code</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : isLoadingSubAdmins && studentSubAdminTargets.length === 0 ? (
+                    <div className="py-16 text-center text-[#8696a0] text-xs space-y-2">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#00a884]" />
+                      <p>सपोर्ट प्रतिनिधिहरू लोड हुँदैछ...</p>
+                    </div>
+                  ) : studentSubAdminTargets.length === 0 ? (
+                    <div className="p-4">
+                      <div className="bg-[#151f26]/95 border border-white/10 rounded-2xl p-6 text-center space-y-3 shadow-xl my-6 max-w-md mx-auto">
+                        <div className="w-14 h-14 rounded-full bg-[#00a884]/15 border border-[#00a884]/30 flex items-center justify-center mx-auto text-[#00a884]">
+                          <MessageCircle className="w-7 h-7" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <h4 className="font-bold text-base text-[#e9edef]">च्याट हाल उपलब्ध छैन</h4>
+                          <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
+                            यस कोर्षको लागि सपोर्ट प्रतिनिधि उपलब्ध भएपछि यहाँ सबै सम्पर्क देखिनेछन्।
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    (() => {
+                      const q = studentSearchQuery.trim().toLowerCase();
+                      const filteredTargets = studentSubAdminTargets
+                        .filter((t) => {
+                          if (!q) return true;
+                          return (
+                            t.subAdmin.name.toLowerCase().includes(q) ||
+                            t.courseTitle.toLowerCase().includes(q)
+                          );
+                        })
+                        .sort((a, b) => {
+                          const ma = studentConvMetaMap[a.subAdmin.code];
+                          const mb = studentConvMetaMap[b.subAdmin.code];
+                          const ua = (ma?.unreadUserCount || 0) > 0 ? 1 : 0;
+                          const ub = (mb?.unreadUserCount || 0) > 0 ? 1 : 0;
+                          if (ub !== ua) return ub - ua;
+                          return (mb?.lastMessageAt || 0) - (ma?.lastMessageAt || 0);
+                        });
+
+                      if (filteredTargets.length === 0) {
+                        return (
+                          <div className="py-16 text-center text-[#8696a0] text-xs px-4 space-y-1.5">
+                            <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
+                            <p className="font-semibold text-[#e9edef]">कुनै सम्पर्क भेटिएन</p>
+                            <p className="text-[11px]">No instructor matched "{studentSearchQuery}".</p>
+                          </div>
+                        );
+                      }
+
+                      return filteredTargets.map((target) => {
+                        const meta = studentConvMetaMap[target.subAdmin.code];
+                        const unreadCount = meta?.unreadUserCount || 0;
+                        const hasUnread = unreadCount > 0;
+                        const lastMsg = meta?.lastMessage || 'म्यासेज पठाउन ट्याप गर्नुहोस्';
+                        const isLastFromMe = meta?.lastSender === 'user';
+                        const isSeenByAdmin = (meta?.unreadAdminCount || 0) === 0;
+
+                        return (
+                          <button
+                            key={target.subAdmin.code}
+                            type="button"
+                            onClick={() => setSelectedStudentSubCode(target.subAdmin.code)}
+                            className="w-full text-left px-4 py-3.5 hover:bg-zinc-950 active:bg-zinc-900 transition flex items-center gap-3.5 cursor-pointer"
+                          >
+                            <div className="relative shrink-0">
+                              <img
+                                src={target.subAdmin.avatarUrl || officialLogoUrl}
+                                alt={target.subAdmin.name}
+                                onError={(e) => {
+                                  const img = e.currentTarget as HTMLImageElement;
+                                  if (!img.src.includes('/logo.png')) img.src = '/logo.png';
+                                }}
+                                className="w-12 h-12 rounded-full object-cover bg-zinc-900 border border-white/15 shadow-sm"
+                              />
+                              <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-black" />
+                              {hasUnread && (
+                                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full bg-[#00a884] text-[11px] font-black text-black flex items-center justify-center px-1 shadow-md ring-2 ring-black">
+                                  {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grow min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-0.5">
+                                <h5 className="font-bold text-sm text-[#e9edef] flex items-center gap-1.5 min-w-0">
+                                  <span className="truncate">{target.subAdmin.name}</span>
+                                  <VerifiedBadge
+                                    variant={target.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
+                                    className="w-4 h-4"
+                                  />
+                                </h5>
+                                {meta?.lastMessageAt ? (
+                                  <span className={`text-[11px] shrink-0 font-medium ${hasUnread ? 'text-[#00a884] font-bold' : 'text-[#8696a0]'}`}>
+                                    {formatRelativeTime(meta.lastMessageAt)}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {target.courseTitle && (
+                                <p className="text-[11px] font-semibold text-[#00a884]/90 truncate mb-0.5">
+                                  {target.courseTitle}
+                                </p>
+                              )}
+
+                              <p className={`text-xs truncate flex items-center gap-1 ${hasUnread ? 'text-[#e9edef] font-semibold' : 'text-[#8696a0]'}`}>
+                                {meta?.lastMessage && isLastFromMe && (
+                                  <span className="shrink-0 inline-flex items-center">
+                                    {isSeenByAdmin ? (
+                                      <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] stroke-[2.5]" />
+                                    ) : (
+                                      <CheckCheck className="w-3.5 h-3.5 text-[#8696a0] stroke-[2]" />
+                                    )}
+                                  </span>
+                                )}
+                                <span className="truncate">{lastMsg}</span>
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      });
+                    })()
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="flex flex-col flex-1 min-h-0 h-full w-full overflow-hidden bg-black">
-              {/* Clean Executive Chat Header Bar */}
+              {/* Clean Executive Chat Header Bar (WhatsApp-style focused chat — Back button only, no Home/Course/WhatsApp buttons) */}
               <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-3 flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-3 min-w-0">
-                  {!embedded && (
-                    <button
-                      onClick={onClose}
-                      className="p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full active:bg-[#111b21] transition cursor-pointer flex items-center justify-center shrink-0"
-                      aria-label="Back"
-                    >
-                      <ArrowLeft className="w-5 h-5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentSubCode('')}
+                    className="p-1.5 -ml-1 text-[#aebac1] hover:text-white rounded-full active:bg-[#111b21] transition cursor-pointer flex items-center justify-center shrink-0"
+                    aria-label="Back to contacts"
+                    title="Back to Contacts"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
 
                   <div className="relative shrink-0">
                     <div className="w-11 h-11 rounded-full bg-[#128C7E]/25 flex items-center justify-center overflow-hidden ring-2 ring-[#00a884]/35 shadow-sm">
@@ -2208,35 +2489,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         className="w-4 h-4"
                       />
                     </h4>
-                    <p className="text-[11px] text-[#00a884] font-medium leading-tight mt-0.5">
-                      Online
+                    <p className="text-[11px] text-[#00a884] font-medium leading-tight mt-0.5 truncate">
+                      Online{activeStudentTarget?.courseTitle ? ` • ${activeStudentTarget.courseTitle}` : ''}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {activeStudentTarget?.courseWhatsapp && (
-                    <a
-                      href={`tel:${activeStudentTarget.courseWhatsapp}`}
-                      className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition"
-                      title={`Call ${activeStudentTarget.courseWhatsapp}`}
-                    >
-                      <Phone className="w-4 h-4" />
-                    </a>
-                  )}
-
-                  {/* Full Screen Toggle button */}
-                  {!embedded && (
-                    <button
-                      type="button"
-                      onClick={toggleFullScreen}
-                      className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
-                      title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
-                    >
-                      {isFullScreen ? <Minimize2 className="w-5 h-5 text-[#00a884]" /> : <Maximize2 className="w-5 h-5" />}
-                    </button>
-                  )}
-
                   {/* WhatsApp 3-dots Menu for Student */}
                   <div className="relative">
                     <button
@@ -2255,20 +2514,6 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           onClick={() => setStudentMenuOpen(false)} 
                         />
                         <div className="absolute right-0 top-full mt-1.5 w-60 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-40 text-xs text-zinc-100">
-                          {!embedded && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setStudentMenuOpen(false);
-                                toggleFullScreen();
-                              }}
-                              className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-[#e9edef] hover:text-white transition cursor-pointer border-b border-[#222d34]"
-                            >
-                              {isFullScreen ? <Minimize2 className="w-4 h-4 text-[#00a884] shrink-0" /> : <Maximize2 className="w-4 h-4 text-[#00a884] shrink-0" />}
-                              <span>{isFullScreen ? 'Exit Fullscreen (सामान्य)' : 'Full Screen (फुलस्क्रिन)'}</span>
-                            </button>
-                          )}
-
                           <button
                             type="button"
                             onClick={() => {
@@ -2294,54 +2539,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       </>
                     )}
                   </div>
-
-                  {!embedded && (
-                    <button
-                      onClick={onClose}
-                      className="p-2 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
-                      title="Close"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  )}
                 </div>
               </div>
-
-              {/* Clean Contact Switcher (shown only if student chats with multiple assigned contacts, showing ONLY names) */}
-              {hasActivatedCourse && studentSubAdminTargets.length > 1 && (
-                <div className="bg-zinc-950 border-b border-zinc-800 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
-                  {studentSubAdminTargets.map((target) => {
-                    const isActiveTarget = target.subAdmin.code === activeStudentTarget?.subAdmin.code;
-                    return (
-                      <button
-                        key={target.subAdmin.code}
-                        type="button"
-                        onClick={() => setSelectedStudentSubCode(target.subAdmin.code)}
-                        className={`pl-1.5 pr-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition inline-flex items-center gap-2 border ${
-                          isActiveTarget
-                            ? 'bg-[#00a884] text-black border-[#00a884] shadow-sm'
-                            : 'bg-zinc-900 text-zinc-100 border-zinc-800 hover:bg-zinc-800'
-                        }`}
-                      >
-                        <img
-                          src={target.subAdmin.avatarUrl || officialLogoUrl}
-                          alt={target.subAdmin.name}
-                          className="w-5 h-5 rounded-full object-cover shrink-0 bg-zinc-900"
-                          onError={(e) => {
-                            const img = e.currentTarget as HTMLImageElement;
-                            if (!img.src.includes('/logo.png')) img.src = '/logo.png';
-                          }}
-                        />
-                        <span>{target.subAdmin.name}</span>
-                        <VerifiedBadge
-                          variant={target.subAdmin.code === 'MAIN_ADMIN' ? 'main_admin' : 'sub_admin'}
-                          className="w-3.5 h-3.5"
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
 
               {/* Messages Scroll Area */}
               <div
@@ -2816,6 +3015,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 )}
               </form>
             </div>
+            )
           )}
 
         </div>
