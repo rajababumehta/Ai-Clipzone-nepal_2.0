@@ -6423,16 +6423,17 @@ export default function App() {
             {/* Course Catalog Title & Grid Section */}
             <section id="courses-section" className="pt-2 scroll-mt-24">
               {currentView === 'home' && (
-                <div className="text-center mb-10">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center gap-2">
-                    <BookOpen className="w-7 h-7 text-blue-400 shrink-0" />
-                    <span>{siteSettings.instituteName || 'HamroLms'} – Online Learning</span>
+                <div className="text-center mb-8">
+                  <h1 className="text-xl sm:text-2xl md:text-[26px] font-black tracking-tight inline-flex items-center justify-center gap-2.5">
+                    <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
+                      <BookOpen className="w-4 h-4 text-white" />
+                    </span>
+                    <span className="bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
+                      HamroLms
+                    </span>
                   </h1>
-                  <h2 className="text-xs sm:text-sm font-semibold text-zinc-400 mt-2 max-w-2xl mx-auto">
-                    Nepal's Premier Digital Skills, Video Editing, Design &amp; Verified Certificate Platform
-                  </h2>
-                  <div className="w-24 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-3 shadow-sm shadow-blue-500/50"></div>
-                  <p className="text-zinc-400 mt-3 text-sm md:text-base max-w-xl mx-auto font-medium">
+                  <div className="w-16 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-2 shadow-sm shadow-blue-500/50"></div>
+                  <p className="text-zinc-400 mt-2.5 text-xs sm:text-sm max-w-xl mx-auto font-medium">
                     तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
                   </p>
                 </div>
