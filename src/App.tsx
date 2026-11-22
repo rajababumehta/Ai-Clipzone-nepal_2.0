@@ -3396,6 +3396,68 @@ export default function App() {
     }
   };
 
+  // MAIN ADMIN: Move Course Up or Down in Catalog Order (persisted atomically to Firestore)
+  const isReorderingCoursesRef = useRef(false);
+  const handleMoveCourse = async (courseId: string, direction: 'up' | 'down') => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्षको क्रम परिवर्तन गर्न सक्छ।', 'error');
+      return;
+    }
+    if (isReorderingCoursesRef.current) return;
+
+    const currentIndex = courses.findIndex(c => c.id === courseId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= courses.length) return;
+
+    isReorderingCoursesRef.current = true;
+    const reordered = [...courses];
+    const [movedCourse] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, movedCourse);
+
+    const normalized = reordered.map((c, idx) => ({
+      ...c,
+      order: idx,
+    }));
+
+    const previousCourses = courses;
+    setCourses(normalized);
+    try {
+      localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(normalized));
+      localStorage.setItem('clipzone_courses_initialized', 'true');
+    } catch (storageErr) {
+      console.warn('Could not cache reordered courses to localStorage:', storageErr);
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const now = Date.now();
+      normalized.forEach((c, idx) => {
+        if (previousCourses[idx]?.id !== c.id || previousCourses[idx]?.order !== idx) {
+          batch.set(doc(db, 'courses', c.id), { order: idx, updatedAt: now }, { merge: true });
+        }
+      });
+      await batch.commit();
+      showToast(
+        direction === 'up'
+          ? `⬆️ "${movedCourse.title}" माथि (#${targetIndex + 1}) सारियो!`
+          : `⬇️ "${movedCourse.title}" तल (#${targetIndex + 1}) सारियो!`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Error reordering courses in Firestore:', err);
+      setCourses(previousCourses);
+      try {
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(previousCourses));
+      } catch {}
+      showToast('कोर्षको क्रम सेभ गर्न समस्या भयो (Failed to save course order)', 'error');
+      handleFirestoreError(err, OperationType.UPDATE, `courses/${courseId}`);
+    } finally {
+      isReorderingCoursesRef.current = false;
+    }
+  };
+
   // Helper to verify key belongs to Sub-Admin's assigned course before mutation
   const verifyKeyPermission = async (code: string): Promise<boolean> => {
     if (isMainAdmin) return true;
@@ -3686,44 +3748,6 @@ export default function App() {
     } catch (err) {
       console.error('Failed to reset all user sessions:', err);
       showToast('सबै सेसन लगआउट गर्दा त्रुटि भयो।', 'error');
-    }
-  };
-
-  // Move Course Up / Down (MAIN ADMIN ONLY)
-  const handleMoveCourse = async (currentIndex: number, direction: 'up' | 'down') => {
-    if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्ष क्रम परिवर्तन गर्न सक्छ।', 'error');
-      return;
-    }
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= courses.length) return;
-
-    const updatedCourses = [...courses];
-    
-    // Swap the courses in array
-    const temp = updatedCourses[currentIndex];
-    updatedCourses[currentIndex] = updatedCourses[targetIndex];
-    updatedCourses[targetIndex] = temp;
-
-    // Update their order values based on new indices
-    const finalizedCourses = updatedCourses.map((course, idx) => ({
-      ...course,
-      order: idx
-    }));
-
-    setCourses(finalizedCourses);
-    localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(finalizedCourses));
-
-    // Save changes to Firestore
-    try {
-      await setDoc(doc(db, 'courses', finalizedCourses[currentIndex].id), finalizedCourses[currentIndex]);
-      await setDoc(doc(db, 'courses', finalizedCourses[targetIndex].id), finalizedCourses[targetIndex]);
-      showToast('Course sequence moved successfully!', 'success');
-    } catch (err) {
-      console.error('Failed to update course order in Firestore:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      showToast(`Sequence updated locally but failed to sync online: ${errorMessage}`, 'error');
-      handleFirestoreError(err, OperationType.UPDATE, 'courses');
     }
   };
 
@@ -7144,6 +7168,30 @@ export default function App() {
                         {/* Admin Inline Controls (Course Sub-Admin sees edit ONLY on assigned course) */}
                         {(canEditCourse(course.id) || isMainAdmin) && (
                           <div className="flex items-center gap-1">
+                            {isMainAdmin && !courseSearchQuery.trim() && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveCourse(course.id, 'up')}
+                                  disabled={index === 0}
+                                  className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-zinc-700"
+                                  title="माथि सार्नुहोस् (Move Up)"
+                                  aria-label="Move course up"
+                                >
+                                  <ArrowUp className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveCourse(course.id, 'down')}
+                                  disabled={index === filteredHomeCourses.length - 1}
+                                  className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-zinc-700"
+                                  title="तल सार्नुहोस् (Move Down)"
+                                  aria-label="Move course down"
+                                >
+                                  <ArrowDown className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                             {canEditCourse(course.id) && (
                               <button
                                 onClick={() => handleEditCourseClick(course)}
@@ -8137,6 +8185,7 @@ export default function App() {
         onDeleteCourseClick={handleDeleteCourse}
         onBatchDeleteCourses={handleBatchDeleteCourses}
         onSaveCourse={handleSaveCourseDirect}
+        onMoveCourse={handleMoveCourse}
         notifications={notifications}
         onSendNotification={handleSendNotification}
         onDeleteNotification={handleDeleteNotification}

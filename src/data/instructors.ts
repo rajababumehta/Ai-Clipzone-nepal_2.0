@@ -1,5 +1,5 @@
-import { Course, PublicInstructorProfile, SubAdminAccount } from '../types';
-import { slugifyText } from '../utils/seoRouting';
+import type { Course, PublicInstructorProfile, SubAdminAccount } from '../types.ts';
+import { slugifyText } from '../utils/seoRouting.ts';
 
 export const CORE_INSTRUCTORS: PublicInstructorProfile[] = [
   {

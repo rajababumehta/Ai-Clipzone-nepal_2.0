@@ -1,4 +1,4 @@
-import { SupportedLocale } from '../types';
+import type { SupportedLocale } from '../types.ts';
 
 export interface LocaleDictionary {
   code: SupportedLocale;

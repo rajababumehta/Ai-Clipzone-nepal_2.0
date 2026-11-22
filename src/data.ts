@@ -1,4 +1,4 @@
-import { Course, CoursePdf, Testimonial, FAQItem, PaymentQrConfig, SiteSettingsConfig } from './types';
+import type { Course, CoursePdf, Testimonial, FAQItem, PaymentQrConfig, SiteSettingsConfig } from './types.ts';
 
 export const DEFAULT_PAYMENT_CONFIG: PaymentQrConfig = {
   esewaId: "9763323268",

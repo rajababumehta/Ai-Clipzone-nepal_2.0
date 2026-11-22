@@ -1,4 +1,4 @@
-import { Course, SupportedLocale } from '../types';
+import type { Course, SupportedLocale } from '../types.ts';
 
 export type AppView =
   | 'home'

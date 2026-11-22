@@ -1,4 +1,4 @@
-import { BlogPost } from '../types';
+import type { BlogPost } from '../types.ts';
 
 export const BLOG_POSTS: BlogPost[] = [
   {

@@ -84,6 +84,7 @@ interface AdminDashboardModalProps {
   onDeleteCourseClick: (courseId: string) => Promise<void>;
   onBatchDeleteCourses?: (courseIds: string[]) => Promise<void>;
   onSaveCourse?: (course: Course) => Promise<void>;
+  onMoveCourse?: (courseId: string, direction: 'up' | 'down') => Promise<void>;
   // Push Notifications
   notifications?: PushNotificationItem[];
   onSendNotification?: (notif: Omit<PushNotificationItem, 'id' | 'createdAt'>) => Promise<void>;
@@ -136,6 +137,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onDeleteCourseClick,
   onBatchDeleteCourses,
   onSaveCourse,
+  onMoveCourse,
   notifications,
   onSendNotification,
   onDeleteNotification,
@@ -198,12 +200,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [adminDeleteConfirmText, setAdminDeleteConfirmText] = useState('');
   const [isAdminDeletingCourse, setIsAdminDeletingCourse] = useState(false);
 
-  // Batch Select Courses state
+  // Batch Select & Reorder Courses state
   const [isBatchModeCourses, setIsBatchModeCourses] = useState(false);
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [batchDeleteConfirmText, setBatchDeleteConfirmText] = useState('');
   const [isBatchDeletingCourses, setIsBatchDeletingCourses] = useState(false);
+  const [movingCourseId, setMovingCourseId] = useState<string | null>(null);
 
   // Synchronize selectedCourseIds with current courses
   useEffect(() => {
@@ -3141,8 +3144,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {visibleCourses.map((course) => {
+                {visibleCourses.map((course, idx) => {
                   const isSelected = selectedCourseIds.includes(course.id);
+                  const isMoving = movingCourseId === course.id;
                   return (
                     <div 
                       key={course.id}
@@ -3187,6 +3191,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       />
                       <div className={`grow space-y-1 overflow-hidden ${isMainAdmin && isBatchModeCourses ? 'pr-6' : ''}`}>
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          {isMainAdmin && (
+                            <span className="text-slate-700 bg-slate-100 text-[10px] font-black px-1.5 py-0.5 rounded border border-slate-200">
+                              #{idx + 1}
+                            </span>
+                          )}
                           <span className="text-purple-700 bg-purple-50 text-[10px] font-black px-2 py-0.5 rounded border border-purple-200">
                             {course.price}
                           </span>
@@ -3213,7 +3222,47 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           ID: {course.id}
                         </p>
                         
-                        <div className="flex items-center gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center flex-wrap gap-1.5 pt-2" onClick={(e) => e.stopPropagation()}>
+                          {isMainAdmin && onMoveCourse && visibleCourses.length > 1 && (
+                            <div className="flex items-center gap-1 mr-0.5">
+                              <button
+                                type="button"
+                                disabled={idx === 0 || Boolean(movingCourseId)}
+                                onClick={async () => {
+                                  if (movingCourseId) return;
+                                  setMovingCourseId(course.id);
+                                  try {
+                                    await onMoveCourse(course.id, 'up');
+                                  } finally {
+                                    setMovingCourseId(null);
+                                  }
+                                }}
+                                className="bg-emerald-50 hover:bg-emerald-100 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-700 border border-emerald-200 font-bold p-1.5 rounded-lg text-[10px] transition cursor-pointer flex items-center"
+                                title="माथि सार्नुहोस् (Move Up)"
+                                aria-label="Move course up"
+                              >
+                                <ArrowUp className={`w-3.5 h-3.5 ${isMoving ? 'animate-pulse' : ''}`} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === visibleCourses.length - 1 || Boolean(movingCourseId)}
+                                onClick={async () => {
+                                  if (movingCourseId) return;
+                                  setMovingCourseId(course.id);
+                                  try {
+                                    await onMoveCourse(course.id, 'down');
+                                  } finally {
+                                    setMovingCourseId(null);
+                                  }
+                                }}
+                                className="bg-emerald-50 hover:bg-emerald-100 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-700 border border-emerald-200 font-bold p-1.5 rounded-lg text-[10px] transition cursor-pointer flex items-center"
+                                title="तल सार्नुहोस् (Move Down)"
+                                aria-label="Move course down"
+                              >
+                                <ArrowDown className={`w-3.5 h-3.5 ${isMoving ? 'animate-pulse' : ''}`} />
+                              </button>
+                            </div>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
