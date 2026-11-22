@@ -16,14 +16,14 @@ try {
   // ignore
 }
 
-// Initialize Firestore with persistent IndexedDB offline cache and auto-detected transport
+// Initialize Firestore with persistent IndexedDB offline cache and reliable long-polling transport
 export const db = initializeFirestore(
   app,
   {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager(),
     }),
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
     ignoreUndefinedProperties: true,
   },
   firebaseConfig.firestoreDatabaseId
@@ -98,14 +98,23 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
-async function testConnection() {
+async function testConnection(attempt = 1) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return;
+  }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
+      if (attempt < 2) {
+        setTimeout(() => {
+          void testConnection(attempt + 1);
+        }, 1500);
+        return;
+      }
       console.error('Please check your Firebase configuration.');
     }
   }
 }
 
-testConnection();
+void testConnection();
