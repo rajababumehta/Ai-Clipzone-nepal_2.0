@@ -33,11 +33,38 @@ interface CertificateModalProps {
   onClose: () => void;
 }
 
+const formatInternationalAdDate = (input?: string | number | Date): string => {
+  const formatAd = (d: Date) =>
+    d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+  if (!input) return formatAd(new Date());
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed || /^20[789]\d[/-]/.test(trimmed)) {
+      return formatAd(new Date());
+    }
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 1990 && parsed.getFullYear() <= 2045) {
+      return formatAd(parsed);
+    }
+    return trimmed;
+  }
+  const parsed = input instanceof Date ? input : new Date(input);
+  if (!isNaN(parsed.getTime())) {
+    return formatAd(parsed);
+  }
+  return formatAd(new Date());
+};
+
 export const CertificateModal: React.FC<CertificateModalProps> = ({
   studentName = 'Student Learner',
   studentPhoto,
   courseTitle,
-  issueDate = '2083/01/14',
+  issueDate,
   certificateId: initialCertId,
   instituteName = 'HamroLms',
   certificateInstituteName = 'HAMROLMS',
@@ -748,7 +775,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     />
                   )}
                   <span style={{ color: themeColors.highlight }} className="font-sans text-sm font-bold tracking-wider">
-                    Date of issue: {issueDate}
+                    Date of issue: {formatInternationalAdDate(issueDate)}
                   </span>
                   <span style={{ color: themeColors.primary }} className="text-xs font-mono mt-0.5 opacity-90">
                     Verify: {certId}

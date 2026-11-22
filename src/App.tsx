@@ -2895,8 +2895,12 @@ export default function App() {
         localStorage.setItem('clipzone_active_codes', JSON.stringify(activeCodes));
       }
 
-      // Save key metadata object locally for student profile dates
-      const keyExp = keyData?.expiresAt || (claimNow + durationMs);
+      // Save key metadata object locally for student profile & certificate activation dates
+      const rawKeyClaimedAt = keyData?.claimedAt && typeof keyData.claimedAt.toMillis === 'function'
+        ? keyData.claimedAt.toMillis()
+        : Number(keyData?.claimedAt || 0);
+      const effectiveClaimedAt = rawKeyClaimedAt > 0 ? rawKeyClaimedAt : claimNow;
+      const keyExp = keyData?.expiresAt || (effectiveClaimedAt + durationMs);
 
       const newKeyObj = {
         id: cleanCode,
@@ -2904,7 +2908,7 @@ export default function App() {
         courseId: unlockedCourseId,
         courseTitle: unlockedCourseTitle,
         studentName: assignedStudentName,
-        claimedAt: claimNow,
+        claimedAt: effectiveClaimedAt,
         expiresAt: keyExp,
         duration: keyData?.duration || '1year',
         status: 'used'
@@ -4458,6 +4462,83 @@ export default function App() {
     }
   }, [activeCourseIds, fullscreenVideo, isUserAdminSession]);
 
+  const formatCertificateAdDate = (dateInput: number | Date = new Date()): string => {
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (isNaN(d.getTime())) {
+      return new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const toTimestampMs = (val: any): number => {
+    if (!val) return 0;
+    if (typeof val === 'number' && !isNaN(val)) return val;
+    if (typeof val?.toMillis === 'function') return val.toMillis();
+    if (typeof val?.seconds === 'number') return val.seconds * 1000;
+    const parsed = Number(val);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+    const dateParsed = Date.parse(String(val));
+    return !isNaN(dateParsed) && dateParsed > 0 ? dateParsed : 0;
+  };
+
+  const getCourseActivatedAdDate = (courseId?: string): string => {
+    const allKeys: any[] = (() => {
+      try {
+        const local = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+        if (Array.isArray(userActivationKeys) && userActivationKeys.length > 0) {
+          return [...userActivationKeys, ...(Array.isArray(local) ? local : [])];
+        }
+        return Array.isArray(local) ? local : [];
+      } catch {
+        return Array.isArray(userActivationKeys) ? userActivationKeys : [];
+      }
+    })();
+
+    const targetKey = courseId
+      ? (
+          allKeys.find(k => k?.courseId === courseId && !isCourseKeyExpired(k)) ||
+          allKeys.find(k => k?.courseId === courseId) ||
+          allKeys.find(k => k?.courseId === 'course-all' && !isCourseKeyExpired(k)) ||
+          allKeys.find(k => k?.id === courseId)
+        )
+      : allKeys[0];
+
+    const activatedTs =
+      toTimestampMs(targetKey?.claimedAt) ||
+      toTimestampMs(targetKey?.activatedAt) ||
+      toTimestampMs(targetKey?.deviceClaimedAt) ||
+      toTimestampMs(targetKey?.createdAt);
+
+    if (activatedTs > 0) {
+      return formatCertificateAdDate(activatedTs);
+    }
+
+    if (courseId) {
+      const storageKey = `clipzone_cert_issue_ad_${courseId}`;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved && saved.trim() && !/^20[789]\d[/-]/.test(saved.trim())) {
+          return saved.trim();
+        }
+      } catch {}
+    }
+
+    const sessionTs = toTimestampMs(localStorage.getItem('clipzone_session_login_time'));
+    if (sessionTs > 0) {
+      return formatCertificateAdDate(sessionTs);
+    }
+
+    return formatCertificateAdDate(new Date());
+  };
+
   // Open Certificate with strict validation:
   // 1. User must have an active/enrolled course with certificate enabled (not replaced by Live Session)
   // 2. Student MUST have uploaded a photo for the certificate
@@ -4494,11 +4575,12 @@ export default function App() {
     const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
     const activeCode = getCourseActivationCode(currentCourse.id) || (userActivationKeys[0]?.code || 'AICLIP-ACTIVE');
     const cleanTitle = (currentCourse.certificateCourseTitle || currentCourse.title).replace(/by Dhruv Rathee/gi, 'by HamroLms').replace(/Dhruv Rathee/gi, 'HamroLms');
+    const adIssueDate = getCourseActivatedAdDate(currentCourse.id);
 
     setSelectedCertCourseId(currentCourse.id);
     setCertificateCourseTitle(cleanTitle);
     setCertificateStudentName(studentName);
-    setCertificateIssueDate(certificateIssueDate || '2083/01/14');
+    setCertificateIssueDate(adIssueDate);
     setCertificateCode(activeCode);
     setShowCertificateModal(true);
   };
@@ -9402,7 +9484,7 @@ export default function App() {
             studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
             studentPhoto={userAvatar || localStorage.getItem('clipzone_student_avatar') || ''}
             courseTitle={effectiveCourseTitle}
-            issueDate={certificateIssueDate || '2083/01/14'}
+            issueDate={getCourseActivatedAdDate(targetedCourse?.id) || certificateIssueDate}
             certificateId={certificateCode || (targetedCourse ? (getCourseActivationCode(targetedCourse.id) || 'AICLIP-ACTIVE') : 'AICLIP-ACTIVE')}
             instituteName={siteSettings.instituteName}
             certificateInstituteName={effectiveInstituteName}
@@ -9423,6 +9505,7 @@ export default function App() {
             selectedCourseId={targetedCourse?.id}
             onSelectCourseId={(newId) => {
               setSelectedCertCourseId(newId);
+              setCertificateIssueDate(getCourseActivatedAdDate(newId));
               const found = enrolledCourses.find(c => c.id === newId);
               if (found) {
                 setCertificateCourseTitle(found.certificateCourseTitle || found.title);
