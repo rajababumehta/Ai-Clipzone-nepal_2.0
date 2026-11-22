@@ -138,42 +138,71 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   // Theme color palette definitions
   const getThemeColors = (theme: string) => {
     switch (theme) {
+      case 'gold':
+        return {
+          bgBaseHex: '#0b0906',
+          bgGradient: 'radial-gradient(ellipse at 50% 42%, #1e180d 0%, #0e0b07 58%, #060503 100%)',
+          primary: '#e5c158',
+          secondary: '#b8860b',
+          border: '#c89d28',
+          darkBorder: '#5a4312',
+          highlight: '#fdf6e3',
+          mutedAccent: '#bfa76a',
+          shadow: 'rgba(212, 175, 55, 0.28)',
+          foilLine: 'linear-gradient(90deg, transparent 0%, #9a7022 20%, #f5dc88 50%, #9a7022 80%, transparent 100%)',
+        };
       case 'cyber-purple':
         return {
+          bgBaseHex: '#090714',
+          bgGradient: 'radial-gradient(ellipse at 50% 42%, #1b1136 0%, #0e0920 58%, #06040f 100%)',
           primary: '#c084fc',
           secondary: '#9333ea',
           border: '#a855f7',
-          darkBorder: '#581c87',
-          highlight: '#f3e8ff',
-          shadow: 'rgba(168, 85, 247, 0.4)',
+          darkBorder: '#4c1d95',
+          highlight: '#faf5ff',
+          mutedAccent: '#b79fd6',
+          shadow: 'rgba(168, 85, 247, 0.28)',
+          foilLine: 'linear-gradient(90deg, transparent 0%, #7e22ce 20%, #e9d5ff 50%, #7e22ce 80%, transparent 100%)',
         };
       case 'emerald':
         return {
+          bgBaseHex: '#04110c',
+          bgGradient: 'radial-gradient(ellipse at 50% 42%, #0a251c 0%, #051610 58%, #020a07 100%)',
           primary: '#34d399',
           secondary: '#059669',
           border: '#10b981',
           darkBorder: '#064e3b',
-          highlight: '#d1fae5',
-          shadow: 'rgba(16, 185, 129, 0.4)',
+          highlight: '#ecfdf5',
+          mutedAccent: '#86bda8',
+          shadow: 'rgba(16, 185, 129, 0.26)',
+          foilLine: 'linear-gradient(90deg, transparent 0%, #047857 20%, #a7f3d0 50%, #047857 80%, transparent 100%)',
         };
       case 'crimson':
         return {
+          bgBaseHex: '#13060a',
+          bgGradient: 'radial-gradient(ellipse at 50% 42%, #290c15 0%, #16070c 58%, #090305 100%)',
           primary: '#fb7185',
           secondary: '#e11d48',
           border: '#f43f5e',
-          darkBorder: '#881337',
-          highlight: '#ffe4e6',
-          shadow: 'rgba(244, 63, 94, 0.4)',
+          darkBorder: '#6b122b',
+          highlight: '#fff1f2',
+          mutedAccent: '#c98b96',
+          shadow: 'rgba(244, 63, 94, 0.26)',
+          foilLine: 'linear-gradient(90deg, transparent 0%, #be123c 20%, #fecdd3 50%, #be123c 80%, transparent 100%)',
         };
-      case 'gold':
+      case 'blue':
       default:
         return {
-          primary: '#38bdf8',
-          secondary: '#2563eb',
-          border: '#38bdf8',
-          darkBorder: '#1e3a8a',
-          highlight: '#e0f2fe',
-          shadow: 'rgba(59, 130, 246, 0.35)',
+          bgBaseHex: '#060c18',
+          bgGradient: 'radial-gradient(ellipse at 50% 42%, #101f3d 0%, #081124 58%, #040812 100%)',
+          primary: '#60a5fa',
+          secondary: '#d4af37',
+          border: '#3b82f6',
+          darkBorder: '#1e3a5f',
+          highlight: '#f8fafc',
+          mutedAccent: '#93c5fd',
+          shadow: 'rgba(59, 130, 246, 0.26)',
+          foilLine: 'linear-gradient(90deg, transparent 0%, #1d4ed8 20%, #bae6fd 50%, #1d4ed8 80%, transparent 100%)',
         };
     }
   };
@@ -316,7 +345,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           scale: 2.5,
           useCORS: true,
           allowTaint: true,
-          backgroundColor: '#000000',
+          backgroundColor: themeColors.bgBaseHex,
           width: 1000,
           height: 707,
           logging: false,
@@ -394,7 +423,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               border: none;
               border-radius: 0;
               transform: none !important;
-              background-color: #060b1e !important;
+              background-color: ${themeColors.bgBaseHex} !important;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
@@ -406,12 +435,14 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         `}</style>
 
         {/* Top Floating Bar Controls */}
-        <div className="w-full max-w-5xl bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 sm:p-3 mb-2 sm:mb-3 flex flex-wrap items-center justify-between gap-2.5 text-white shadow-xl z-20 print:hidden shrink-0">
-          <div className="flex items-center gap-2">
-            <Award className="w-5 h-5 text-blue-400 shrink-0 animate-pulse" />
+        <div className="w-full max-w-5xl bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 sm:p-3 mb-2 sm:mb-3 flex flex-wrap items-center justify-between gap-2.5 text-white shadow-xl z-20 print:hidden shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+              <Award className="w-5 h-5 text-blue-400" />
+            </div>
             <div>
               <h3 className="text-xs sm:text-sm font-black text-slate-100 flex items-center gap-1.5">
-                Official Course Certificate 📜
+                Official Course Certificate
                 <span className="text-[10px] bg-blue-500/20 text-blue-300 font-mono px-2 py-0.5 rounded-full border border-blue-500/30">
                   ID: {certId}
                 </span>
@@ -426,7 +457,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             {/* Course Switcher if multiple courses available */}
             {courses && courses.length > 1 && onSelectCourseId && (
               <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/90 rounded-xl px-3 py-1.5 text-xs text-slate-200">
-                <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider">🎓 Course:</span>
+                <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider">Course:</span>
                 <select
                   value={selectedCourseId || ''}
                   onChange={(e) => onSelectCourseId(e.target.value)}
@@ -454,7 +485,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 </>
               ) : (
                 <>
-                  <Download className="w-4.5 h-4.5" />
+                  <Download className="w-4 h-4" />
                   <span>Download Certificate</span>
                 </>
               )}
@@ -463,7 +494,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             {/* Copy Verification Link - Blue (Info/Share Action) */}
             <button
               onClick={handleCopyLink}
-              className="bg-slate-800 hover:bg-slate-750 text-blue-300 text-xs font-bold px-3 py-2.5 rounded-xl border border-blue-500/30 transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-slate-800 hover:bg-slate-700 text-blue-300 text-xs font-bold px-3 py-2.5 rounded-xl border border-blue-500/30 transition flex items-center gap-1.5 cursor-pointer"
             >
               {copied ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-blue-400" />}
               <span>{copied ? 'Copied Details!' : 'Share'}</span>
@@ -509,11 +540,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 height: '707px',
                 transform: `scale(${scale})`,
                 transformOrigin: 'top left',
-                backgroundColor: '#000000',
-                borderColor: themeColors.border,
-                boxShadow: `0 25px 60px -15px rgba(0,0,0,0.95), inset 0 0 35px ${themeColors.shadow}`,
+                backgroundColor: themeColors.bgBaseHex,
+                backgroundImage: themeColors.bgGradient,
+                borderColor: themeColors.darkBorder,
+                boxShadow: `0 30px 70px -15px rgba(0,0,0,0.95), inset 0 0 48px ${themeColors.shadow}`,
               }}
-              className="absolute top-0 left-0 bg-black rounded-2xl p-9 shadow-2xl overflow-hidden border-4 flex flex-col justify-between text-center select-none font-sans shrink-0"
+              className="absolute top-0 left-0 rounded-xl px-10 py-8 shadow-2xl overflow-hidden border-[3px] flex flex-col justify-between text-center select-none font-sans shrink-0"
             >
               {/* Embedded Font Definitions for Image Capture Canvas Engine */}
               <style>{`
@@ -523,73 +555,72 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 .cert-font-playfair { font-family: 'Playfair Display', Georgia, serif !important; }
               `}</style>
 
-              {/* Outer Luxury Metallic Border Multi-Layers */}
-              <div 
-                style={{ borderColor: themeColors.primary }}
-                className="absolute inset-3 border-2 rounded-lg pointer-events-none opacity-90" 
+              {/* Subtle Architectural Guilloché Rosette Background Geometry (Vector Hairlines) */}
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 1000 707"
+                fill="none"
+                aria-hidden="true"
+              >
+                {/* Concentric central hairline medallions */}
+                <circle cx="500" cy="353.5" r="260" stroke={themeColors.primary} strokeOpacity="0.06" strokeWidth="1" />
+                <circle cx="500" cy="353.5" r="244" stroke={themeColors.primary} strokeOpacity="0.05" strokeWidth="0.75" strokeDasharray="4 6" />
+                <circle cx="500" cy="353.5" r="196" stroke={themeColors.highlight} strokeOpacity="0.045" strokeWidth="0.8" />
+                <circle cx="500" cy="353.5" r="150" stroke={themeColors.primary} strokeOpacity="0.04" strokeWidth="0.75" strokeDasharray="2 5" />
+                {/* Subtle axial cross-rules */}
+                <line x1="60" y1="353.5" x2="215" y2="353.5" stroke={themeColors.primary} strokeOpacity="0.06" strokeWidth="0.75" />
+                <line x1="785" y1="353.5" x2="940" y2="353.5" stroke={themeColors.primary} strokeOpacity="0.06" strokeWidth="0.75" />
+                {/* Architectural diamond lattice corners */}
+                <polygon points="500,54 510,64 500,74 490,64" stroke={themeColors.primary} strokeOpacity="0.16" strokeWidth="0.9" />
+                <polygon points="500,633 510,643 500,653 490,643" stroke={themeColors.primary} strokeOpacity="0.16" strokeWidth="0.9" />
+              </svg>
+
+              {/* Multi-Layered Precision Diploma Frames */}
+              <div
+                style={{ borderColor: themeColors.border }}
+                className="absolute inset-[10px] border-[2px] rounded-[8px] pointer-events-none opacity-85"
               />
-              <div 
+              <div
                 style={{ borderColor: themeColors.darkBorder }}
-                className="absolute inset-4 border rounded-md pointer-events-none opacity-80" 
+                className="absolute inset-[17px] border rounded-[5px] pointer-events-none opacity-90"
+              />
+              <div
+                style={{ borderColor: `${themeColors.primary}38` }}
+                className="absolute inset-[22px] border rounded-[3px] pointer-events-none"
               />
 
-              {/* Corner Ornate Baroque Flourish Decorations (4 Corners) */}
-              <svg 
-                style={{ color: themeColors.primary }}
-                className="absolute top-3 left-3 w-16 h-16 opacity-85 pointer-events-none z-10" 
-                viewBox="0 0 100 100" 
-                fill="currentColor"
-              >
-                <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
-                <circle cx="20" cy="20" r="3" />
-                <path d="M0,0 L35,0 C20,0 0,20 0,35 Z M0,0 L0,35 C0,20 20,0 35,0 Z" />
-              </svg>
-              <svg 
-                style={{ color: themeColors.primary }}
-                className="absolute top-3 right-3 w-16 h-16 opacity-85 pointer-events-none transform rotate-90 z-10" 
-                viewBox="0 0 100 100" 
-                fill="currentColor"
-              >
-                <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
-                <circle cx="20" cy="20" r="3" />
-              </svg>
-              <svg 
-                style={{ color: themeColors.primary }}
-                className="absolute bottom-3 left-3 w-16 h-16 opacity-85 pointer-events-none transform -rotate-90 z-10" 
-                viewBox="0 0 100 100" 
-                fill="currentColor"
-              >
-                <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
-                <circle cx="20" cy="20" r="3" />
-              </svg>
-              <svg 
-                style={{ color: themeColors.primary }}
-                className="absolute bottom-3 right-3 w-16 h-16 opacity-85 pointer-events-none transform rotate-180 z-10" 
-                viewBox="0 0 100 100" 
-                fill="currentColor"
-              >
-                <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
-                <circle cx="20" cy="20" r="3" />
-              </svg>
-
-              {/* Background Watermark Logo */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
-                <span 
+              {/* Precision Architectural Corner Filigree Ornaments (4 Corners) */}
+              {[
+                { pos: 'top-[13px] left-[13px]', rot: '' },
+                { pos: 'top-[13px] right-[13px]', rot: 'rotate-90' },
+                { pos: 'bottom-[13px] right-[13px]', rot: 'rotate-180' },
+                { pos: 'bottom-[13px] left-[13px]', rot: '-rotate-90' },
+              ].map((corner, idx) => (
+                <svg
+                  key={idx}
                   style={{ color: themeColors.primary }}
-                  className="cert-font-cinzel text-[160px] font-black tracking-widest uppercase truncate max-w-4xl px-4"
+                  className={`absolute ${corner.pos} ${corner.rot} w-14 h-14 opacity-90 pointer-events-none z-10`}
+                  viewBox="0 0 80 80"
+                  fill="none"
+                  aria-hidden="true"
                 >
-                  {certificateInstituteName || instituteName || 'Ai'}
-                </span>
-              </div>
+                  <path d="M 4 42 L 4 4 L 42 4" stroke="currentColor" strokeWidth="2.2" />
+                  <path d="M 11 36 L 11 11 L 36 11" stroke="currentColor" strokeWidth="1" strokeOpacity="0.7" />
+                  <path d="M 4 4 L 20 20" stroke="currentColor" strokeWidth="1.2" strokeOpacity="0.85" />
+                  <polygon points="20,14 26,20 20,26 14,20" fill="currentColor" fillOpacity="0.85" />
+                  <circle cx="8" cy="42" r="1.8" fill="currentColor" />
+                  <circle cx="42" cy="8" r="1.8" fill="currentColor" />
+                </svg>
+              ))}
 
               {/* HEADER SECTION: FIXED 1000px CANVAS PROPORTIONS (IDENTICAL ON MOBILE & DESKTOP) */}
-              <div className="relative z-10 flex items-center justify-between w-full px-4 pt-1">
-                {/* Official Institute Logo */}
-                <div className="w-56 shrink-0 flex items-center justify-start pl-4">
-                  <div className="h-28 flex items-center justify-start shrink-0 bg-transparent">
+              <div className="relative z-10 flex items-center justify-between w-full px-3 pt-1 shrink-0">
+                {/* Left: Official Institute Logo */}
+                <div className="w-[215px] shrink-0 flex items-center justify-start pl-2">
+                  <div className="h-24 flex items-center justify-start shrink-0 bg-transparent">
                     {embeddedLogo ? (
-                      <img 
-                        src={embeddedLogo} 
+                      <img
+                        src={embeddedLogo}
                         alt={instituteName || 'Institute Logo'}
                         crossOrigin={embeddedLogo.startsWith('http') ? 'anonymous' : undefined}
                         referrerPolicy="no-referrer"
@@ -600,19 +631,31 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                             setEmbeddedLogo('/logo.png');
                           }
                         }}
-                        className="h-28 w-auto max-w-[210px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]"
+                        className="h-24 w-auto max-w-[195px] object-contain drop-shadow-[0_4px_14px_rgba(0,0,0,0.85)]"
                       />
                     ) : (
                       <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg border border-amber-300/40">
-                          {instituteName ? instituteName.trim().charAt(0).toUpperCase() : '🎓'}
+                        <div
+                          style={{
+                            borderColor: themeColors.border,
+                            color: themeColors.highlight,
+                          }}
+                          className="w-12 h-12 rounded-xl bg-slate-900/90 border flex items-center justify-center font-black text-xl shadow-md cert-font-cinzel"
+                        >
+                          {instituteName ? instituteName.trim().charAt(0).toUpperCase() : 'H'}
                         </div>
                         <div className="flex flex-col text-left">
-                          <span className="text-amber-200 font-black text-sm tracking-wider uppercase font-serif">
-                            {instituteName || 'ACADEMY OF EXCELLENCE'}
+                          <span
+                            style={{ color: themeColors.highlight }}
+                            className="cert-font-cinzel font-bold text-sm tracking-wider uppercase"
+                          >
+                            {instituteName || 'HAMROLMS'}
                           </span>
-                          <span className="text-[9px] text-amber-400/80 font-mono tracking-widest uppercase">
-                            OFFICIAL VERIFIED
+                          <span
+                            style={{ color: themeColors.primary }}
+                            className="text-[9px] font-mono tracking-[0.22em] uppercase"
+                          >
+                            OFFICIAL CREDENTIAL
                           </span>
                         </div>
                       </div>
@@ -620,87 +663,129 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   </div>
                 </div>
 
-                {/* CENTER TITLE */}
+                {/* Center: Institutional Header & Engraved Title */}
                 <div className="flex-1 min-w-0 text-center px-2">
+                  {(certificateInstituteName || instituteName) && (
+                    <div className="flex items-center justify-center gap-2.5 mb-1">
+                      <span
+                        style={{ backgroundColor: themeColors.primary }}
+                        className="h-[1px] w-7 opacity-60"
+                      />
+                      <span
+                        style={{ color: themeColors.mutedAccent }}
+                        className="text-[10px] tracking-[0.34em] font-bold uppercase"
+                      >
+                        {certificateInstituteName || instituteName}
+                      </span>
+                      <span
+                        style={{ backgroundColor: themeColors.primary }}
+                        className="h-[1px] w-7 opacity-60"
+                      />
+                    </div>
+                  )}
+
                   <h1
-                    style={{ 
+                    style={{
                       color: themeColors.highlight,
-                      textShadow: `0 2px 10px ${themeColors.shadow}` 
+                      textShadow: `0 2px 14px ${themeColors.shadow}`,
                     }}
-                    className="cert-font-cinzel text-[42px] leading-tight font-black tracking-[0.14em] uppercase drop-shadow-md whitespace-nowrap"
+                    className="cert-font-cinzel text-[38px] leading-[1.08] font-bold tracking-[0.2em] uppercase whitespace-nowrap"
                   >
                     {certificateTitle || 'CERTIFICATE'}
                   </h1>
-                  <h2
-                    style={{ color: themeColors.primary }}
-                    className="cert-font-cinzel text-sm font-black tracking-[0.28em] uppercase mt-1"
-                  >
-                    {certificateSubtitle || 'OF ACHIEVEMENT'}
-                  </h2>
-                  {certificateInstituteName && (
-                    <p 
+
+                  <div className="flex items-center justify-center gap-3 mt-1">
+                    <span
+                      style={{ backgroundColor: themeColors.primary }}
+                      className="h-[1px] w-10 opacity-50"
+                    />
+                    <h2
                       style={{ color: themeColors.primary }}
-                      className="text-[10px] tracking-[0.24em] font-bold uppercase opacity-80 mt-0.5"
+                      className="cert-font-cinzel text-[12px] font-bold tracking-[0.36em] uppercase"
                     >
-                      {certificateInstituteName}
-                    </p>
-                  )}
+                      {certificateSubtitle || 'OF ACHIEVEMENT'}
+                    </h2>
+                    <span
+                      style={{ backgroundColor: themeColors.primary }}
+                      className="h-[1px] w-10 opacity-50"
+                    />
+                  </div>
                 </div>
 
-                {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO - SHOWN ONLY IF USER UPLOADED PHOTO */}
-                <div className="w-56 shrink-0 flex items-center justify-end pr-4">
+                {/* Right: Official Student Portrait (Shown ONLY if user uploaded photo) */}
+                <div className="w-[215px] shrink-0 flex items-center justify-end pr-2">
                   {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
-                    <div 
-                      style={{ 
-                        borderColor: themeColors.primary,
-                        boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 16px ${themeColors.shadow}`
+                    <div
+                      style={{
+                        borderColor: themeColors.border,
+                        backgroundColor: themeColors.bgBaseHex,
+                        boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 14px ${themeColors.shadow}`,
                       }}
-                      className="w-28 h-28 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-lg mt-2"
+                      className="w-[96px] h-[96px] aspect-square border-[1.5px] p-[3px] relative overflow-hidden flex items-center justify-center shrink-0 rounded-md"
                     >
-                      <img 
-                        src={studentPhoto} 
-                        alt="" 
-                        crossOrigin="anonymous"
-                        className="w-full h-full object-cover rounded-md"
-                      />
+                      <div
+                        style={{ borderColor: themeColors.darkBorder }}
+                        className="w-full h-full border rounded-[3px] overflow-hidden"
+                      >
+                        <img
+                          src={studentPhoto}
+                          alt=""
+                          crossOrigin="anonymous"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     </div>
                   ) : (
-                    /* If no photo uploaded, do NOT show any shape or icon */
-                    <div className="w-28 h-28 shrink-0 opacity-0 pointer-events-none" />
+                    /* Invisible symmetric spacer when no photo uploaded */
+                    <div className="w-[96px] h-[96px] shrink-0 opacity-0 pointer-events-none" />
                   )}
                 </div>
               </div>
 
               {/* CERTIFICATION BODY STATEMENT */}
-              <div className="relative z-10 py-1 px-8 my-auto">
-                <p className="font-serif italic text-slate-300 text-xl tracking-wide">
+              <div className="relative z-10 px-10 my-auto flex flex-col items-center">
+                <p className="cert-font-playfair italic text-slate-300/90 text-[18px] tracking-wide">
                   This is to certify that
                 </p>
 
                 {/* STUDENT CALLIGRAPHIC NAME */}
-                <div className="my-2 relative block w-full max-w-full px-4 text-center">
+                <div className="mt-1.5 mb-2 relative w-full max-w-[820px] px-4 text-center">
                   <h2
-                    className="cert-font-script text-[68px] font-normal tracking-wide leading-[1.12] px-2 block mx-auto"
+                    className="cert-font-script text-[62px] font-normal tracking-wide leading-[1.1] px-2 block mx-auto"
                     style={{
                       fontFamily: "'Great Vibes', cursive",
                       fontWeight: 400,
                       color: themeColors.highlight,
-                      textShadow: `0 2px 14px ${themeColors.shadow}`,
+                      textShadow: `0 3px 16px ${themeColors.shadow}`,
                     }}
                   >
                     {studentName}
                   </h2>
 
-                  {/* Golden Horizontal Divider Line with Flourish Tips & Center Sparkle */}
-                  <div className="w-full max-w-lg mx-auto flex items-center justify-center gap-2 mt-1">
-                    <div 
-                      style={{ background: `linear-gradient(to right, transparent, ${themeColors.primary})` }}
-                      className="h-[2px] flex-1" 
+                  {/* Precision Engraved Foil Rule Under Student Name */}
+                  <div className="w-full max-w-[460px] mx-auto flex items-center justify-center gap-3 mt-1.5">
+                    <div
+                      style={{
+                        background: `linear-gradient(to right, transparent, ${themeColors.primary})`,
+                      }}
+                      className="h-[1px] flex-1 opacity-80"
                     />
-                    <span style={{ color: themeColors.highlight }} className="text-base font-serif">♦ ✦ ♦</span>
-                    <div 
-                      style={{ background: `linear-gradient(to left, transparent, ${themeColors.primary})` }}
-                      className="h-[2px] flex-1" 
+                    <svg
+                      style={{ color: themeColors.primary }}
+                      className="w-5 h-3 shrink-0"
+                      viewBox="0 0 24 14"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <polygon points="12,1 16,7 12,13 8,7" />
+                      <circle cx="3" cy="7" r="1.4" opacity="0.75" />
+                      <circle cx="21" cy="7" r="1.4" opacity="0.75" />
+                    </svg>
+                    <div
+                      style={{
+                        background: `linear-gradient(to left, transparent, ${themeColors.primary})`,
+                      }}
+                      className="h-[1px] flex-1 opacity-80"
                     />
                   </div>
                 </div>
@@ -708,124 +793,155 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* ACHIEVEMENT STATEMENT */}
                 <p
                   style={{ color: themeColors.primary }}
-                  className="cert-font-cinzel text-base font-bold tracking-[0.25em] uppercase mt-2"
+                  className="cert-font-cinzel text-[11px] font-bold tracking-[0.34em] uppercase mt-2"
                 >
                   HAS SUCCESSFULLY COMPLETED
                 </p>
 
                 {/* COURSE TITLE */}
                 <h3
-                  style={{ 
+                  style={{
                     color: themeColors.highlight,
-                    textShadow: `0 2px 8px ${themeColors.shadow}` 
+                    textShadow: `0 2px 10px ${themeColors.shadow}`,
                   }}
-                  className="font-sans font-black text-[28px] tracking-wider uppercase my-2 leading-snug max-w-3xl mx-auto px-4"
+                  className="cert-font-cinzel font-bold text-[23px] tracking-[0.07em] uppercase mt-2 mb-2 leading-[1.3] max-w-[780px] mx-auto px-4"
                 >
                   {cleanCourseTitle}
                 </h3>
 
                 {/* COURSE DESCRIPTION SUMMARY */}
-                <p className="text-slate-300/90 text-[15px] font-normal max-w-2xl mx-auto leading-relaxed px-4 my-1">
+                <p className="text-slate-300/85 text-[13.5px] font-normal max-w-[660px] mx-auto leading-[1.6] px-4">
                   {certificateDescription || 'an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.'}
                 </p>
               </div>
 
-              {/* BOTTOM SIGNATURES & ISSUE DATE SECTION */}
-              <div 
-                style={{ borderColor: `${themeColors.primary}33` }}
-                className="relative z-10 grid grid-cols-3 items-end text-center pt-2 border-t px-6 pb-1"
+              {/* BOTTOM SIGNATURES, OFFICIAL ROSETTE SEAL & CREDENTIAL METADATA */}
+              <div
+                style={{ borderColor: `${themeColors.primary}2b` }}
+                className="relative z-10 grid grid-cols-[1fr_270px_1fr] items-end text-center pt-3 border-t px-6 pb-1 shrink-0"
               >
-                {/* Left Signature: Director */}
+                {/* Left Signature: Course Director */}
                 <div className="flex flex-col items-center justify-end">
                   {directorSignatureUrl && directorSignatureUrl.trim() ? (
-                    <img 
-                      src={directorSignatureUrl.trim()} 
-                      alt="Director Signature" 
-                      className="h-12 w-auto max-w-[170px] object-contain drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)] mx-auto"
+                    <img
+                      src={directorSignatureUrl.trim()}
+                      alt="Director Signature"
+                      className="h-11 w-auto max-w-[165px] object-contain mx-auto"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                   ) : (
-                    <svg 
+                    <svg
                       style={{ color: themeColors.highlight }}
-                      className="w-40 h-12 drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]" 
-                      viewBox="0 0 180 55" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeLinecap="round" 
+                      className="w-36 h-11 opacity-95"
+                      viewBox="0 0 180 55"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
                       strokeLinejoin="round"
+                      aria-hidden="true"
                     >
-                      <path d="M 22 42 C 14 38, 12 12, 28 8 C 42 5, 40 38, 25 44 C 18 47, 24 24, 46 20 C 62 17, 56 36, 72 28 C 80 24, 84 32, 96 26 C 104 22, 112 30, 128 24" strokeWidth="2.4" />
-                      <path d="M 120 18 Q 138 12, 148 22 Q 132 38, 108 42 C 80 47, 130 42, 162 40" strokeWidth="1.8" />
-                      <circle cx="166" cy="39" r="1.8" fill="currentColor" />
+                      <path d="M 22 42 C 14 38, 12 12, 28 8 C 42 5, 40 38, 25 44 C 18 47, 24 24, 46 20 C 62 17, 56 36, 72 28 C 80 24, 84 32, 96 26 C 104 22, 112 30, 128 24" strokeWidth="2.1" />
+                      <path d="M 120 18 Q 138 12, 148 22 Q 132 38, 108 42 C 80 47, 130 42, 162 40" strokeWidth="1.5" />
+                      <circle cx="166" cy="39" r="1.6" fill="currentColor" />
                     </svg>
                   )}
-                  <div 
-                    style={{ background: `linear-gradient(to right, transparent, ${themeColors.primary}, transparent)` }}
-                    className="w-32 h-[1px] my-1" 
+                  <div
+                    style={{ background: themeColors.foilLine }}
+                    className="w-44 h-[1px] my-1.5"
                   />
-                  <span className="font-sans text-sm font-bold text-slate-100">
+                  <span className="cert-font-playfair text-[14px] font-bold text-slate-100 tracking-wide">
                     {directorName || 'Director'}
                   </span>
-                  <span style={{ color: themeColors.primary }} className="text-[10px] font-semibold uppercase tracking-wider">
+                  <span
+                    style={{ color: themeColors.primary }}
+                    className="text-[9.5px] font-semibold uppercase tracking-[0.2em] mt-0.5"
+                  >
                     {directorTitle || 'Course Director'}
                   </span>
                 </div>
 
-                {/* Center: Date of Issue & Seal */}
-                <div className="flex flex-col items-center justify-end pb-1">
-                  {certificateStampUrl && certificateStampUrl.trim() && (
-                    <img 
-                      src={certificateStampUrl.trim()} 
-                      alt="Official Seal" 
-                      className="w-14 h-14 object-contain mx-auto mb-1 drop-shadow-lg"
+                {/* Center: Official Seal + Date of Issue & Verification ID */}
+                <div className="flex flex-col items-center justify-end pb-0.5">
+                  {certificateStampUrl && certificateStampUrl.trim() ? (
+                    <img
+                      src={certificateStampUrl.trim()}
+                      alt="Official Seal"
+                      className="w-12 h-12 object-contain mx-auto mb-1.5 drop-shadow-lg"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
+                  ) : (
+                    <svg
+                      className="w-12 h-12 mx-auto mb-1.5"
+                      viewBox="0 0 64 64"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      {/* Scalloped Outer Rosette */}
+                      <circle cx="32" cy="30" r="23" stroke={themeColors.primary} strokeWidth="1.5" strokeDasharray="3 2" />
+                      <circle cx="32" cy="30" r="19" fill={themeColors.bgBaseHex} stroke={themeColors.border} strokeWidth="1.4" />
+                      <circle cx="32" cy="30" r="14.5" stroke={themeColors.primary} strokeWidth="0.8" strokeOpacity="0.65" />
+                      {/* Ribbon Tails */}
+                      <path d="M 22 49 L 17 61 L 24 57 L 28 62 L 29 51" fill={themeColors.darkBorder} stroke={themeColors.primary} strokeWidth="1" />
+                      <path d="M 42 49 L 47 61 L 40 57 L 36 62 L 35 51" fill={themeColors.darkBorder} stroke={themeColors.primary} strokeWidth="1" />
+                      {/* Inner Crest Checkmark/Star */}
+                      <path d="M 25.5 30 L 30 34.5 L 39 25" stroke={themeColors.highlight} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   )}
-                  <span style={{ color: themeColors.highlight }} className="font-sans text-sm font-bold tracking-wider">
+                  <span
+                    style={{ color: themeColors.highlight }}
+                    className="font-sans text-[12px] font-bold tracking-[0.06em]"
+                  >
                     Date of issue: {formatInternationalAdDate(issueDate)}
                   </span>
-                  <span style={{ color: themeColors.primary }} className="text-xs font-mono mt-0.5 opacity-90">
+                  <span
+                    style={{ color: themeColors.primary }}
+                    className="text-[11px] font-mono tracking-[0.12em] mt-0.5"
+                  >
                     Verify: {certId}
                   </span>
                   {certificateSealText && (
-                    <span className="text-[9px] text-slate-400 font-mono tracking-widest uppercase mt-0.5">
+                    <span className="text-[9px] text-slate-400 font-mono tracking-[0.18em] uppercase mt-0.5">
                       {certificateSealText}
                     </span>
                   )}
                 </div>
 
-                {/* Right Signature: Founder/CEO */}
+                {/* Right Signature: Founder & CEO */}
                 <div className="flex flex-col items-center justify-end">
                   {ceoSignatureUrl && ceoSignatureUrl.trim() ? (
-                    <img 
-                      src={ceoSignatureUrl.trim()} 
-                      alt="CEO Signature" 
-                      className="h-12 w-auto max-w-[170px] object-contain drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)] mx-auto"
+                    <img
+                      src={ceoSignatureUrl.trim()}
+                      alt="CEO Signature"
+                      className="h-11 w-auto max-w-[165px] object-contain mx-auto"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                   ) : (
-                    <svg 
+                    <svg
                       style={{ color: themeColors.highlight }}
-                      className="w-40 h-12 drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]" 
-                      viewBox="0 0 180 55" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeLinecap="round" 
+                      className="w-36 h-11 opacity-95"
+                      viewBox="0 0 180 55"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
                       strokeLinejoin="round"
+                      aria-hidden="true"
                     >
-                      <path d="M 18 45 C 10 18, 30 4, 48 10 C 62 15, 42 42, 28 32 C 18 24, 38 10, 68 18 C 88 23, 80 38, 98 28 C 110 21, 118 32, 134 22 C 144 16, 150 24, 158 20" strokeWidth="2.5" />
-                      <path d="M 32 36 C 65 28, 110 26, 152 32 C 165 34, 172 30, 166 26 C 158 21, 145 28, 135 34 C 120 42, 148 44, 170 42" strokeWidth="1.7" />
-                      <circle cx="174" cy="41" r="1.8" fill="currentColor" />
+                      <path d="M 18 45 C 10 18, 30 4, 48 10 C 62 15, 42 42, 28 32 C 18 24, 38 10, 68 18 C 88 23, 80 38, 98 28 C 110 21, 118 32, 134 22 C 144 16, 150 24, 158 20" strokeWidth="2.2" />
+                      <path d="M 32 36 C 65 28, 110 26, 152 32 C 165 34, 172 30, 166 26 C 158 21, 145 28, 135 34 C 120 42, 148 44, 170 42" strokeWidth="1.4" />
+                      <circle cx="174" cy="41" r="1.6" fill="currentColor" />
                     </svg>
                   )}
-                  <div 
-                    style={{ background: `linear-gradient(to right, transparent, ${themeColors.primary}, transparent)` }}
-                    className="w-32 h-[1px] my-1" 
+                  <div
+                    style={{ background: themeColors.foilLine }}
+                    className="w-44 h-[1px] my-1.5"
                   />
-                  <span className="font-sans text-sm font-bold text-slate-100 text-center max-w-[160px]">
+                  <span className="cert-font-playfair text-[14px] font-bold text-slate-100 tracking-wide max-w-[190px] truncate">
                     {ceoName || 'Founder/CEO (HamroLms)'}
                   </span>
-                  <span style={{ color: themeColors.primary }} className="text-[10px] font-semibold uppercase tracking-wider">
+                  <span
+                    style={{ color: themeColors.primary }}
+                    className="text-[9.5px] font-semibold uppercase tracking-[0.2em] mt-0.5"
+                  >
                     {ceoTitle || 'Founder & CEO'}
                   </span>
                 </div>
