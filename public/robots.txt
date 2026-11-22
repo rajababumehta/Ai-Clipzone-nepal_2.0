@@ -1,7 +1,0 @@
-# Robots.txt for HamroLms
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /admin
-
-Sitemap: https://hamrolms.vercel.app/sitemap.xml

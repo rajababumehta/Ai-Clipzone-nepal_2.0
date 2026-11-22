@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { mountSharedApiMiddlewareAndRoutes } from "./server/coreApiRoutes.ts";
+import { injectRouteSeoMeta, resolvePublicOrigin } from "./server/seoRoutes.ts";
 
 dotenv.config();
 
@@ -89,9 +90,17 @@ async function startServer() {
         },
       })
     );
-    app.get("*", (_req, res) => {
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-      res.sendFile(path.join(distPath, "index.html"));
+    app.get("*", async (req, res) => {
+      try {
+        const indexPath = path.join(distPath, "index.html");
+        const rawHtml = fs.readFileSync(indexPath, "utf-8");
+        const { html, statusCode } = await injectRouteSeoMeta(rawHtml, req.path, resolvePublicOrigin(req));
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.status(statusCode).type("html").send(html);
+      } catch {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.sendFile(path.join(distPath, "index.html"));
+      }
     });
   }
 

@@ -1,0 +1,209 @@
+import { BlogPost, Course, PublicInstructorProfile, SupportedLocale } from '../types';
+import { getCourseSlug, buildLocalizedPath } from './seoRouting';
+
+export interface BreadcrumbItem {
+  name: string;
+  url: string;
+}
+
+export function buildOrganizationSchema(origin: string, brand: string, supportEmail: string) {
+  return {
+    '@type': 'EducationalOrganization',
+    '@id': `${origin}/#organization`,
+    name: brand,
+    url: `${origin}/`,
+    logo: {
+      '@type': 'ImageObject',
+      url: `${origin}/institute-logo.png`,
+      width: 1600,
+      height: 1600,
+    },
+    image: `${origin}/institute-logo.png`,
+    description: `${brand} is an online multi-instructor learning platform offering practical courses in AI tools, video editing, graphic design, and web development with verifiable digital certificates.`,
+    email: supportEmail,
+    contactPoint: [
+      {
+        '@type': 'ContactPoint',
+        email: supportEmail,
+        contactType: 'customer support',
+        availableLanguage: ['English', 'Nepali', 'Hindi'],
+      },
+    ],
+    sameAs: [
+      `${origin}/`,
+      'https://rajababumehta.com.np',
+      'https://www.facebook.com/profile.php?id=61583901232576',
+    ],
+  };
+}
+
+export function buildWebsiteSchema(origin: string, brand: string, locale: SupportedLocale) {
+  return {
+    '@type': 'WebSite',
+    '@id': `${origin}/#website`,
+    url: `${origin}${buildLocalizedPath('/', locale)}`,
+    name: brand,
+    inLanguage: locale,
+    publisher: { '@id': `${origin}/#organization` },
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${origin}/?search={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+}
+
+export function buildBreadcrumbSchema(items: BreadcrumbItem[]) {
+  return {
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, idx) => ({
+      '@type': 'ListItem',
+      position: idx + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+export function parseCoursePriceNumber(course: Partial<Course>): { isFree: boolean; priceNumber: number } {
+  const isFree =
+    course.isFree === true ||
+    (typeof course.amount === 'number' && course.amount === 0) ||
+    (typeof course.price === 'string' && /^free$/i.test(course.price.trim()));
+  if (isFree) return { isFree: true, priceNumber: 0 };
+  const parsed = Number(course.amount ?? String(course.price || '').replace(/[^\d.]/g, ''));
+  return { isFree: false, priceNumber: Number.isFinite(parsed) ? parsed : 0 };
+}
+
+export function buildCourseSchema(
+  origin: string,
+  brand: string,
+  course: Course,
+  instructor: PublicInstructorProfile,
+  locale: SupportedLocale
+) {
+  const slug = getCourseSlug(course);
+  const courseUrl = `${origin}${buildLocalizedPath(`/courses/${slug}`, locale)}`;
+  const instructorUrl = `${origin}${buildLocalizedPath(`/instructors/${instructor.slug}`, locale)}`;
+  const { isFree, priceNumber } = parseCoursePriceNumber(course);
+
+  const description =
+    course.seoDescription?.trim() ||
+    course.overview?.trim() ||
+    (course.learn?.length
+      ? `${course.title}: ${course.learn.slice(0, 4).join(', ')}.`
+      : `Structured online course on ${brand}.`);
+
+  return {
+    '@type': 'Course',
+    '@id': `${courseUrl}#course`,
+    name: course.title,
+    description,
+    url: courseUrl,
+    image: course.image || `${origin}/institute-logo.png`,
+    provider: { '@id': `${origin}/#organization` },
+    instructor: {
+      '@type': 'Person',
+      name: instructor.name,
+      url: instructorUrl,
+    },
+    teaches: course.learn?.slice(0, 8) || [],
+    coursePrerequisites: course.prerequisites?.join('; ') || 'No prior experience required; smartphone or computer with internet access.',
+    educationalLevel: course.level || 'All Levels',
+    inLanguage: course.language ? [course.language] : ['en', 'ne', 'hi'],
+    educationalCredentialAwarded:
+      course.includeCertificate !== false ? 'Certificate of Completion' : undefined,
+    offers: {
+      '@type': 'Offer',
+      category: isFree ? 'Free' : 'Paid',
+      priceCurrency: 'NPR',
+      price: priceNumber,
+      availability: 'https://schema.org/InStock',
+      url: courseUrl,
+    },
+    hasCourseInstance: {
+      '@type': 'CourseInstance',
+      courseMode: course.includeLive ? 'Blended' : 'Online',
+      instructor: {
+        '@type': 'Person',
+        name: instructor.name,
+        url: instructorUrl,
+      },
+    },
+  };
+}
+
+export function buildPersonSchema(
+  origin: string,
+  instructor: PublicInstructorProfile,
+  locale: SupportedLocale
+) {
+  const url = `${origin}${buildLocalizedPath(`/instructors/${instructor.slug}`, locale)}`;
+  const socialArray = Object.values(instructor.socialLinks || {}).filter(
+    (v): v is string => typeof v === 'string' && v.trim().length > 0
+  );
+
+  return {
+    '@type': 'Person',
+    '@id': `${url}#person`,
+    name: instructor.name,
+    jobTitle: instructor.role,
+    description: instructor.bio,
+    url,
+    image: instructor.avatarUrl
+      ? instructor.avatarUrl.startsWith('http')
+        ? instructor.avatarUrl
+        : `${origin}${instructor.avatarUrl}`
+      : `${origin}/institute-logo.png`,
+    knowsAbout: instructor.expertise,
+    knowsLanguage: instructor.languages,
+    worksFor: { '@id': `${origin}/#organization` },
+    ...(socialArray.length > 0 ? { sameAs: socialArray } : {}),
+  };
+}
+
+export function buildArticleSchema(
+  origin: string,
+  brand: string,
+  post: BlogPost,
+  author: PublicInstructorProfile,
+  locale: SupportedLocale
+) {
+  const articleUrl = `${origin}${buildLocalizedPath(`/blog/${post.slug}`, locale)}`;
+  const authorUrl = `${origin}${buildLocalizedPath(`/instructors/${author.slug}`, locale)}`;
+  const imageUrl = post.coverImage.startsWith('http') ? post.coverImage : `${origin}${post.coverImage}`;
+
+  return {
+    '@type': 'Article',
+    '@id': `${articleUrl}#article`,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': articleUrl,
+    },
+    headline: post.title,
+    description: post.seoDescription || post.excerpt,
+    image: [imageUrl],
+    datePublished: post.publishedAt,
+    dateModified: post.updatedAt,
+    articleSection: post.category,
+    keywords: post.tags.join(', '),
+    inLanguage: locale,
+    author: {
+      '@type': 'Person',
+      name: author.name,
+      url: authorUrl,
+    },
+    publisher: {
+      '@id': `${origin}/#organization`,
+      '@type': 'EducationalOrganization',
+      name: brand,
+      logo: {
+        '@type': 'ImageObject',
+        url: `${origin}/institute-logo.png`,
+      },
+    },
+  };
+}

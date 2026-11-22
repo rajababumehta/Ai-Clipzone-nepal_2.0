@@ -50,6 +50,64 @@ export interface Course {
   // Per-course Payment & WhatsApp override (editable by Main Admin or Course Sub-Admin)
   paymentConfig?: CoursePaymentConfig;
   lastEditedBySubAdminCode?: string;
+  // Optional Public SEO Metadata (public-safe only; never contains private lesson URLs)
+  slug?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  overview?: string;
+  prerequisites?: string[];
+  instructorSlug?: string;
+  instructorName?: string;
+  category?: string;
+  level?: 'Beginner' | 'Intermediate' | 'Advanced' | 'All Levels';
+  updatedAt?: number;
+}
+
+export type SupportedLocale = 'en' | 'ne' | 'hi';
+
+export interface PublicInstructorProfile {
+  slug: string;
+  name: string;
+  role: string;
+  headline: string;
+  bio: string;
+  expertise: string[];
+  avatarUrl?: string;
+  location?: string;
+  languages: string[];
+  courseIds: string[];
+  isFounder?: boolean;
+  socialLinks?: {
+    website?: string;
+    facebook?: string;
+    youtube?: string;
+    linkedin?: string;
+    github?: string;
+  };
+}
+
+export interface BlogArticleSection {
+  heading: string;
+  paragraphs: string[];
+  bullets?: string[];
+}
+
+export interface BlogPost {
+  slug: string;
+  title: string;
+  seoTitle: string;
+  seoDescription: string;
+  excerpt: string;
+  category: string;
+  tags: string[];
+  authorSlug: string;
+  publishedAt: string; // ISO 8601 e.g. "2026-09-15"
+  updatedAt: string; // ISO 8601 e.g. "2026-11-20"
+  readTimeMinutes: number;
+  coverImage: string;
+  coverAlt: string;
+  relatedCourseIds: string[];
+  sections: BlogArticleSection[];
 }
 
 export interface LiveSession {

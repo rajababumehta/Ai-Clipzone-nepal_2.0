@@ -1,5 +1,5 @@
 // HamroLms - High-Speed PWA Service Worker
-const CACHE_NAME = 'hamrolms-pwa-v40';
+const CACHE_NAME = 'hamrolms-pwa-v41';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/logo.png',
@@ -23,9 +23,7 @@ const STATIC_ASSETS = [
   '/apple-touch-icon.png',
   '/screenshots/screenshot-desktop.png',
   '/screenshots/screenshot-mobile.png',
-  '/widget-template.json',
-  '/robots.txt',
-  '/sitemap.xml'
+  '/widget-template.json'
 ];
 
 // 1. Install Event: Pre-cache static icon/manifest assets & activate immediately

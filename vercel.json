@@ -78,6 +78,14 @@
   ],
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/.well-known/assetlinks.json",
       "destination": "/api/assetlinks"
     },

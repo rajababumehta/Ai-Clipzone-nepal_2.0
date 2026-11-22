@@ -13,6 +13,7 @@ import { createRateLimiter, verifyAdminIdentity } from './authAndEnrollment.ts';
 import { createLiveClassRouter } from './liveClassRoutes.ts';
 import { getAdminAuth, getAdminDb } from './firebaseAdmin.ts';
 import { createRestFirestore } from './firestoreRest.ts';
+import { mountSeoRoutes } from './seoRoutes.ts';
 
 function getServerFirestoreForReq(req: express.Request) {
   const adminDb = getAdminDb();
@@ -24,6 +25,7 @@ function getServerFirestoreForReq(req: express.Request) {
 
 export function mountSharedApiMiddlewareAndRoutes(app: Express) {
   app.use(securityHeadersMiddleware);
+  mountSeoRoutes(app);
   app.use(express.json({ limit: '150kb' }));
 
   const liveEncryptLimiter = createRateLimiter({

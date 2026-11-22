@@ -44,7 +44,7 @@ import { AdminNotificationsTab } from './AdminNotificationsTab';
 import { AdminAskTab } from './AdminAskTab';
 import { AdminSubAdminsTab } from './AdminSubAdminsTab';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './LiveSessionsPanel';
-import { compressImageFile } from '../utils/chatMedia';
+import { compressImageFile, compressBrandingImageFile } from '../utils/chatMedia';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -684,32 +684,48 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         showToast('Global Certificate Template saved successfully! 📜🎉', 'success');
       } else {
         const targetCourse = courses.find((c) => c.id === selectedCertScope);
-        if (targetCourse && onSaveCourse) {
-          const updatedCourse: Course = {
-            ...targetCourse,
-            certificateTitle: certificateTitle.trim() || undefined,
-            certificateSubtitle: certificateSubtitle.trim() || undefined,
-            certificateCourseTitle: certCourseTitleOverride.trim() || undefined,
-            certificateInstituteName: certificateInstituteName.trim() || undefined,
-            certificateLogoUrl: certificateLogoUrl.trim() || undefined,
-            certificateDescription: certificateDescription.trim() || undefined,
-            certificateDirectorName: certificateDirectorName.trim() || undefined,
-            certificateDirectorTitle: certificateDirectorTitle.trim() || undefined,
-            certificateDirectorSignatureUrl: certificateDirectorSignatureUrl.trim() || undefined,
-            certificateCeoName: certificateCeoName.trim() || undefined,
-            certificateCeoTitle: certificateCeoTitle.trim() || undefined,
-            certificateCeoSignatureUrl: certificateCeoSignatureUrl.trim() || undefined,
-            certificateTheme: certificateTheme || undefined,
-            certificateStampUrl: certificateStampUrl.trim() || undefined,
-            certificateSealText: certificateSealText.trim() || undefined
-          };
-          await onSaveCourse(updatedCourse);
-          showToast(`Certificate settings saved for "${targetCourse.title}"! 📜🎉`, 'success');
+        if (!targetCourse || !onSaveCourse) {
+          showToast('Target course not found. Please select a valid course.', 'error');
+          return;
         }
+        const updatedCourse: Course = {
+          ...targetCourse,
+          certificateTitle: certificateTitle.trim() || undefined,
+          certificateSubtitle: certificateSubtitle.trim() || undefined,
+          certificateCourseTitle: certCourseTitleOverride.trim() || undefined,
+          certificateInstituteName: certificateInstituteName.trim() || undefined,
+          certificateLogoUrl: certificateLogoUrl.trim(),
+          certificateDescription: certificateDescription.trim() || undefined,
+          certificateDirectorName: certificateDirectorName.trim() || undefined,
+          certificateDirectorTitle: certificateDirectorTitle.trim() || undefined,
+          certificateDirectorSignatureUrl: certificateDirectorSignatureUrl.trim(),
+          certificateCeoName: certificateCeoName.trim() || undefined,
+          certificateCeoTitle: certificateCeoTitle.trim() || undefined,
+          certificateCeoSignatureUrl: certificateCeoSignatureUrl.trim(),
+          certificateTheme: certificateTheme || undefined,
+          certificateStampUrl: certificateStampUrl.trim(),
+          certificateSealText: certificateSealText.trim() || undefined
+        };
+        await onSaveCourse(updatedCourse);
+        showToast(`Certificate settings saved for "${targetCourse.title}"! 📜🎉`, 'success');
       }
     } catch (err) {
       console.error('Error saving certificate settings:', err);
-      showToast('Failed to save certificate settings.', 'error');
+      let friendlyMsg = 'Failed to save certificate settings.';
+      if (err instanceof Error && err.message) {
+        if (err.message.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(err.message);
+            if (parsed?.error) friendlyMsg = parsed.error;
+          } catch {}
+        } else {
+          friendlyMsg = err.message;
+        }
+      }
+      if (/1048576|maximum size|exceeds/i.test(friendlyMsg)) {
+        friendlyMsg = '⚠️ Image data exceeds Firebase 1MB limit. Please re-upload or use smaller images.';
+      }
+      showToast(friendlyMsg, 'error');
     } finally {
       setIsSavingSiteSettings(false);
     }
@@ -729,16 +745,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         certificateSubtitle: undefined,
         certificateCourseTitle: undefined,
         certificateInstituteName: undefined,
-        certificateLogoUrl: undefined,
+        certificateLogoUrl: '',
         certificateDescription: undefined,
         certificateDirectorName: undefined,
         certificateDirectorTitle: undefined,
-        certificateDirectorSignatureUrl: undefined,
+        certificateDirectorSignatureUrl: '',
         certificateCeoName: undefined,
         certificateCeoTitle: undefined,
-        certificateCeoSignatureUrl: undefined,
+        certificateCeoSignatureUrl: '',
         certificateTheme: undefined,
-        certificateStampUrl: undefined,
+        certificateStampUrl: '',
         certificateSealText: undefined
       };
       await onSaveCourse(resetCourse);
@@ -802,32 +818,54 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       showToast('Branding, Certificate Design & Site settings updated live! ⚙️', 'success');
     } catch (err) {
       console.error('Error saving overall site settings:', err);
-      showToast('Failed to save site settings.', 'error');
+      let friendlyMsg = 'Failed to save site settings.';
+      if (err instanceof Error && err.message) {
+        if (err.message.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(err.message);
+            if (parsed?.error) friendlyMsg = parsed.error;
+          } catch {}
+        } else {
+          friendlyMsg = err.message;
+        }
+      }
+      if (/1048576|maximum size|exceeds/i.test(friendlyMsg)) {
+        friendlyMsg = '⚠️ Image data exceeds Firebase 1MB limit. Please re-upload or use smaller images.';
+      }
+      showToast(friendlyMsg, 'error');
     } finally {
       setIsSavingSiteSettings(false);
     }
   };
 
-  // Generic Image File Uploader to Data URL
-  const handleImageFileUpload = (
+  // Generic Image File Uploader with automatic compression & transparency preservation
+  const handleImageFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (url: string) => void,
     label: string
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('Image size exceeds 2MB limit. Please choose a smaller file.', 'error');
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('Image size exceeds 15MB limit. Please choose a smaller file.', 'error');
+      e.target.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setter(reader.result);
-        showToast(`${label} loaded! Click Save to apply changes.`, 'success');
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressBrandingImageFile(file, 700, 110 * 1024);
+      setter(compressed.url);
+      showToast(`${label} uploaded & optimized! Click Save to apply changes.`, 'success');
+    } catch (err) {
+      console.error(`Failed to process ${label}:`, err);
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : `Failed to process ${label}. Please try a smaller PNG/JPG image.`,
+        'error'
+      );
+    } finally {
+      e.target.value = '';
+    }
   };
 
   // Handle Local Image Upload for QR Code (compressed so it always fits safely inside Firestore)
@@ -2134,7 +2172,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </label>
                     <div className="flex gap-2">
                       <input 
-                        type="url"
+                        type="text"
                         value={instituteLogoUrl}
                         onChange={(e) => setInstituteLogoUrl(e.target.value)}
                         placeholder="https://example.com/institute-logo.png"
@@ -2703,7 +2741,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
                   <div className="flex gap-2">
                     <input 
-                      type="url"
+                      type="text"
                       value={certificateLogoUrl}
                       onChange={(e) => setCertificateLogoUrl(e.target.value)}
                       placeholder="https://example.com/certificate-logo.png"
@@ -2778,7 +2816,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </label>
                     <div className="flex gap-2">
                       <input 
-                        type="url"
+                        type="text"
                         value={certificateDirectorSignatureUrl}
                         onChange={(e) => setCertificateDirectorSignatureUrl(e.target.value)}
                         placeholder="https://example.com/director-signature.png"
@@ -2859,7 +2897,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </label>
                     <div className="flex gap-2">
                       <input 
-                        type="url"
+                        type="text"
                         value={certificateCeoSignatureUrl}
                         onChange={(e) => setCertificateCeoSignatureUrl(e.target.value)}
                         placeholder="https://example.com/ceo-signature.png"
@@ -2915,7 +2953,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </label>
                     <div className="flex gap-2">
                       <input 
-                        type="url"
+                        type="text"
                         value={certificateStampUrl}
                         onChange={(e) => setCertificateStampUrl(e.target.value)}
                         placeholder="https://example.com/official-stamp.png"

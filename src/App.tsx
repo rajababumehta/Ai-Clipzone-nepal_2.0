@@ -86,7 +86,7 @@ import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessio
 import { CourseEnrollPage } from './components/CourseEnrollPage';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
-import { compressImageFile } from './utils/chatMedia';
+import { compressImageFile, estimateJsonByteSize } from './utils/chatMedia';
 
 enum OperationType {
   CREATE = 'create',
@@ -3226,13 +3226,22 @@ export default function App() {
   // ADMIN OVERALL SITE SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSaveSiteSettings = async (newSettings: SiteSettingsConfig) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Site सेटिङ परिवर्तन गर्न सक्छ।', 'error');
-      return;
+      const msg = 'केवल Main Admin ले मात्र Site सेटिङ परिवर्तन गर्न सक्छ।';
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
-    setSiteSettings(newSettings);
-    localStorage.setItem('clipzone_site_settings', JSON.stringify(newSettings));
+    const cleanedSettings = cleanUndefined(newSettings);
+    if (estimateJsonByteSize(cleanedSettings) > 950 * 1024) {
+      throw new Error('⚠️ Total site/certificate images exceed Firebase 1MB document limit. Please re-upload or remove oversized images.');
+    }
+    setSiteSettings(cleanedSettings);
     try {
-      await setDoc(doc(db, 'system', 'site_settings'), newSettings);
+      localStorage.setItem('clipzone_site_settings', JSON.stringify(cleanedSettings));
+    } catch (storageErr) {
+      console.warn('Could not cache site settings to localStorage:', storageErr);
+    }
+    try {
+      await setDoc(doc(db, 'system', 'site_settings'), cleanedSettings);
     } catch (err) {
       console.error('Error saving site settings to Firestore:', err);
       handleFirestoreError(err, OperationType.WRITE, 'system/site_settings');
@@ -3242,8 +3251,9 @@ export default function App() {
   // ADMIN & SCOPED SUB-ADMIN DIRECT COURSE UPDATE HANDLER
   const handleSaveCourseDirect = async (updatedCourse: Course) => {
     if (!canEditCourse(updatedCourse.id)) {
-      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
-      return;
+      const msg = 'तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।';
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
     const existingCourse = courses.find(c => c.id === updatedCourse.id);
     const safeCourse: Course = isMainAdmin
@@ -3254,6 +3264,9 @@ export default function App() {
           includeCertificate: existingCourse?.includeCertificate,
         };
     const cleaned = cleanUndefined(safeCourse);
+    if (estimateJsonByteSize(cleaned) > 950 * 1024) {
+      throw new Error('⚠️ Course data & uploaded images exceed Firebase 1MB limit. Please re-upload smaller images.');
+    }
     setCourses(prev => {
       const index = prev.findIndex(c => c.id === safeCourse.id);
       let updatedList: Course[];
@@ -3263,7 +3276,11 @@ export default function App() {
       } else {
         updatedList = [...prev, safeCourse];
       }
-      localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+      try {
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+      } catch (storageErr) {
+        console.warn('Could not cache dynamic courses to localStorage:', storageErr);
+      }
       return updatedList;
     });
 

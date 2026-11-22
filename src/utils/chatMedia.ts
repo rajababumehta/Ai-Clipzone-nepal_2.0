@@ -117,6 +117,127 @@ export const compressImageFile = (
 };
 
 /**
+ * Estimates serialized UTF-8 byte size of a Firestore payload object.
+ */
+export const estimateJsonByteSize = (payload: Record<string, any>): number => {
+  const json = JSON.stringify(payload);
+  return typeof TextEncoder !== 'undefined'
+    ? new TextEncoder().encode(json).length
+    : json.length;
+};
+
+/**
+ * Compresses branding images (signatures, stamps, logos) with alpha transparency preserved
+ * via WebP/PNG so multiple images fit safely inside a single Firestore 1 MiB document.
+ */
+export const compressBrandingImageFile = (
+  file: File,
+  maxDimension = 700,
+  maxDataUrlChars = 110 * 1024
+): Promise<ChatAttachment> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.onload = (e) => {
+      const originalDataUrl = (e.target?.result as string) || '';
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed to decode image'));
+      img.onload = () => {
+        const renderAt = (
+          dim: number,
+          mime: 'image/png' | 'image/webp' | 'image/jpeg',
+          quality?: number
+        ): string => {
+          let width = img.width;
+          let height = img.height;
+          if (width > dim || height > dim) {
+            if (width > height) {
+              height = Math.round((height * dim) / width);
+              width = dim;
+            } else {
+              width = Math.round((width * dim) / height);
+              height = dim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return originalDataUrl;
+          if (mime === 'image/jpeg') {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          return quality !== undefined ? canvas.toDataURL(mime, quality) : canvas.toDataURL(mime);
+        };
+
+        // Keep tiny original images untouched when already well under limit
+        if (originalDataUrl.length <= maxDataUrlChars && img.width <= maxDimension && img.height <= maxDimension) {
+          resolve({
+            type: 'image',
+            url: originalDataUrl,
+            name: file.name,
+            size: Math.round((originalDataUrl.length * 3) / 4),
+          });
+          return;
+        }
+
+        // Prefer WebP (preserves transparency at tiny file size)
+        const webpAttempts: Array<[number, number]> = [
+          [maxDimension, 0.85],
+          [Math.min(maxDimension, 560), 0.75],
+          [440, 0.65],
+          [340, 0.55],
+          [260, 0.45],
+        ];
+
+        let bestUrl = '';
+        for (const [dim, q] of webpAttempts) {
+          const candidate = renderAt(dim, 'image/webp', q);
+          if (candidate.startsWith('data:image/webp')) {
+            bestUrl = candidate;
+            if (candidate.length <= maxDataUrlChars) break;
+          } else {
+            break;
+          }
+        }
+
+        // Fallback to JPEG (with white background) if WebP encoding isn't supported or still too large
+        if (!bestUrl || bestUrl.length > maxDataUrlChars) {
+          const jpegAttempts: Array<[number, number]> = [
+            [Math.min(maxDimension, 560), 0.72],
+            [440, 0.6],
+            [320, 0.48],
+          ];
+          for (const [dim, q] of jpegAttempts) {
+            const candidate = renderAt(dim, 'image/jpeg', q);
+            if (!bestUrl || candidate.length < bestUrl.length) {
+              bestUrl = candidate;
+            }
+            if (candidate.length <= maxDataUrlChars) break;
+          }
+        }
+
+        if (!bestUrl || bestUrl.length > 260 * 1024) {
+          reject(new Error('Image is still too large after compression. Please choose a smaller image.'));
+          return;
+        }
+
+        resolve({
+          type: 'image',
+          url: bestUrl,
+          name: file.name,
+          size: Math.round((bestUrl.length * 3) / 4),
+        });
+      };
+      img.src = originalDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * Reads document (PDF, Doc, text, etc.) as Data URL, strictly ensuring base64 payload fits in Firestore (<1MB).
  */
 export const readDocumentFile = (

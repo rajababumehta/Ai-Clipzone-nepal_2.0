@@ -37,8 +37,8 @@ export const LegalPagesView: React.FC<LegalPagesViewProps> = ({
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearedSuccess, setClearedSuccess] = useState(false);
 
-  const instituteName = siteSettings.instituteName || 'AI Clipzone';
-  const supportEmail = siteSettings.supportEmail || 'ai.clipzone.edu@gmail.com';
+  const instituteName = siteSettings.instituteName || 'HamroLms';
+  const supportEmail = siteSettings.supportEmail || 'support.hamrolms@gmail.com';
   const supportPhone = siteSettings.supportPhone || '9763323268';
   const whatsappClean = supportPhone.replace(/[^0-9]/g, '').startsWith('977')
     ? supportPhone.replace(/[^0-9]/g, '')
