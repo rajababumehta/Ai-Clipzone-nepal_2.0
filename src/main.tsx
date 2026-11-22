@@ -19,27 +19,10 @@ if ('serviceWorker' in navigator) {
     }).catch(() => {});
   } else {
     window.addEventListener('load', () => {
-      const hadController = Boolean(navigator.serviceWorker.controller);
       navigator.serviceWorker
         .register('/sw.js', { updateViaCache: 'none' })
         .then((reg) => reg.update().catch(() => {}))
         .catch(() => {});
-
-      if (hadController) {
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (refreshing) return;
-          const reloadKey = 'sw_reloaded_v37';
-          try {
-            if (sessionStorage.getItem(reloadKey)) return;
-            sessionStorage.setItem(reloadKey, '1');
-          } catch {
-            // ignore storage errors
-          }
-          refreshing = true;
-          window.location.reload();
-        });
-      }
     });
   }
 }
@@ -49,5 +32,3 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </ErrorBoundary>
 );
-
-

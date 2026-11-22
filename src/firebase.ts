@@ -16,14 +16,14 @@ try {
   // ignore
 }
 
-// Initialize Firestore with persistent IndexedDB offline cache and forced long polling
+// Initialize Firestore with persistent IndexedDB offline cache and auto-detected transport
 export const db = initializeFirestore(
   app,
   {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager(),
     }),
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
     ignoreUndefinedProperties: true,
   },
   firebaseConfig.firestoreDatabaseId
