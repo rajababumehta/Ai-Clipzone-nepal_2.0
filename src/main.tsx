@@ -27,6 +27,50 @@ if ('serviceWorker' in navigator) {
   }
 }
 
+// Prevent pinch-to-zoom, Safari gesture zoom, and Ctrl/Cmd browser zoom
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const preventGesture = (e: Event) => e.preventDefault();
+  document.addEventListener('gesturestart', preventGesture, { passive: false });
+  document.addEventListener('gesturechange', preventGesture, { passive: false });
+  document.addEventListener('gestureend', preventGesture, { passive: false });
+
+  document.addEventListener(
+    'touchstart',
+    (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  document.addEventListener(
+    'touchmove',
+    (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  window.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && ['+', '=', '-', '_', '0'].includes(e.key)) {
+      e.preventDefault();
+    }
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <App />

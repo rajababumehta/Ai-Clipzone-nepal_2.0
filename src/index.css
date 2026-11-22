@@ -109,21 +109,31 @@
   font-family: var(--font-heading);
 }
 
-/* Mobile view clear visibility & slight zoom-out styling (thorai zoom out for mobile) */
+/* Mobile view clear visibility & zoom lock */
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
+  touch-action: pan-x pan-y;
 }
 
-button, nav, header {
+button, nav, header, a {
   -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
 }
 
 @media (max-width: 640px) {
