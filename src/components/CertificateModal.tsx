@@ -222,20 +222,27 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     .replace(/by Dhruv Rathee/gi, 'by HamroLms')
     .replace(/Dhruv Rathee/gi, 'HamroLms');
 
-  // Auto-scale certificate canvas to fit user's modal screen clearly (both mobile and desktop)
+  // Auto-scale certificate canvas to fit both width and height clearly (on mobile and desktop)
   useEffect(() => {
     const updateScale = () => {
-      const containerWidth = containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1000);
-      const isMobile = (typeof window !== 'undefined' ? window.innerWidth : 1000) < 768;
-      const padding = isMobile ? 16 : 40;
-      const availableWidth = Math.max(280, containerWidth - padding);
-      
-      let newScale = availableWidth / 1000;
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 1000;
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const containerWidth = containerRef.current?.clientWidth || vw;
+      const isMobile = vw < 768;
+      const paddingX = isMobile ? 16 : 48;
+      const reservedTopUi = isMobile ? 150 : 128;
+
+      const availableWidth = Math.max(280, containerWidth - paddingX);
+      const availableHeight = Math.max(260, vh - reservedTopUi);
+
+      const scaleByWidth = availableWidth / 1000;
+      const scaleByHeight = availableHeight / 707;
+
+      let newScale = Math.min(1.0, scaleByWidth, scaleByHeight);
       if (isMobile) {
-        newScale = Math.min(1.0, Math.max(0.30, newScale));
+        newScale = Math.min(1.0, Math.max(0.30, scaleByWidth));
       } else {
-        // Desktop / Laptop: keep it large, sharp, and easy to read (0.78 to 1.0)
-        newScale = Math.min(1.0, Math.max(0.78, newScale));
+        newScale = Math.min(1.0, Math.max(0.55, newScale));
       }
       setScale(newScale);
     };
@@ -575,11 +582,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 </span>
               </div>
 
-              {/* HEADER SECTION: LOGO (TOP LEFT) & MAIN TITLE (CENTERED EQUALLY) */}
-              <div className="relative z-10 flex items-center justify-between w-full px-4 pt-2">
+              {/* HEADER SECTION: FIXED 1000px CANVAS PROPORTIONS (IDENTICAL ON MOBILE & DESKTOP) */}
+              <div className="relative z-10 flex items-center justify-between w-full px-4 pt-1">
                 {/* Official Institute Logo */}
-                <div className="w-72 sm:w-80 shrink-0 flex items-center justify-start pl-6 sm:pl-8 md:pl-10">
-                  <div className="h-28 sm:h-32 md:h-36 flex items-center justify-start shrink-0 bg-transparent mt-1">
+                <div className="w-56 shrink-0 flex items-center justify-start pl-4">
+                  <div className="h-28 flex items-center justify-start shrink-0 bg-transparent">
                     {embeddedLogo ? (
                       <img 
                         src={embeddedLogo} 
@@ -593,7 +600,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                             setEmbeddedLogo('/logo.png');
                           }
                         }}
-                        className="h-28 sm:h-32 md:h-36 w-auto max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]"
+                        className="h-28 w-auto max-w-[210px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]"
                       />
                     ) : (
                       <div className="flex items-center gap-3">
@@ -614,26 +621,26 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 </div>
 
                 {/* CENTER TITLE */}
-                <div className="flex-1 text-center px-1">
+                <div className="flex-1 min-w-0 text-center px-2">
                   <h1
                     style={{ 
                       color: themeColors.highlight,
                       textShadow: `0 2px 10px ${themeColors.shadow}` 
                     }}
-                    className="cert-font-cinzel text-4xl sm:text-5xl font-black tracking-[0.16em] uppercase drop-shadow-md"
+                    className="cert-font-cinzel text-[42px] leading-tight font-black tracking-[0.14em] uppercase drop-shadow-md whitespace-nowrap"
                   >
                     {certificateTitle || 'CERTIFICATE'}
                   </h1>
                   <h2
                     style={{ color: themeColors.primary }}
-                    className="cert-font-cinzel text-sm sm:text-base font-black tracking-[0.32em] uppercase mt-1"
+                    className="cert-font-cinzel text-sm font-black tracking-[0.28em] uppercase mt-1"
                   >
                     {certificateSubtitle || 'OF ACHIEVEMENT'}
                   </h2>
                   {certificateInstituteName && (
                     <p 
                       style={{ color: themeColors.primary }}
-                      className="text-[10px] tracking-[0.25em] font-bold uppercase opacity-80 mt-0.5"
+                      className="text-[10px] tracking-[0.24em] font-bold uppercase opacity-80 mt-0.5"
                     >
                       {certificateInstituteName}
                     </p>
@@ -641,14 +648,14 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 </div>
 
                 {/* RIGHT SIDE: OFFICIAL STUDENT PHOTO - SHOWN ONLY IF USER UPLOADED PHOTO */}
-                <div className="w-72 sm:w-80 shrink-0 flex items-center justify-end pr-6 sm:pr-8 md:pr-10">
+                <div className="w-56 shrink-0 flex items-center justify-end pr-4">
                   {studentPhoto && (studentPhoto.startsWith('data:') || studentPhoto.startsWith('http')) ? (
                     <div 
                       style={{ 
                         borderColor: themeColors.primary,
                         boxShadow: `0 8px 24px -4px rgba(0,0,0,0.85), 0 0 16px ${themeColors.shadow}`
                       }}
-                      className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-lg mt-6 sm:mt-8 md:mt-10"
+                      className="w-28 h-28 aspect-square border-2 p-0.5 bg-black/80 relative overflow-hidden flex items-center justify-center shrink-0 rounded-lg mt-2"
                     >
                       <img 
                         src={studentPhoto} 
@@ -659,7 +666,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     </div>
                   ) : (
                     /* If no photo uploaded, do NOT show any shape or icon */
-                    <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 shrink-0 opacity-0 pointer-events-none" />
+                    <div className="w-28 h-28 shrink-0 opacity-0 pointer-events-none" />
                   )}
                 </div>
               </div>
@@ -673,7 +680,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* STUDENT CALLIGRAPHIC NAME */}
                 <div className="my-2 relative block w-full max-w-full px-4 text-center">
                   <h2
-                    className="cert-font-script text-7xl md:text-8xl font-normal tracking-wide leading-tight px-2 block mx-auto"
+                    className="cert-font-script text-[68px] font-normal tracking-wide leading-[1.12] px-2 block mx-auto"
                     style={{
                       fontFamily: "'Great Vibes', cursive",
                       fontWeight: 400,
@@ -712,13 +719,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     color: themeColors.highlight,
                     textShadow: `0 2px 8px ${themeColors.shadow}` 
                   }}
-                  className="font-sans font-black text-3xl tracking-wider uppercase my-2 leading-snug max-w-3xl mx-auto px-4"
+                  className="font-sans font-black text-[28px] tracking-wider uppercase my-2 leading-snug max-w-3xl mx-auto px-4"
                 >
                   {cleanCourseTitle}
                 </h3>
 
                 {/* COURSE DESCRIPTION SUMMARY */}
-                <p className="text-slate-300/90 text-base font-normal max-w-2xl mx-auto leading-relaxed px-4 my-1">
+                <p className="text-slate-300/90 text-[15px] font-normal max-w-2xl mx-auto leading-relaxed px-4 my-1">
                   {certificateDescription || 'an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.'}
                 </p>
               </div>
