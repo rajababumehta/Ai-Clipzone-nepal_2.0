@@ -843,7 +843,6 @@ export default function App() {
   const [showDirectVideoAddForm, setShowDirectVideoAddForm] = useState(false);
   const [directVideoChapter, setDirectVideoChapter] = useState('');
   const [directVideoTitle, setDirectVideoTitle] = useState('');
-  const [directVideoDuration, setDirectVideoDuration] = useState('10:00');
   const [directVideoUrl, setDirectVideoUrl] = useState('');
   const [isSavingDirectVideo, setIsSavingDirectVideo] = useState(false);
   const [confirmDeleteVideoIdx, setConfirmDeleteVideoIdx] = useState<number | null>(null);
@@ -3526,7 +3525,6 @@ export default function App() {
     }
     const cleanTitle = directVideoTitle.trim();
     const cleanUrl = directVideoUrl.trim();
-    const cleanDuration = directVideoDuration.trim() || '10:00';
     const cleanChapter = directVideoChapter.trim();
 
     if (!cleanTitle || !cleanUrl) {
@@ -3538,7 +3536,7 @@ export default function App() {
     try {
       const newVideo: CourseVideo = {
         title: cleanTitle,
-        duration: cleanDuration,
+        duration: '',
         videoUrl: cleanUrl,
         ...(cleanChapter ? { chapterTitle: cleanChapter } : {}),
       };
@@ -3556,7 +3554,6 @@ export default function App() {
       }
       setDirectVideoTitle('');
       setDirectVideoUrl('');
-      setDirectVideoDuration('10:00');
       setShowDirectVideoAddForm(false);
       showToast(`🎬 "${cleanTitle}" कोर्षमा सिधै थपियो!`, 'success');
     } catch (err) {
@@ -7191,32 +7188,18 @@ export default function App() {
                                       )}
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                      <div className="sm:col-span-2">
-                                        <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                                          Lecture Title *
-                                        </label>
-                                        <input
-                                          type="text"
-                                          required
-                                          value={directVideoTitle}
-                                          onChange={(e) => setDirectVideoTitle(e.target.value)}
-                                          placeholder="e.g. 1.1 Course Setup & Overview"
-                                          className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                                          Duration
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={directVideoDuration}
-                                          onChange={(e) => setDirectVideoDuration(e.target.value)}
-                                          placeholder="e.g. 12:30"
-                                          className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
-                                        />
-                                      </div>
+                                    <div>
+                                      <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                                        Lecture Title *
+                                      </label>
+                                      <input
+                                        type="text"
+                                        required
+                                        value={directVideoTitle}
+                                        onChange={(e) => setDirectVideoTitle(e.target.value)}
+                                        placeholder="e.g. 1.1 Course Setup & Overview"
+                                        className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
+                                      />
                                     </div>
 
                                     <div>
@@ -8377,10 +8360,14 @@ export default function App() {
                                           <h5 className={`font-bold leading-tight text-[11px] ${isSelected ? 'text-blue-300 font-extrabold' : 'text-slate-200'}`}>
                                             {video.title || `Lecture ${globalIndex + 1}`}
                                           </h5>
-                                          <div className="flex items-center justify-between mt-1 text-[9px]">
-                                            <span className="text-slate-400 font-medium">⏱️ {video.duration || '10:00'} min</span>
-                                            {isSelected && <span className="text-blue-400 font-black uppercase tracking-wider">Now Playing</span>}
-                                          </div>
+                                          {(video.duration || isSelected) && (
+                                            <div className="flex items-center justify-between mt-1 text-[9px]">
+                                              {video.duration ? (
+                                                <span className="text-slate-400 font-medium">⏱️ {video.duration} min</span>
+                                              ) : <span />}
+                                              {isSelected && <span className="text-blue-400 font-black uppercase tracking-wider">Now Playing</span>}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     );
@@ -9656,7 +9643,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         const lastChapter = formVideos.length > 0 ? formVideos[formVideos.length - 1].chapterTitle : 'Chapter 1: Course Introduction';
-                        setFormVideos([...formVideos, { chapterTitle: lastChapter, title: '', duration: '10:00', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]);
+                        setFormVideos([...formVideos, { chapterTitle: lastChapter, title: '', duration: '', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]);
                       }}
                       className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
                     >
@@ -9705,19 +9692,7 @@ export default function App() {
                             className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-[11px] font-semibold text-slate-800 outline-hidden focus:border-purple-500"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input 
-                            type="text"
-                            required
-                            placeholder="Duration (e.g. 12:15)"
-                            value={video.duration}
-                            onChange={(e) => {
-                              const updated = [...formVideos];
-                              updated[idx].duration = e.target.value;
-                              setFormVideos(updated);
-                            }}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
-                          />
+                        <div>
                           <input 
                             type="text"
                             required
