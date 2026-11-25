@@ -5628,7 +5628,7 @@ export default function App() {
 
         {/* Top Floating Banner with sleek pitch-black styling matching the logo */}
         <div className="w-full bg-black text-white">
-          <div className="max-w-[1600px] mx-auto px-2 sm:px-3 md:px-4 lg:px-5 h-11 sm:h-12 relative flex items-center justify-between">
+          <div className="max-w-[1600px] mx-auto px-2 sm:px-3 md:px-4 lg:px-5 h-11 sm:h-12 relative flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Brand Logo Only */}
             <div 
               onClick={() => {
@@ -5638,7 +5638,7 @@ export default function App() {
                 }
                 navigateToPath('/');
               }}
-              className="flex items-center cursor-pointer select-none relative group shrink-0 z-10"
+              className="min-w-[70px] sm:min-w-0 flex items-center cursor-pointer select-none relative group shrink-0 z-10"
               title="Hamro LMS - Home"
             >
               {/* Institute Official Logo */}
@@ -5646,7 +5646,7 @@ export default function App() {
                 <img 
                   src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                   alt={siteSettings.instituteName || "Logo"}
-                  className="h-7.5 sm:h-9.5 md:h-10.5 w-auto max-w-[68px] sm:max-w-[135px] md:max-w-[165px] object-contain shrink-0 filter drop-shadow-md"
+                  className="h-7.5 sm:h-9.5 md:h-10.5 w-auto max-w-[78px] sm:max-w-[135px] md:max-w-[165px] object-contain shrink-0 filter drop-shadow-md"
                   loading="eager"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
@@ -5661,7 +5661,7 @@ export default function App() {
             {/* Centered Slim Pill Search Bar */}
             <div
               ref={searchContainerRef}
-              className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-[clamp(144px,46vw,220px)] sm:w-[290px] md:w-[370px] lg:w-[430px] z-20"
+              className="relative flex-1 min-w-0 max-w-[230px] mx-auto sm:flex-none sm:max-w-none sm:mx-0 sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:w-[290px] md:w-[370px] lg:w-[430px] z-20"
             >
               <div className="relative flex items-center w-full">
                 <div className="absolute inset-y-0 left-2.5 pointer-events-none text-zinc-400 flex items-center justify-center">
