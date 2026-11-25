@@ -5583,7 +5583,7 @@ export default function App() {
   ]);
 
   return (
-    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
+    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-0'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
       {/* Sleek Pure Black Ambient Lighting: Hidden in Ask and Enroll views */}
       {!(currentView === 'ask' && isCourseActiveUser) && !(currentView === 'enroll' && enrollCourse) && (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
@@ -5628,7 +5628,7 @@ export default function App() {
 
         {/* Top Floating Banner with sleek pitch-black styling matching the logo */}
         <div className="w-full bg-black text-white">
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="max-w-7xl mx-auto px-2.5 sm:px-4 py-1 sm:py-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
             {/* Left: Brand Logo Only (text removed as requested) */}
             <div 
               onClick={() => {
@@ -5638,15 +5638,15 @@ export default function App() {
                 }
                 navigateToPath('/');
               }}
-              className="flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
+              className="justify-self-start flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
               title="Hamro LMS - Home"
             >
               {/* Institute Official Logo */}
-              <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
+              <div className="h-8 sm:h-10 md:h-11 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
                 <img 
                   src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                   alt={siteSettings.instituteName || "Logo"}
-                  className="h-10 sm:h-12 md:h-14 w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[190px] object-contain shrink-0 filter drop-shadow-md"
+                  className="h-8 sm:h-10 md:h-11 w-auto max-w-[92px] sm:max-w-[150px] md:max-w-[175px] object-contain shrink-0 filter drop-shadow-md"
                   loading="eager"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
@@ -5658,11 +5658,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* 100% Radius Search Bar */}
-            <div ref={searchContainerRef} className="relative flex-1 max-w-[180px] xs:max-w-[220px] sm:max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-3">
+            {/* Centered Extra-Slim Pill Search Bar */}
+            <div ref={searchContainerRef} className="relative justify-self-center w-[156px] xs:w-[200px] sm:w-[300px] md:w-[380px] lg:w-[440px]">
               <div className="relative flex items-center w-full">
-                <div className="absolute left-3 sm:left-3.5 pointer-events-none text-zinc-400 flex items-center justify-center">
-                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
+                <div className="absolute left-2.5 pointer-events-none text-zinc-400 flex items-center justify-center">
+                  <Search className="w-3 h-3 text-zinc-400" />
                 </div>
                 <input
                   type="text"
@@ -5675,8 +5675,7 @@ export default function App() {
                   }}
                   onFocus={() => setIsSearchFocused(true)}
                   placeholder="Search courses, AI tools..."
-                  className="w-full pl-8.5 sm:pl-10 pr-7 sm:pr-8 py-1.5 sm:py-2 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs md:text-sm rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
-                  style={{ borderRadius: '9999px' }}
+                  className="w-full h-6.5 sm:h-7 pl-7 pr-6 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs leading-none rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
                 />
                 {courseSearchQuery && (
                   <button
@@ -5685,10 +5684,10 @@ export default function App() {
                       setCourseSearchQuery('');
                       setIsSearchFocused(false);
                     }}
-                    className="absolute right-2 sm:right-2.5 w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                    className="absolute right-1.5 w-4 h-4 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
                     title="Clear search"
                   >
-                    <X className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                    <X className="w-2.5 h-2.5" />
                   </button>
                 )}
               </div>
@@ -5701,7 +5700,7 @@ export default function App() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.98 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute left-0 right-0 top-full mt-2 bg-zinc-950/98 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[600] max-h-80 overflow-y-auto"
+                    className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 w-[260px] sm:w-full top-full mt-2 bg-zinc-950/98 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl p-2 z-[600] max-h-80 overflow-y-auto"
                   >
                     <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-2 py-1 flex items-center justify-between border-b border-zinc-900 mb-1">
                       <span>Matching Courses ({filteredHomeCourses.length})</span>
@@ -5775,15 +5774,15 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="justify-self-end flex items-center gap-1.5 sm:gap-2.5">
               {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
               <button
                 id="header-notification-bell-btn"
                 onClick={() => setShowNotifCenterModal(true)}
-                className="relative w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group shrink-0"
+                className="relative w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group shrink-0"
                 title="Notifications & Announcements"
               >
-                <Bell className="w-4.5 h-4.5 text-zinc-300 group-hover:text-blue-400 transition" />
+                <Bell className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-zinc-300 group-hover:text-blue-400 transition" />
                 {unreadNotifCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
                     {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
@@ -5794,7 +5793,7 @@ export default function App() {
               {/* Student Profile Avatar Badge (No dropdown menu on click as requested) */}
               <div className="relative shrink-0">
                 <div
-                  className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
+                  className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
                   title={hasStudentProfile && currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'HamroLms'}
                 >
                   {hasStudentProfile && userAvatar ? (
@@ -5814,7 +5813,7 @@ export default function App() {
                       </span>
                     </>
                   ) : (
-                    <User className="w-4.5 h-4.5 text-zinc-400" />
+                    <User className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-zinc-400" />
                   )}
                 </div>
               </div>
@@ -5825,7 +5824,7 @@ export default function App() {
       )}
 
       {/* Main Container for Course List / Classroom / Account / Ask / Enroll */}
-      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-24 md:pb-28'}>
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-1.5 pb-[62px] md:pb-[68px]'}>
 
         {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / ENROLL / HOME VIEWS */}
         {currentView === 'enroll' && enrollCourse ? (
@@ -6588,24 +6587,25 @@ export default function App() {
           /* 2. COURSES / CLASSROOM VIEW (when not in account) */
           <>
             {/* Course Catalog Title & Grid Section */}
-            <section id="courses-section" className="pt-2 scroll-mt-24">
+            <section id="courses-section" className="pt-0 scroll-mt-24">
               {currentView === 'home' && (
-                <div className="text-center mb-8 space-y-4">
-                  <div>
-                    <h1 className="text-xl sm:text-2xl md:text-[28px] font-black tracking-tight inline-flex items-center justify-center gap-2.5">
-                      <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
-                        <BookOpen className="w-4 h-4 text-white" />
-                      </span>
-                      <span className="bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
-                        Hamro LMS
-                      </span>
+                <div className="flex flex-col items-center justify-center text-center pt-0.5 pb-0.5 mb-3 sm:mb-4">
+                  <div className="inline-flex items-center gap-2.5">
+                    <span
+                      aria-hidden="true"
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-blue-500/20 via-indigo-500/15 to-sky-500/10 border border-blue-400/35 flex items-center justify-center shadow-sm shadow-blue-500/15 shrink-0"
+                    >
+                      <GraduationCap className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-sky-300" />
+                    </span>
+                    <h1 className="font-['Outfit',sans-serif] text-2xl sm:text-[28px] font-extrabold tracking-tight leading-none bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
+                      Hamro Lms
                     </h1>
-                    <div className="w-16 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-2 shadow-sm shadow-blue-500/50"></div>
                   </div>
-
-                  <h2 id="available-courses-heading" className="text-lg sm:text-xl font-black text-white pt-2">
-                    Available Online Courses on Hamro LMS Nepal
-                  </h2>
+                  <div className="mt-1.5 flex items-center gap-2.5 w-48 sm:w-64" aria-hidden="true">
+                    <span className="h-[1.5px] flex-1 bg-gradient-to-r from-transparent via-blue-500/50 to-blue-400/90 rounded-full" />
+                    <BookOpen className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-sky-400 shrink-0" />
+                    <span className="h-[1.5px] flex-1 bg-gradient-to-l from-transparent via-blue-500/50 to-blue-400/90 rounded-full" />
+                  </div>
                 </div>
               )}
 
@@ -7462,7 +7462,7 @@ export default function App() {
 
             {/* Compact Footer */}
             {currentView === 'home' && (
-              <footer className="mt-10 pt-5 pb-4 border-t border-zinc-900 text-center sm:text-left">
+              <footer className="mt-4 pt-3 pb-1 border-t border-zinc-900 text-center sm:text-left">
                 <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
                   <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
                   <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
