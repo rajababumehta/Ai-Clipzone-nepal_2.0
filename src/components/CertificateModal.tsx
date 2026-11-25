@@ -70,6 +70,143 @@ const renderStarPoints = (cx: number, cy: number, outerR: number, innerR: number
   return pts.join(' ');
 };
 
+interface ProcessedSignature {
+  src: string;
+  width?: number;
+  height?: number;
+}
+
+const fitSignatureDimensions = (
+  natW: number,
+  natH: number,
+  maxW: number,
+  maxH: number
+): { width: number; height: number } => {
+  if (!natW || !natH) return { width: maxW, height: maxH };
+  const ratio = Math.min(maxW / natW, maxH / natH);
+  return {
+    width: Math.max(24, Math.round(natW * ratio)),
+    height: Math.max(18, Math.round(natH * ratio)),
+  };
+};
+
+const processSignatureForCertificate = (
+  rawUrl: string,
+  maxW: number,
+  maxH: number
+): Promise<ProcessedSignature> => {
+  return new Promise((resolve) => {
+    const trimmedUrl = rawUrl.trim();
+    if (!trimmedUrl) {
+      resolve({ src: '' });
+      return;
+    }
+
+    const img = new Image();
+    if (trimmedUrl.startsWith('http')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.referrerPolicy = 'no-referrer';
+
+    img.onload = () => {
+      const natW = img.naturalWidth || img.width;
+      const natH = img.naturalHeight || img.height;
+      if (!natW || !natH) {
+        resolve({ src: trimmedUrl });
+        return;
+      }
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = natW;
+        canvas.height = natH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve({ src: trimmedUrl, ...fitSignatureDimensions(natW, natH, maxW, maxH) });
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, natW, natH);
+        const data = imgData.data;
+
+        const isNearWhite = (idx: number) =>
+          data[idx + 3] > 20 && data[idx] > 240 && data[idx + 1] > 240 && data[idx + 2] > 240;
+        const isTransparent = (idx: number) => data[idx + 3] < 20;
+
+        const cornerCoords = [
+          0,
+          (natW - 1) * 4,
+          (natH - 1) * natW * 4,
+          ((natH - 1) * natW + (natW - 1)) * 4,
+        ];
+        const allCornersWhite = cornerCoords.every(isNearWhite);
+
+        if (allCornersWhite) {
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 242 && data[i + 1] > 242 && data[i + 2] > 242) {
+              data[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        }
+
+        let minX = natW;
+        let minY = natH;
+        let maxX = -1;
+        let maxY = -1;
+
+        for (let y = 0; y < natH; y++) {
+          const rowOffset = y * natW * 4;
+          for (let x = 0; x < natW; x++) {
+            const idx = rowOffset + x * 4;
+            if (!isTransparent(idx)) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+
+        if (maxX >= minX && maxY >= minY) {
+          const pad = 4;
+          const cropX = Math.max(0, minX - pad);
+          const cropY = Math.max(0, minY - pad);
+          const cropW = Math.min(natW - cropX, maxX - minX + 1 + pad * 2);
+          const cropH = Math.min(natH - cropY, maxY - minY + 1 + pad * 2);
+
+          const outCanvas = document.createElement('canvas');
+          outCanvas.width = cropW;
+          outCanvas.height = cropH;
+          const outCtx = outCanvas.getContext('2d');
+          if (outCtx) {
+            outCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+            resolve({
+              src: outCanvas.toDataURL('image/png'),
+              ...fitSignatureDimensions(cropW, cropH, maxW, maxH),
+            });
+            return;
+          }
+        }
+
+        resolve({
+          src: allCornersWhite ? canvas.toDataURL('image/png') : trimmedUrl,
+          ...fitSignatureDimensions(natW, natH, maxW, maxH),
+        });
+      } catch {
+        resolve({ src: trimmedUrl, ...fitSignatureDimensions(natW, natH, maxW, maxH) });
+      }
+    };
+
+    img.onerror = () => {
+      resolve({ src: trimmedUrl });
+    };
+
+    img.src = trimmedUrl;
+  });
+};
+
 export const CertificateModal: React.FC<CertificateModalProps> = ({
   studentName = 'Student Learner',
   studentPhoto,
@@ -105,6 +242,45 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     if (logoUrl && logoUrl.startsWith('data:image/')) return logoUrl;
     return logoUrl?.trim() || '';
   });
+
+  const [processedDirectorSig, setProcessedDirectorSig] = useState<ProcessedSignature>(() => ({
+    src: directorSignatureUrl?.trim() || '',
+  }));
+  const [processedCeoSig, setProcessedCeoSig] = useState<ProcessedSignature>(() => ({
+    src: ceoSignatureUrl?.trim() || '',
+  }));
+
+  useEffect(() => {
+    let active = true;
+    const raw = directorSignatureUrl?.trim() || '';
+    if (!raw) {
+      setProcessedDirectorSig({ src: '' });
+      return;
+    }
+    setProcessedDirectorSig({ src: raw });
+    processSignatureForCertificate(raw, 208, 72).then((res) => {
+      if (active) setProcessedDirectorSig(res);
+    });
+    return () => {
+      active = false;
+    };
+  }, [directorSignatureUrl]);
+
+  useEffect(() => {
+    let active = true;
+    const raw = ceoSignatureUrl?.trim() || '';
+    if (!raw) {
+      setProcessedCeoSig({ src: '' });
+      return;
+    }
+    setProcessedCeoSig({ src: raw });
+    processSignatureForCertificate(raw, 192, 68).then((res) => {
+      if (active) setProcessedCeoSig(res);
+    });
+    return () => {
+      active = false;
+    };
+  }, [ceoSignatureUrl]);
 
   useEffect(() => {
     const targetUrl = logoUrl && logoUrl.trim() ? logoUrl.trim() : '';
@@ -1068,17 +1244,29 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* LAYER 6: FOOTER SIGNATURES, VERTICAL DIVIDERS & CENTER DATE/VERIFY INFO */}
               <div
-                style={{ left: '56px', width: '888px', bottom: '28px', height: '110px' }}
+                style={{ left: '56px', width: '888px', bottom: '24px', height: '138px' }}
                 className="absolute z-20 flex items-end justify-between text-center"
               >
                 {/* Left Column: Director Signature */}
                 <div style={{ width: '215px' }} className="flex flex-col items-center justify-end pb-1 shrink-0">
-                  <div className="h-[44px] flex items-end justify-center w-full">
-                    {directorSignatureUrl && directorSignatureUrl.trim() ? (
+                  <div className="h-[74px] flex items-end justify-center w-full">
+                    {processedDirectorSig.src ? (
                       <img
-                        src={directorSignatureUrl.trim()}
+                        src={processedDirectorSig.src}
                         alt="Director Signature"
-                        className="h-10 w-auto max-w-[155px] object-contain mx-auto"
+                        style={
+                          processedDirectorSig.width && processedDirectorSig.height
+                            ? {
+                                width: `${processedDirectorSig.width}px`,
+                                height: `${processedDirectorSig.height}px`,
+                              }
+                            : undefined
+                        }
+                        className={
+                          processedDirectorSig.width && processedDirectorSig.height
+                            ? 'block mx-auto'
+                            : 'max-h-[72px] w-auto max-w-[208px] object-contain mx-auto'
+                        }
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
@@ -1086,7 +1274,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     ) : (
                       <svg
                         viewBox="0 0 180 56"
-                        className="w-[144px] h-[42px]"
+                        className="w-[152px] h-[44px]"
                         fill="none"
                         stroke="#0a1c3d"
                         strokeLinecap="round"
@@ -1106,7 +1294,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   </div>
                   <div
                     style={{ backgroundColor: '#c79324', height: '1.5px' }}
-                    className="w-[154px] my-1.5"
+                    className="w-[158px] mt-0.5 mb-1.5"
                   />
                   <span className="text-[13.5px] font-bold text-[#071e46] leading-tight whitespace-nowrap truncate max-w-[205px]">
                     {resolvedDirectorName}
@@ -1119,7 +1307,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* Vertical Gold Divider 1 */}
                 <div
                   style={{ backgroundColor: '#d4a238', height: '62px' }}
-                  className="w-[1px] self-center opacity-80 shrink-0"
+                  className="w-[1px] self-center opacity-80 shrink-0 mt-4"
                 />
 
                 {/* Center Column: Date of Issue, Verify Code & Footer Seal Line */}
@@ -1148,17 +1336,29 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* Vertical Gold Divider 2 */}
                 <div
                   style={{ backgroundColor: '#d4a238', height: '62px' }}
-                  className="w-[1px] self-center opacity-80 shrink-0"
+                  className="w-[1px] self-center opacity-80 shrink-0 mt-4"
                 />
 
                 {/* Right Column: Founder/CEO Signature */}
-                <div style={{ width: '188px', marginRight: '58px' }} className="flex flex-col items-center justify-end pb-1 shrink-0">
-                  <div className="h-[44px] flex items-end justify-center w-full">
-                    {ceoSignatureUrl && ceoSignatureUrl.trim() ? (
+                <div style={{ width: '196px', marginRight: '52px' }} className="flex flex-col items-center justify-end pb-1 shrink-0">
+                  <div className="h-[70px] flex items-end justify-center w-full">
+                    {processedCeoSig.src ? (
                       <img
-                        src={ceoSignatureUrl.trim()}
+                        src={processedCeoSig.src}
                         alt="CEO Signature"
-                        className="h-10 w-auto max-w-[150px] object-contain mx-auto"
+                        style={
+                          processedCeoSig.width && processedCeoSig.height
+                            ? {
+                                width: `${processedCeoSig.width}px`,
+                                height: `${processedCeoSig.height}px`,
+                              }
+                            : undefined
+                        }
+                        className={
+                          processedCeoSig.width && processedCeoSig.height
+                            ? 'block mx-auto'
+                            : 'max-h-[68px] w-auto max-w-[192px] object-contain mx-auto'
+                        }
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
@@ -1166,7 +1366,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     ) : (
                       <svg
                         viewBox="0 0 180 56"
-                        className="w-[144px] h-[42px]"
+                        className="w-[152px] h-[44px]"
                         fill="none"
                         stroke="#0a1c3d"
                         strokeLinecap="round"
@@ -1186,9 +1386,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   </div>
                   <div
                     style={{ backgroundColor: '#c79324', height: '1.5px' }}
-                    className="w-[148px] my-1.5"
+                    className="w-[154px] mt-0.5 mb-1.5"
                   />
-                  <span className="text-[13.5px] font-bold text-[#071e46] leading-tight whitespace-nowrap truncate max-w-[170px]">
+                  <span className="text-[13.5px] font-bold text-[#071e46] leading-tight whitespace-nowrap truncate max-w-[180px]">
                     {resolvedCeoPrimary}
                   </span>
                   {resolvedCeoSubline && (
@@ -1196,7 +1396,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                       {resolvedCeoSubline}
                     </span>
                   )}
-                  <span className="text-[10.5px] font-bold text-[#102954] tracking-[0.06em] uppercase leading-tight mt-0.5 whitespace-nowrap truncate max-w-[170px]">
+                  <span className="text-[10.5px] font-bold text-[#102954] tracking-[0.06em] uppercase leading-tight mt-0.5 whitespace-nowrap truncate max-w-[180px]">
                     {resolvedCeoTitle}
                   </span>
                 </div>
