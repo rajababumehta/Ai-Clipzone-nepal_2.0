@@ -87,7 +87,7 @@ import { CourseEnrollPage } from './components/CourseEnrollPage';
 import { CourseDetailView } from './components/CourseDetailView';
 import { InstructorsView } from './components/InstructorsView';
 import { BlogView } from './components/BlogView';
-import { HomePlatformOverviewSection, PrivacyPolicyView, TermsOfUseView, NotFoundView } from './components/PublicPagesView';
+import { PrivacyPolicyView, TermsOfUseView, NotFoundView } from './components/PublicPagesView';
 import { buildPublicInstructors, resolveCourseInstructor } from './data/instructors';
 import { BLOG_POSTS, findBlogPostBySlug } from './data/blogArticles';
 import { getLocaleDict } from './utils/i18n';
@@ -6810,83 +6810,25 @@ export default function App() {
           <>
             {/* Course Catalog Title & Grid Section */}
             <section id="courses-section" className="pt-2 scroll-mt-24">
-              {currentView === 'home' && (() => {
-                const dict = getLocaleDict(activeLocale);
-                return (
-                  <div className="text-center mb-8 space-y-4">
-                    <div>
-                      <h1 className="text-xl sm:text-2xl md:text-[28px] font-black tracking-tight inline-flex items-center justify-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
-                          <BookOpen className="w-4 h-4 text-white" />
-                        </span>
-                        <span className="bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
-                          Hamro LMS
-                        </span>
-                      </h1>
-                      <div className="w-16 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-2 shadow-sm shadow-blue-500/50"></div>
-                      <p className="text-zinc-200 mt-3 text-sm sm:text-base font-bold max-w-2xl mx-auto">
-                        {dict.homeHeading}
-                      </p>
-                      <p className="text-zinc-400 mt-1.5 text-xs sm:text-sm max-w-2xl mx-auto font-medium leading-relaxed">
-                        {dict.homeCtaSubtitle}
-                      </p>
-                    </div>
-
-                    {/* Clean Crawlable Public Subpage & Language Navigation */}
-                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
-                      <a
-                        href="#available-courses-heading"
-                        className="px-3.5 py-1.5 rounded-xl bg-blue-600/15 text-blue-300 border border-blue-500/30 font-bold hover:bg-blue-600/25 transition"
-                      >
-                        {dict.coursesNav}
-                      </a>
-                      <a
-                        href={buildLocalizedPath('/instructors', activeLocale)}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          navigateToPath('/instructors');
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-zinc-900 text-zinc-200 border border-zinc-800 hover:border-blue-500/40 hover:text-white font-bold transition"
-                      >
-                        {dict.instructorsNav}
-                      </a>
-                      <a
-                        href={buildLocalizedPath('/blog', activeLocale)}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          navigateToPath('/blog');
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-zinc-900 text-zinc-200 border border-zinc-800 hover:border-blue-500/40 hover:text-white font-bold transition"
-                      >
-                        {dict.blogNav}
-                      </a>
-                      <div className="inline-flex items-center rounded-xl bg-zinc-950 border border-zinc-800 p-0.5 ml-1" aria-label="Language switcher">
-                        {(['en', 'ne', 'hi'] as SupportedLocale[]).map((loc) => (
-                          <a
-                            key={loc}
-                            href={buildLocalizedPath('/', loc)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              switchLocale(loc);
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
-                              activeLocale === loc
-                                ? 'bg-blue-600 text-white'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            {loc === 'en' ? 'EN' : loc === 'ne' ? 'नेपाली' : 'हिन्दी'}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-
-                    <h2 id="available-courses-heading" className="text-lg sm:text-xl font-black text-white pt-2">
-                      Available Online Courses on Hamro LMS Nepal
-                    </h2>
+              {currentView === 'home' && (
+                <div className="text-center mb-8 space-y-4">
+                  <div>
+                    <h1 className="text-xl sm:text-2xl md:text-[28px] font-black tracking-tight inline-flex items-center justify-center gap-2.5">
+                      <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
+                        <BookOpen className="w-4 h-4 text-white" />
+                      </span>
+                      <span className="bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
+                        Hamro LMS
+                      </span>
+                    </h1>
+                    <div className="w-16 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-2 shadow-sm shadow-blue-500/50"></div>
                   </div>
-                );
-              })()}
+
+                  <h2 id="available-courses-heading" className="text-lg sm:text-xl font-black text-white pt-2">
+                    Available Online Courses on Hamro LMS Nepal
+                  </h2>
+                </div>
+              )}
 
           {/* Courses Cards Grid or Live Embedded Classroom */}
           {currentView === 'classroom' ? (
@@ -7739,117 +7681,14 @@ export default function App() {
           )}
         </section>
 
-            {/* Home Semantic Overview, Student Benefits, Enrollment Steps, FAQs & Footer */}
+            {/* Compact Footer */}
             {currentView === 'home' && (
-              <>
-                <HomePlatformOverviewSection
-                  courses={publicCatalogCourses}
-                  instructors={publicInstructors}
-                  faqs={faqs}
-                  locale={activeLocale}
-                  supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
-                  onNavigatePath={navigateToPath}
-                />
-
-                <footer className="mt-12 pt-8 pb-4 border-t border-zinc-900 text-center sm:text-left">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-zinc-400">
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-black text-white">Hamro LMS</p>
-                      <p className="leading-relaxed text-zinc-400">
-                        Online learning platform in Nepal for AI tools, video editing, graphic design, creator growth, and practical digital skills.
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Explore Platform</p>
-                      <ul className="space-y-1.5">
-                        <li>
-                          <a
-                            href={buildLocalizedPath('/', activeLocale)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigateToPath('/');
-                            }}
-                            className="hover:text-blue-400 transition"
-                          >
-                            Online Courses Nepal
-                          </a>
-                        </li>
-                        <li>
-                          <a
-                            href={buildLocalizedPath('/instructors', activeLocale)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigateToPath('/instructors');
-                            }}
-                            className="hover:text-blue-400 transition"
-                          >
-                            Teachers &amp; Instructors
-                          </a>
-                        </li>
-                        <li>
-                          <a
-                            href={buildLocalizedPath('/blog', activeLocale)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigateToPath('/blog');
-                            }}
-                            className="hover:text-blue-400 transition"
-                          >
-                            Learning Blog &amp; AI Guides
-                          </a>
-                        </li>
-                      </ul>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Trust &amp; Policies</p>
-                      <ul className="space-y-1.5">
-                        <li>
-                          <a
-                            href={buildLocalizedPath('/privacy-policy', activeLocale)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigateToPath('/privacy-policy');
-                            }}
-                            className="hover:text-blue-400 transition"
-                          >
-                            Privacy Policy
-                          </a>
-                        </li>
-                        <li>
-                          <a
-                            href={buildLocalizedPath('/terms', activeLocale)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigateToPath('/terms');
-                            }}
-                            className="hover:text-blue-400 transition"
-                          >
-                            Terms of Use
-                          </a>
-                        </li>
-                        <li>Birgunj, Madhesh Province, Nepal</li>
-                      </ul>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Official Support</p>
-                      <p>
-                        Email:{' '}
-                        <a
-                          href={`mailto:${siteSettings.supportEmail || 'support.hamrolms@gmail.com'}`}
-                          className="text-blue-400 hover:underline"
-                        >
-                          {siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
-                        </a>
-                      </p>
-                      <p>Portal: https://hamrolms.vercel.app/</p>
-                    </div>
-                  </div>
-                  <div className="mt-6 pt-4 border-t border-zinc-900/80 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-                    <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
-                    <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
-                  </div>
-                </footer>
-              </>
+              <footer className="mt-10 pt-5 pb-4 border-t border-zinc-900 text-center sm:text-left">
+                <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                  <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
+                  <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
+                </div>
+              </footer>
             )}
 
           </>
