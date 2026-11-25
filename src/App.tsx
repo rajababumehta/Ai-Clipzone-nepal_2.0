@@ -5583,7 +5583,7 @@ export default function App() {
   ]);
 
   return (
-    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-0'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
+    <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-clip pb-0' : 'min-h-screen overflow-x-clip justify-between pb-0'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
       {/* Sleek Pure Black Ambient Lighting: Hidden in Ask and Enroll views */}
       {!(currentView === 'ask' && isCourseActiveUser) && !(currentView === 'enroll' && enrollCourse) && (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
@@ -5824,7 +5824,7 @@ export default function App() {
       )}
 
       {/* Main Container for Course List / Classroom / Account / Ask / Enroll */}
-      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : 'flex-1 max-w-6xl w-full mx-auto px-4 pt-1.5 pb-[62px] md:pb-[68px]'}>
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : `flex-1 flex flex-col max-w-6xl w-full mx-auto px-4 pt-1.5 ${currentView === 'home' ? 'pb-0' : 'pb-4'}`}>
 
         {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / ENROLL / HOME VIEWS */}
         {currentView === 'enroll' && enrollCourse ? (
@@ -7462,10 +7462,12 @@ export default function App() {
 
             {/* Compact Footer */}
             {currentView === 'home' && (
-              <footer className="mt-4 pt-3 pb-1 border-t border-zinc-900 text-center sm:text-left">
-                <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-                  <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
-                  <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
+              <footer className="mt-auto pt-4">
+                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left">
+                  <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
+                    <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
+                  </div>
                 </div>
               </footer>
             )}
@@ -9811,7 +9813,7 @@ export default function App() {
       <nav 
         id="native-app-bottom-bar"
         aria-label="App Navigation Bar" 
-        className={`${currentView === 'ask' && isCourseActiveUser ? 'relative shrink-0' : 'fixed bottom-0'} inset-x-0 z-[4900] bg-zinc-950/95 border-t border-zinc-800/90 shadow-[0_-12px_45px_rgba(0,0,0,0.95)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-2xl`}
+        className={`${currentView === 'ask' && isCourseActiveUser ? 'relative shrink-0' : 'sticky bottom-0 shrink-0'} inset-x-0 z-[4900] bg-zinc-950/95 border-t border-zinc-800/90 shadow-[0_-12px_45px_rgba(0,0,0,0.95)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-2xl`}
       >
         <div className="w-full max-w-md md:max-w-5xl lg:max-w-6xl mx-auto px-2 md:px-6 py-1.5 md:py-2.5 flex items-center justify-around md:gap-3 lg:gap-5">
           {/* 1. Home */}
