@@ -532,7 +532,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const resolvedSubtitle = (certificateSubtitle || 'OF ACHIEVEMENT').trim().toUpperCase();
   const subtitleFontSize = resolvedSubtitle.length > 22 ? '13.5px' : '16.5px';
 
-  const cleanStudentName = (studentName || 'Student Learner').trim();
+  const rawStudentName = (studentName || 'Student Learner').trim();
+  const cleanStudentName = /^(mr|mrs|ms|miss|dr|prof)\.?\s+/i.test(rawStudentName)
+    ? rawStudentName
+    : `Mr. ${rawStudentName}`;
   const studentNameFontSize =
     cleanStudentName.length > 32
       ? '34px'
