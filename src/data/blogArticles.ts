@@ -4,7 +4,7 @@ export const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'mastering-prompt-engineering-for-practical-ai-workflows',
     title: 'Mastering Prompt Engineering for Practical AI Workflows',
-    seoTitle: 'Prompt Engineering Guide for Practical AI Workflows | HamroLms',
+    seoTitle: 'Prompt Engineering Guide for Practical AI Workflows | Hamro LMS',
     seoDescription: 'Learn structured prompt engineering frameworks for writing, visual generation, coding, and productivity using modern AI tools.',
     excerpt: 'Move beyond basic one-line prompts with a repeatable framework covering role framing, context blocks, constraints, and iterative refinement.',
     category: 'AI & Automation',
@@ -14,7 +14,7 @@ export const BLOG_POSTS: BlogPost[] = [
     updatedAt: '2026-11-15',
     readTimeMinutes: 6,
     coverImage: '/institute-logo.png',
-    coverAlt: 'HamroLms guide on structured prompt engineering workflows',
+    coverAlt: 'Hamro LMS guide on structured prompt engineering workflows',
     relatedCourseIds: ['Ai master class course by Ai clipzone'],
     sections: [
       {
@@ -47,7 +47,7 @@ export const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'high-retention-video-editing-workflow-for-creators',
     title: 'High-Retention Video Editing Workflow for Digital Creators',
-    seoTitle: 'High-Retention Video Editing Workflow Guide | HamroLms',
+    seoTitle: 'High-Retention Video Editing Workflow Guide | Hamro LMS',
     seoDescription: 'Step-by-step guide to pacing, hooks, sound design, and visual storytelling that keep viewers watching educational and creator videos.',
     excerpt: 'Discover how structured hooks, clean audio layering, and intentional visual pacing turn raw footage into engaging educational stories.',
     category: 'Video Editing',
@@ -84,7 +84,7 @@ export const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'building-a-sustainable-youtube-education-channel',
     title: 'Building a Sustainable YouTube Education Channel from Scratch',
-    seoTitle: 'How to Build a YouTube Education Channel | HamroLms',
+    seoTitle: 'How to Build a YouTube Education Channel | Hamro LMS',
     seoDescription: 'Learn practical niche positioning, topic research, packaging, and ethical monetization workflows for educational YouTube creators.',
     excerpt: 'A realistic blueprint for selecting an educational niche, planning searchable topics, designing clear thumbnails, and building long-term audience trust.',
     category: 'Creator Growth',
@@ -119,7 +119,7 @@ export const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'ai-assisted-web-development-best-practices-for-beginners',
     title: 'AI-Assisted Web Development Best Practices for Beginners',
-    seoTitle: 'AI-Assisted Web Development Best Practices | HamroLms',
+    seoTitle: 'AI-Assisted Web Development Best Practices | Hamro LMS',
     seoDescription: 'Understand how to combine HTML, CSS, React, and AI coding assistants responsibly to build fast, accessible, production-ready web apps.',
     excerpt: 'Learn how modern developers pair foundational web architecture with AI-assisted coding without sacrificing security, performance, or accessibility.',
     category: 'Career & Skills',

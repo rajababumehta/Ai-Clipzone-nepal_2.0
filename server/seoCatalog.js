@@ -119,7 +119,14 @@ export const SEED_BLOG_POSTS = [
     seoTitle: 'Prompt Engineering Guide for Practical AI Workflows | Hamro LMS',
     seoDescription:
       'Learn structured prompt engineering frameworks for writing, visual generation, coding, and productivity using modern AI tools on Hamro LMS Nepal.',
+    excerpt:
+      'Move beyond basic one-line prompts with a repeatable framework covering role framing, context blocks, constraints, and iterative refinement.',
     category: 'AI & Automation',
+    tags: ['Prompt Engineering', 'AI Tools', 'Productivity', 'ChatGPT'],
+    authorSlug: 'rajababu-mehta',
+    authorName: 'Rajababu Mehta',
+    coverImage: '/institute-logo.png',
+    coverAlt: 'Hamro LMS guide on structured prompt engineering workflows',
     publishedAt: '2026-09-18',
     updatedAt: '2026-11-15',
   },
@@ -129,7 +136,14 @@ export const SEED_BLOG_POSTS = [
     seoTitle: 'High-Retention Video Editing Workflow Guide | Hamro LMS',
     seoDescription:
       'Step-by-step guide to pacing, hooks, sound design, and visual storytelling that keep viewers watching educational and creator videos.',
+    excerpt:
+      'Discover how structured hooks, clean audio layering, and intentional visual pacing turn raw footage into engaging educational stories.',
     category: 'Video Editing',
+    tags: ['Video Editing', 'Storytelling', 'CapCut', 'YouTube'],
+    authorSlug: 'rajababu-mehta',
+    authorName: 'Rajababu Mehta',
+    coverImage: '/institute-logo.png',
+    coverAlt: 'High-retention video editing and visual storytelling workflow',
     publishedAt: '2026-10-04',
     updatedAt: '2026-11-18',
   },
@@ -139,7 +153,14 @@ export const SEED_BLOG_POSTS = [
     seoTitle: 'How to Build a YouTube Education Channel | Hamro LMS',
     seoDescription:
       'Learn practical niche positioning, topic research, packaging, and ethical monetization workflows for educational YouTube creators.',
+    excerpt:
+      'A realistic blueprint for selecting an educational niche, planning searchable topics, designing clear thumbnails, and building long-term audience trust.',
     category: 'Creator Growth',
+    tags: ['YouTube Growth', 'Thumbnails', 'Content Strategy', 'Creator Economy'],
+    authorSlug: 'rajababu-mehta',
+    authorName: 'Rajababu Mehta',
+    coverImage: '/institute-logo.png',
+    coverAlt: 'YouTube educational channel strategy and packaging workflow',
     publishedAt: '2026-10-22',
     updatedAt: '2026-11-19',
   },
@@ -149,7 +170,14 @@ export const SEED_BLOG_POSTS = [
     seoTitle: 'AI-Assisted Web Development Best Practices | Hamro LMS',
     seoDescription:
       'Understand how to combine HTML, CSS, React, and AI coding assistants responsibly to build fast, accessible, production-ready web apps.',
+    excerpt:
+      'Learn how modern developers pair foundational web architecture with AI-assisted coding without sacrificing security, performance, or accessibility.',
     category: 'Career & Skills',
+    tags: ['Web Development', 'React', 'Frontend', 'AI Coding'],
+    authorSlug: 'rajababu-mehta',
+    authorName: 'Rajababu Mehta',
+    coverImage: '/institute-logo.png',
+    coverAlt: 'Modern web development architecture and best practices guide',
     publishedAt: '2026-11-05',
     updatedAt: '2026-11-20',
   },
@@ -762,6 +790,22 @@ export function generateRobotsTxt(origin = DEFAULT_PUBLIC_ORIGIN) {
   ].join('\n');
 }
 
+function clampSeoText(text, maxLen) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLen) return clean;
+  const sliced = clean.slice(0, maxLen - 1);
+  const lastSpace = sliced.lastIndexOf(' ');
+  return `${(lastSpace > Math.floor(maxLen * 0.6) ? sliced.slice(0, lastSpace) : sliced).trim()}…`;
+}
+
+function resolveAbsImg(img, origin) {
+  const cleanOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, '');
+  const raw = String(img || '').trim();
+  if (!raw) return `${cleanOrigin}/institute-logo.png`;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${cleanOrigin}${raw.startsWith('/') ? raw : `/${raw}`}`;
+}
+
 export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC_ORIGIN) {
   const parsed = parsePathnameToRoute(pathname);
   const dict = SEO_LOCALE_TEXT[parsed.locale] || SEO_LOCALE_TEXT.en;
@@ -770,11 +814,19 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
   let statusCode = 200;
   let title = dict.homeTitle;
   let description = dict.homeDescription;
+  let keywords = 'Hamro LMS, Hamro LMS Nepal, Online Learning Platform Nepal, Online Courses Nepal, AI Course Nepal, AI Training Nepal';
   let ogType = 'website';
   let ogImage = `${origin}/institute-logo.png`;
+  let ogImageAlt = 'Hamro LMS – Online Courses & Learning Platform in Nepal';
+  let articleMeta = null;
   let robots = parsed.isPublicIndexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
     : 'noindex, nofollow';
+
+  const breadcrumbItems = [
+    { name: 'Home', url: `${origin}${buildLocalizedPath('/', parsed.locale)}` },
+  ];
+  const extraSchemas = [];
 
   if (parsed.view === 'course-detail') {
     const course = findCourseBySlug(courses, parsed.slug);
@@ -784,18 +836,72 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       description = dict.notFoundDescription;
       robots = 'noindex, nofollow';
     } else {
-      title = (course.seoTitle && course.seoTitle.trim()) || `${course.title} | Hamro LMS Nepal`;
-      description =
-        (course.seoDescription && course.seoDescription.trim()) ||
-        (course.overview && course.overview.trim()) ||
-        `Enroll in ${course.title} on Hamro LMS, an online learning platform in Nepal. ${Array.isArray(course.learn) ? course.learn.slice(0, 3).join(', ') : ''}.`;
-      if (course.image && String(course.image).startsWith('http')) {
-        ogImage = String(course.image);
-      }
+      const cSlug = getCourseSlug(course);
+      const courseUrl = `${origin}${buildLocalizedPath(`/courses/${cSlug}`, parsed.locale)}`;
+      const inst =
+        instructors.find(
+          (i) =>
+            (course.instructorSlug && i.slug === slugifyText(course.instructorSlug)) ||
+            i.courseIds.includes(course.id)
+        ) || instructors[0];
+      title =
+        (course.seoTitle && course.seoTitle.trim()) ||
+        clampSeoText(`${course.title}${course.category ? ` – ${course.category}` : ''} | Hamro LMS`, 64);
+      const topics = Array.isArray(course.learn) ? course.learn.slice(0, 3).join(', ') : '';
+      const langNote = course.language ? ` in ${course.language}` : '';
+      const instNote = inst?.name ? ` taught by ${inst.name}` : '';
+      const fallbackDesc = course.overview?.trim()
+        ? `${course.overview.trim()}${langNote}${instNote}.`
+        : `Enroll in ${course.title} on Hamro LMS Nepal${instNote}. Covers ${topics || 'practical digital skills'}${langNote}.`;
+      description = clampSeoText((course.seoDescription && course.seoDescription.trim()) || fallbackDesc, 160);
+      keywords = Array.from(
+        new Set([
+          course.title,
+          course.category || 'Online Course Nepal',
+          'Hamro LMS',
+          'Hamro LMS Nepal',
+          ...(Array.isArray(course.learn) ? course.learn.slice(0, 4) : []),
+          inst?.name || '',
+        ].filter(Boolean))
+      ).join(', ');
+      ogImage = resolveAbsImg(course.image, origin);
+      ogImageAlt = `${course.title} – ${course.category || 'Online Course'} on Hamro LMS Nepal`;
+      breadcrumbItems.push({ name: course.title, url: courseUrl });
+      extraSchemas.push({
+        '@type': 'Course',
+        '@id': `${courseUrl}#course`,
+        url: courseUrl,
+        name: course.title,
+        description,
+        image: ogImage,
+        inLanguage: course.language || parsed.locale,
+        courseCode: course.id,
+        educationalLevel: course.level || 'All Levels',
+        provider: {
+          '@type': 'EducationalOrganization',
+          '@id': `${origin}/#organization`,
+          name: 'Hamro LMS',
+          url: origin,
+        },
+        ...(inst
+          ? {
+              instructor: {
+                '@type': 'Person',
+                name: inst.name,
+                url: `${origin}${buildLocalizedPath(`/instructors/${inst.slug}`, parsed.locale)}`,
+              },
+            }
+          : {}),
+      });
     }
   } else if (parsed.view === 'instructors') {
     title = dict.instructorsTitle;
     description = dict.instructorsDescription;
+    ogImageAlt = 'Teachers and Instructors on Hamro LMS Nepal';
+    breadcrumbItems.push({
+      name: 'Instructors',
+      url: `${origin}${buildLocalizedPath('/instructors', parsed.locale)}`,
+    });
   } else if (parsed.view === 'instructor-detail') {
     const targetSlug = slugifyText(parsed.slug || '');
     const inst =
@@ -807,26 +913,59 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       description = dict.notFoundDescription;
       robots = 'noindex, nofollow';
     } else {
-      title = `${inst.name} – ${inst.role} | Hamro LMS`;
-      description = inst.bio;
+      const instUrl = `${origin}${buildLocalizedPath(`/instructors/${inst.slug}`, parsed.locale)}`;
+      title = clampSeoText(`${inst.name} – ${inst.role} | Hamro LMS`, 64);
+      description = clampSeoText(inst.bio, 160);
+      keywords = `${inst.name}, ${inst.role}, ${(inst.expertise || []).slice(0, 3).join(', ')}, Hamro LMS`;
+      ogImage = resolveAbsImg(inst.avatarUrl, origin);
+      ogImageAlt = `${inst.name} – ${inst.role} at Hamro LMS`;
+      breadcrumbItems.push(
+        { name: 'Instructors', url: `${origin}${buildLocalizedPath('/instructors', parsed.locale)}` },
+        { name: inst.name, url: instUrl }
+      );
+      extraSchemas.push({
+        '@type': 'Person',
+        '@id': `${instUrl}#person`,
+        name: inst.name,
+        jobTitle: inst.role,
+        description: inst.bio,
+        url: instUrl,
+        image: ogImage,
+        worksFor: { '@id': `${origin}/#organization` },
+      });
     }
   } else if (parsed.view === 'blog') {
+    breadcrumbItems.push({
+      name: 'Blog',
+      url: `${origin}${buildLocalizedPath('/blog', parsed.locale)}`,
+    });
     if (parsed.category) {
-      const matchedPost = SEED_BLOG_POSTS.find(
+      const matchedPosts = SEED_BLOG_POSTS.filter(
         (p) => slugifyText(p.category) === slugifyText(parsed.category)
       );
-      if (!matchedPost) {
+      if (matchedPosts.length === 0) {
         statusCode = 404;
         title = dict.notFoundTitle;
         description = dict.notFoundDescription;
         robots = 'noindex, nofollow';
       } else {
-        title = `${matchedPost.category} Guides & Courses | Hamro LMS`;
-        description = `Explore ${matchedPost.category} tutorials, practical AI workflows, and digital skill training guides on Hamro LMS Nepal.`;
+        const categoryName = matchedPosts[0].category;
+        title = `${categoryName} Guides & Tutorials | Hamro LMS`;
+        description = clampSeoText(
+          `Explore ${matchedPosts.length} ${categoryName} guides on Hamro LMS Nepal, including ${matchedPosts.slice(0, 2).map((p) => p.title).join(' and ')}.`,
+          160
+        );
+        keywords = `${categoryName}, Hamro LMS Blog, Online Courses Nepal, Digital Skills`;
+        ogImageAlt = `${categoryName} Learning Guides on Hamro LMS`;
+        breadcrumbItems.push({
+          name: categoryName,
+          url: `${origin}${buildLocalizedPath(`/blog/category/${slugifyText(categoryName)}`, parsed.locale)}`,
+        });
       }
     } else {
       title = dict.blogTitle;
       description = dict.blogDescription;
+      ogImageAlt = 'Hamro LMS Learning Blog & Practical AI Guides';
     }
   } else if (parsed.view === 'blog-detail') {
     const post = SEED_BLOG_POSTS.find((p) => p.slug === String(parsed.slug || '').toLowerCase());
@@ -836,9 +975,41 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       description = dict.notFoundDescription;
       robots = 'noindex, nofollow';
     } else {
-      title = post.seoTitle || `${post.title} | Hamro LMS`;
-      description = post.seoDescription;
+      const postUrl = `${origin}${buildLocalizedPath(`/blog/${post.slug}`, parsed.locale)}`;
+      title = post.seoTitle || clampSeoText(`${post.title} | Hamro LMS`, 64);
+      description = clampSeoText(post.seoDescription || post.excerpt || `${post.title} on Hamro LMS Nepal.`, 160);
+      keywords = Array.from(new Set([post.category, ...(post.tags || []), 'Hamro LMS', 'Hamro LMS Blog'])).join(', ');
       ogType = 'article';
+      ogImage = resolveAbsImg(post.coverImage, origin);
+      ogImageAlt = post.coverAlt || `${post.title} – ${post.category} Guide on Hamro LMS`;
+      articleMeta = {
+        publishedTime: post.publishedAt,
+        modifiedTime: post.updatedAt || post.publishedAt,
+        section: post.category,
+        author: post.authorName || 'Rajababu Mehta',
+        tags: Array.isArray(post.tags) ? post.tags : [],
+      };
+      breadcrumbItems.push(
+        { name: 'Blog', url: `${origin}${buildLocalizedPath('/blog', parsed.locale)}` },
+        { name: post.title, url: postUrl }
+      );
+      extraSchemas.push({
+        '@type': 'Article',
+        '@id': `${postUrl}#article`,
+        headline: post.title,
+        description,
+        image: ogImage,
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt || post.publishedAt,
+        articleSection: post.category,
+        author: {
+          '@type': 'Person',
+          name: post.authorName || 'Rajababu Mehta',
+          url: `${origin}${buildLocalizedPath(`/instructors/${post.authorSlug || 'rajababu-mehta'}`, parsed.locale)}`,
+        },
+        publisher: { '@id': `${origin}/#organization` },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
+      });
     }
   } else if (parsed.view === 'privacy-policy') {
     title = 'Privacy Policy | Hamro LMS';
@@ -855,6 +1026,19 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     robots = 'noindex, nofollow';
   } else if (!parsed.isPublicIndexable) {
     robots = 'noindex, nofollow';
+  } else {
+    extraSchemas.push({
+      '@type': 'ItemList',
+      '@id': `${origin}/#course-catalog`,
+      name: 'Online Courses on Hamro LMS Nepal',
+      numberOfItems: courses.length,
+      itemListElement: courses.map((c, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        url: `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale)}`,
+        name: c.title,
+      })),
+    });
   }
 
   const canonicalPath =
@@ -878,6 +1062,57 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
           )}" />`,
         ].join('\n    ');
 
+  const articleTags =
+    ogType === 'article' && articleMeta
+      ? [
+          articleMeta.publishedTime
+            ? `<meta property="article:published_time" content="${escapeHtmlAttr(articleMeta.publishedTime)}" />`
+            : '',
+          articleMeta.modifiedTime
+            ? `<meta property="article:modified_time" content="${escapeHtmlAttr(articleMeta.modifiedTime)}" />`
+            : '',
+          articleMeta.section
+            ? `<meta property="article:section" content="${escapeHtmlAttr(articleMeta.section)}" />`
+            : '',
+          articleMeta.author
+            ? `<meta property="article:author" content="${escapeHtmlAttr(articleMeta.author)}" />`
+            : '',
+          ...articleMeta.tags.map(
+            (t) => `<meta property="article:tag" content="${escapeHtmlAttr(t)}" />`
+          ),
+        ]
+          .filter(Boolean)
+          .join('\n    ')
+      : '';
+
+  const dynamicGraphScript = `<script id="dynamic-hamrolms-jsonld" type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': ['Organization', 'EducationalOrganization'],
+        '@id': `${origin}/#organization`,
+        name: 'Hamro LMS',
+        url: `${origin}/`,
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${origin}/#website`,
+        url: `${origin}/`,
+        name: 'Hamro LMS',
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: breadcrumbItems.map((b, idx) => ({
+          '@type': 'ListItem',
+          position: idx + 1,
+          name: b.name,
+          item: b.url,
+        })),
+      },
+      ...extraSchemas,
+    ],
+  }).replace(/<\/script/gi, '<\\/script')}</script>`;
+
   let updated = html;
   updated = updated.replace(/<html lang="[^"]*"/i, `<html lang="${escapeHtmlAttr(dict.htmlLang)}"`);
   updated = updated.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtmlAttr(title)}</title>`);
@@ -889,6 +1124,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     /<meta name="description" content="[^"]*"\s*\/?>/i,
     `<meta name="description" content="${escapeHtmlAttr(description)}" />`
   );
+  updated = updated.replace(/<meta name="keywords" content="[^"]*"\s*\/?>\s*/gi, '');
   updated = updated.replace(
     /<meta name="robots" content="[^"]*"\s*\/?>/i,
     `<meta name="robots" content="${escapeHtmlAttr(robots)}" />`
@@ -906,9 +1142,8 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     `<link rel="canonical" href="${escapeHtmlAttr(canonicalUrl)}" />`
   );
   updated = updated.replace(/<link rel="alternate" hreflang="[^"]*" href="[^"]*"\s*\/?>\s*/gi, '');
-  if (hreflangTags) {
-    updated = updated.replace('</head>', `    ${hreflangTags}\n  </head>`);
-  }
+  updated = updated.replace(/<meta property="article:[^"]*" content="[^"]*"\s*\/?>\s*/gi, '');
+  updated = updated.replace(/<script id="dynamic-hamrolms-jsonld" type="application\/ld\+json">[\s\S]*?<\/script>\s*/gi, '');
   updated = updated.replace(
     /<meta property="og:type" content="[^"]*"\s*\/?>/i,
     `<meta property="og:type" content="${escapeHtmlAttr(ogType)}" />`
@@ -930,6 +1165,10 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     `<meta property="og:image" content="${escapeHtmlAttr(ogImage)}" />`
   );
   updated = updated.replace(
+    /<meta property="og:image:alt" content="[^"]*"\s*\/?>/i,
+    `<meta property="og:image:alt" content="${escapeHtmlAttr(ogImageAlt)}" />`
+  );
+  updated = updated.replace(
     /<meta name="twitter:url" content="[^"]*"\s*\/?>/i,
     `<meta name="twitter:url" content="${escapeHtmlAttr(canonicalUrl)}" />`
   );
@@ -945,6 +1184,21 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     /<meta name="twitter:image" content="[^"]*"\s*\/?>/i,
     `<meta name="twitter:image" content="${escapeHtmlAttr(ogImage)}" />`
   );
+  updated = updated.replace(
+    /<meta name="twitter:image:alt" content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:image:alt" content="${escapeHtmlAttr(ogImageAlt)}" />`
+  );
+
+  const extraHeadParts = [
+    `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
+    hreflangTags,
+    articleTags,
+    dynamicGraphScript,
+  ]
+    .filter(Boolean)
+    .join('\n    ');
+  updated = updated.replace('</head>', `    ${extraHeadParts}\n  </head>`);
 
   return { html: updated, statusCode };
 }
+

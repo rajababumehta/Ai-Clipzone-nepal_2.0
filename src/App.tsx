@@ -92,7 +92,7 @@ import { buildPublicInstructors, resolveCourseInstructor } from './data/instruct
 import { BLOG_POSTS, findBlogPostBySlug } from './data/blogArticles';
 import { getLocaleDict } from './utils/i18n';
 import { AppView, parsePathnameToRoute, buildLocalizedPath, getCourseSlug, findCourseBySlug, slugifyText } from './utils/seoRouting';
-import { buildOrganizationSchema, buildWebsiteSchema, buildBreadcrumbSchema, buildCourseSchema, buildCourseItemListSchema, buildPersonSchema, buildArticleSchema } from './utils/seoSchema';
+import { generateDynamicPageMetadata, injectDynamicPageMetadata } from './utils/seoMeta';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 import { compressImageFile, estimateJsonByteSize } from './utils/chatMedia';
@@ -5544,253 +5544,32 @@ export default function App() {
     showToast('Payment confirmation message sent on WhatsApp!', 'success');
   };
 
-  // Dynamic SPA SEO metadata, canonical URL, hreflang alternates, robots directives, and Schema.org JSON-LD sync
+  // Dynamic SPA SEO metadata, canonical URL, Open Graph, article tags, hreflang, and JSON-LD sync
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
-    const brand = 'Hamro LMS';
-    const supportEmail = siteSettings.supportEmail || 'support.hamrolms@gmail.com';
     const origin =
       window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? window.location.origin
         : 'https://hamrolms.vercel.app';
-    const rawPathname = window.location.pathname === '/index.html' ? '/' : window.location.pathname;
-    const parsedRoute = parsePathnameToRoute(rawPathname);
-    const dict = getLocaleDict(activeLocale);
 
-    let pageTitle = dict.seoHomeTitle;
-    let pageDescription = dict.seoHomeDescription;
-    let robotsDirective = parsedRoute.isPublicIndexable
-      ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
-      : 'noindex, nofollow';
-    let isRoute404 = parsedRoute.view === 'not-found';
-    let ogImage = `${origin}/institute-logo.png`;
-    let ogType = 'website';
+    const metadata = generateDynamicPageMetadata({
+      origin,
+      pathname: window.location.pathname,
+      currentView,
+      activeLocale,
+      routeSlug,
+      routeCategory,
+      publicCatalogCourses,
+      publicInstructors,
+      blogPosts: BLOG_POSTS,
+      enrollCourse,
+      isCoursesLoading,
+      supportEmail: siteSettings.supportEmail || 'support.hamrolms@gmail.com',
+      brand: 'Hamro LMS',
+    });
 
-    const breadcrumbItems: Array<{ name: string; url: string }> = [
-      { name: 'Home', url: `${origin}${buildLocalizedPath('/', activeLocale)}` },
-    ];
-    const extraSchemas: Record<string, any>[] = [];
-
-    if (currentView === 'course-detail') {
-      const targetCourse = findCourseBySlug(publicCatalogCourses, routeSlug);
-      if (!targetCourse) {
-        if (!isCoursesLoading) {
-          isRoute404 = true;
-          pageTitle = `${dict.notFoundTitle} | ${brand}`;
-          pageDescription = dict.notFoundDescription;
-          robotsDirective = 'noindex, nofollow';
-        }
-      } else {
-        const cSlug = getCourseSlug(targetCourse);
-        const courseUrl = `${origin}${buildLocalizedPath(`/courses/${cSlug}`, activeLocale)}`;
-        const instructor = resolveCourseInstructor(targetCourse, publicInstructors);
-        pageTitle = targetCourse.seoTitle?.trim() || `${targetCourse.title} | ${brand}`;
-        pageDescription =
-          targetCourse.seoDescription?.trim() ||
-          targetCourse.overview?.trim() ||
-          `Enroll in ${targetCourse.title} on ${brand} Nepal. ${targetCourse.learn.slice(0, 3).join(', ')}.`;
-        if (targetCourse.image && targetCourse.image.startsWith('http')) {
-          ogImage = targetCourse.image;
-        }
-        breadcrumbItems.push({ name: targetCourse.title, url: courseUrl });
-        extraSchemas.push(buildCourseSchema(origin, brand, targetCourse, instructor, activeLocale));
-      }
-    } else if (currentView === 'instructors') {
-      pageTitle = dict.seoInstructorsTitle;
-      pageDescription = dict.seoInstructorsDescription;
-      breadcrumbItems.push({
-        name: dict.instructorsNav,
-        url: `${origin}${buildLocalizedPath('/instructors', activeLocale)}`,
-      });
-    } else if (currentView === 'instructor-detail') {
-      const instSlug = slugifyText(routeSlug || '');
-      const inst = publicInstructors.find((i) => i.slug === instSlug);
-      if (!inst) {
-        isRoute404 = true;
-        pageTitle = `${dict.notFoundTitle} | ${brand}`;
-        pageDescription = dict.notFoundDescription;
-        robotsDirective = 'noindex, nofollow';
-      } else {
-        const instUrl = `${origin}${buildLocalizedPath(`/instructors/${inst.slug}`, activeLocale)}`;
-        pageTitle = `${inst.name} – ${inst.role} | ${brand}`;
-        pageDescription = inst.bio;
-        breadcrumbItems.push(
-          { name: dict.instructorsNav, url: `${origin}${buildLocalizedPath('/instructors', activeLocale)}` },
-          { name: inst.name, url: instUrl }
-        );
-        extraSchemas.push(buildPersonSchema(origin, inst, activeLocale));
-      }
-    } else if (currentView === 'blog') {
-      const blogBaseUrl = `${origin}${buildLocalizedPath('/blog', activeLocale)}`;
-      breadcrumbItems.push({ name: dict.blogNav, url: blogBaseUrl });
-      if (routeCategory) {
-        const matched = BLOG_POSTS.find(
-          (p) => slugifyText(p.category) === slugifyText(routeCategory)
-        );
-        if (!matched) {
-          isRoute404 = true;
-          pageTitle = `${dict.notFoundTitle} | ${brand}`;
-          pageDescription = dict.notFoundDescription;
-          robotsDirective = 'noindex, nofollow';
-        } else {
-          pageTitle = `${matched.category} Guides & Articles | ${brand}`;
-          pageDescription = `Read practical ${matched.category} guides, AI training workflows, and creator tutorials on ${brand} Nepal.`;
-          breadcrumbItems.push({
-            name: matched.category,
-            url: `${origin}${buildLocalizedPath(`/blog/category/${slugifyText(matched.category)}`, activeLocale)}`,
-          });
-        }
-      } else {
-        pageTitle = dict.seoBlogTitle;
-        pageDescription = dict.seoBlogDescription;
-      }
-    } else if (currentView === 'blog-detail') {
-      const post = findBlogPostBySlug(BLOG_POSTS, routeSlug);
-      if (!post) {
-        isRoute404 = true;
-        pageTitle = `${dict.notFoundTitle} | ${brand}`;
-        pageDescription = dict.notFoundDescription;
-        robotsDirective = 'noindex, nofollow';
-      } else {
-        const author =
-          publicInstructors.find((i) => i.slug === post.authorSlug) || publicInstructors[0];
-        const postUrl = `${origin}${buildLocalizedPath(`/blog/${post.slug}`, activeLocale)}`;
-        pageTitle = post.seoTitle || `${post.title} | ${brand}`;
-        pageDescription = post.seoDescription || post.excerpt;
-        ogType = 'article';
-        breadcrumbItems.push(
-          { name: dict.blogNav, url: `${origin}${buildLocalizedPath('/blog', activeLocale)}` },
-          { name: post.title, url: postUrl }
-        );
-        if (author) {
-          extraSchemas.push(buildArticleSchema(origin, brand, post, author, activeLocale));
-        }
-      }
-    } else if (currentView === 'privacy-policy') {
-      pageTitle = `Privacy Policy | ${brand}`;
-      pageDescription = `Read how ${brand} protects learner privacy, course credentials, and account security across our online learning platform in Nepal.`;
-      breadcrumbItems.push({
-        name: 'Privacy Policy',
-        url: `${origin}${buildLocalizedPath('/privacy-policy', activeLocale)}`,
-      });
-    } else if (currentView === 'terms') {
-      pageTitle = `Terms of Use | ${brand}`;
-      pageDescription = `Review ${brand} online learning platform terms of use, course licensing, and enrollment guidelines.`;
-      breadcrumbItems.push({
-        name: 'Terms of Use',
-        url: `${origin}${buildLocalizedPath('/terms', activeLocale)}`,
-      });
-    } else if (currentView === 'enroll' && enrollCourse) {
-      const priceLabel = isCourseFree(enrollCourse) ? 'Free' : (enrollCourse.price || 'Affordable');
-      pageTitle = `Enroll: ${enrollCourse.title} | ${brand}`.slice(0, 60);
-      pageDescription = `Enroll in ${enrollCourse.title} (${priceLabel}) on ${brand} Nepal. Get instant course access and structured lessons.`;
-      robotsDirective = 'noindex, nofollow';
-    } else if (currentView === 'classroom') {
-      pageTitle = `Student Classroom & Video Lectures | ${brand}`.slice(0, 60);
-      pageDescription = `Watch your unlocked HD video lectures, download PDF study notes, and earn certificates inside the ${brand} online classroom.`;
-      robotsDirective = 'noindex, nofollow';
-    } else if (currentView === 'account') {
-      pageTitle = `Student Profile & Course Activation | ${brand}`.slice(0, 60);
-      pageDescription = `Activate your course secret key, manage your student profile, and access your certificates on ${brand} Nepal.`;
-      robotsDirective = 'noindex, nofollow';
-    } else if (currentView === 'ask') {
-      pageTitle = `Mentor Support & Course Chat | ${brand}`.slice(0, 60);
-      pageDescription = `Connect directly with your ${brand} course mentors and instructors for help and learning guidance.`;
-      robotsDirective = 'noindex, nofollow';
-    } else if (currentView === 'live' || currentView === 'course-live') {
-      pageTitle = `Live Interactive Sessions | ${brand}`.slice(0, 60);
-      pageDescription = `Join scheduled live mentoring sessions and interactive Q&A workshops for your enrolled courses on ${brand}.`;
-      robotsDirective = 'noindex, nofollow';
-    } else if (currentView === 'not-found' || currentView === 'delete-account') {
-      pageTitle = currentView === 'delete-account' ? `Account Help | ${brand}` : `${dict.notFoundTitle} | ${brand}`;
-      pageDescription = dict.notFoundDescription;
-      robotsDirective = 'noindex, nofollow';
-    } else {
-      extraSchemas.push(
-        buildCourseItemListSchema(origin, brand, publicCatalogCourses, publicInstructors, activeLocale)
-      );
-    }
-
-    const canonicalPath = isRoute404
-      ? rawPathname
-      : buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, activeLocale);
-    const canonicalUrl = `${origin}${canonicalPath}`;
-
-    document.documentElement.lang = dict.htmlLang;
-    document.title = pageTitle;
-
-    const setMetaTag = (attr: 'name' | 'property', key: string, content: string) => {
-      let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
-      if (!el) {
-        el = document.createElement('meta');
-        el.setAttribute(attr, key);
-        document.head.appendChild(el);
-      }
-      el.setAttribute('content', content);
-    };
-
-    setMetaTag('name', 'title', pageTitle);
-    setMetaTag('name', 'description', pageDescription);
-    setMetaTag('name', 'robots', robotsDirective);
-    setMetaTag('name', 'googlebot', robotsDirective);
-    setMetaTag('name', 'bingbot', robotsDirective);
-    setMetaTag('property', 'og:type', ogType);
-    setMetaTag('property', 'og:title', pageTitle);
-    setMetaTag('property', 'og:description', pageDescription);
-    setMetaTag('property', 'og:url', canonicalUrl);
-    setMetaTag('property', 'og:image', ogImage);
-    setMetaTag('property', 'og:site_name', brand);
-    setMetaTag('property', 'og:locale', dict.ogLocale);
-    setMetaTag('name', 'twitter:title', pageTitle);
-    setMetaTag('name', 'twitter:description', pageDescription);
-    setMetaTag('name', 'twitter:url', canonicalUrl);
-    setMetaTag('name', 'twitter:image', ogImage);
-
-    let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canonicalLink) {
-      canonicalLink = document.createElement('link');
-      canonicalLink.setAttribute('rel', 'canonical');
-      document.head.appendChild(canonicalLink);
-    }
-    canonicalLink.setAttribute('href', canonicalUrl);
-
-    // Sync hreflang alternates for indexable public pages
-    document.querySelectorAll('link[rel="alternate"][hreflang]').forEach((node) => node.remove());
-    if (!isRoute404 && parsedRoute.isPublicIndexable) {
-      const locales: SupportedLocale[] = ['en', 'ne', 'hi'];
-      locales.forEach((loc) => {
-        const link = document.createElement('link');
-        link.rel = 'alternate';
-        link.hreflang = loc;
-        link.href = `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, loc)}`;
-        document.head.appendChild(link);
-      });
-      const xDefault = document.createElement('link');
-      xDefault.rel = 'alternate';
-      xDefault.hreflang = 'x-default';
-      xDefault.href = `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, 'en')}`;
-      document.head.appendChild(xDefault);
-    }
-
-    const dynamicGraph = {
-      '@context': 'https://schema.org',
-      '@graph': [
-        buildOrganizationSchema(origin, brand, supportEmail),
-        buildWebsiteSchema(origin, brand, activeLocale),
-        buildBreadcrumbSchema(breadcrumbItems),
-        ...extraSchemas,
-      ],
-    };
-
-    let ldScript = document.getElementById('dynamic-hamrolms-jsonld') as HTMLScriptElement | null;
-    if (!ldScript) {
-      ldScript = document.createElement('script');
-      ldScript.id = 'dynamic-hamrolms-jsonld';
-      ldScript.type = 'application/ld+json';
-      document.head.appendChild(ldScript);
-    }
-    ldScript.textContent = JSON.stringify(dynamicGraph);
+    injectDynamicPageMetadata(metadata);
   }, [
     currentView,
     activeLocale,
