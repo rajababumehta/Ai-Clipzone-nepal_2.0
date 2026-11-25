@@ -5,6 +5,7 @@ import {
   Award,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Globe,
   Layers,
@@ -46,6 +47,8 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   const t = getLocaleDict(locale);
   const videos = Array.isArray(course.videos) ? course.videos : [];
   const pdfs = Array.isArray(course.pdfs) ? course.pdfs : [];
+  const [openChapters, setOpenChapters] = React.useState<Record<number, boolean>>({});
+  const hasChapters = videos.some((v) => Boolean(v.chapterTitle && v.chapterTitle.trim()));
 
   // Group public syllabus chapters WITHOUT exposing private videoUrl or pdfUrl
   const groupedChapters = React.useMemo(() => {
@@ -251,34 +254,75 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
               </span>
             </div>
 
-            {groupedChapters.length > 0 ? (
-              <div className="space-y-4">
-                {groupedChapters.map(([chapterTitle, lessons], chIdx) => (
-                  <div key={chIdx} className="border border-zinc-800/90 rounded-2xl overflow-hidden bg-black/50">
-                    <div className="px-4 py-3 bg-zinc-900/70 border-b border-zinc-800 flex items-center justify-between">
-                      <h3 className="text-sm font-extrabold text-zinc-100">{chapterTitle}</h3>
-                      <span className="text-[11px] text-zinc-400 font-semibold">
-                        {lessons.length} {lessons.length === 1 ? 'lesson' : 'lessons'}
-                      </span>
+            {groupedChapters.length > 0 && hasChapters ? (
+              <div className="space-y-2.5">
+                {groupedChapters.map(([chapterTitle, lessons], chIdx) => {
+                  const isOpen = Boolean(openChapters[chIdx]);
+                  return (
+                    <div key={chIdx} className="border border-zinc-800/90 rounded-2xl overflow-hidden bg-black/50">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() =>
+                          setOpenChapters((prev) => ({
+                            ...prev,
+                            [chIdx]: !isOpen,
+                          }))
+                        }
+                        className="w-full px-4 py-3.5 bg-zinc-900/70 hover:bg-zinc-900 flex items-center justify-between gap-3 text-left transition cursor-pointer"
+                      >
+                        <h3 className="text-sm font-extrabold text-zinc-100 truncate">{chapterTitle}</h3>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] text-zinc-400 font-semibold">
+                            {lessons.length} {lessons.length === 1 ? 'lesson' : 'lessons'}
+                          </span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
+                              isOpen ? 'rotate-180 text-blue-400' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <ul className="divide-y divide-zinc-900 border-t border-zinc-800">
+                          {lessons.map((lesson, lIdx) => (
+                            <li key={lIdx} className="px-4 py-3 flex items-center justify-between gap-3 text-xs sm:text-sm text-zinc-300">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <BookOpen className="w-4 h-4 text-zinc-500 shrink-0" />
+                                <span className="truncate">{lesson.title}</span>
+                              </div>
+                              {lesson.duration && (
+                                <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 shrink-0">
+                                  <Clock className="w-3 h-3" />
+                                  {lesson.duration}
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
-                    <ul className="divide-y divide-zinc-900">
-                      {lessons.map((lesson, lIdx) => (
-                        <li key={lIdx} className="px-4 py-3 flex items-center justify-between gap-3 text-xs sm:text-sm text-zinc-300">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <BookOpen className="w-4 h-4 text-zinc-500 shrink-0" />
-                            <span className="truncate">{lesson.title}</span>
-                          </div>
-                          {lesson.duration && (
-                            <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 shrink-0">
-                              <Clock className="w-3 h-3" />
-                              {lesson.duration}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+            ) : videos.length > 0 ? (
+              <div className="border border-zinc-800/90 rounded-2xl overflow-hidden bg-black/50">
+                <ul className="divide-y divide-zinc-900">
+                  {videos.map((lesson, lIdx) => (
+                    <li key={lIdx} className="px-4 py-3 flex items-center justify-between gap-3 text-xs sm:text-sm text-zinc-300">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <BookOpen className="w-4 h-4 text-zinc-500 shrink-0" />
+                        <span className="truncate">{lesson.title}</span>
+                      </div>
+                      {lesson.duration && (
+                        <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 shrink-0">
+                          <Clock className="w-3 h-3" />
+                          {lesson.duration}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : (
               <p className="text-sm text-zinc-400 leading-relaxed">

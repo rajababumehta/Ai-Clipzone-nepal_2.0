@@ -832,6 +832,14 @@ export default function App() {
   } | null>(null);
   const [classroomTab, setClassroomTab] = useState<'videos' | 'pdfs'>('videos');
   const [courseDetailTab, setCourseDetailTab] = useState<'videos' | 'pdfs'>('videos');
+  const [classroomExpandedChapters, setClassroomExpandedChapters] = useState<Record<string, boolean>>({});
+  const [showDirectVideoAddForm, setShowDirectVideoAddForm] = useState(false);
+  const [directVideoChapter, setDirectVideoChapter] = useState('');
+  const [directVideoTitle, setDirectVideoTitle] = useState('');
+  const [directVideoDuration, setDirectVideoDuration] = useState('10:00');
+  const [directVideoUrl, setDirectVideoUrl] = useState('');
+  const [isSavingDirectVideo, setIsSavingDirectVideo] = useState(false);
+  const [confirmDeleteVideoIdx, setConfirmDeleteVideoIdx] = useState<number | null>(null);
 
   // Process Firestore course documents into sorted active courses
   const processCourseSnapshotDocs = useCallback((docs: any[]): Course[] => {
@@ -3435,6 +3443,92 @@ export default function App() {
     } catch (err) {
       console.error('Error toggling course visibility:', err);
     }
+  };
+
+  // DIRECT COURSE SECTION VIDEO ADD / DELETE (Sub-Admin on assigned course & Main Admin, without opening Edit Course modal)
+  const handleAddDirectVideoLecture = async (e: FormEvent, targetCourse: Course) => {
+    e.preventDefault();
+    if (!canEditCourse(targetCourse.id)) {
+      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्षमा मात्र भिडियो थप्ने अनुमति छ।', 'error');
+      return;
+    }
+    const cleanTitle = directVideoTitle.trim();
+    const cleanUrl = directVideoUrl.trim();
+    const cleanDuration = directVideoDuration.trim() || '10:00';
+    const cleanChapter = directVideoChapter.trim();
+
+    if (!cleanTitle || !cleanUrl) {
+      showToast('कृपया Lecture Title र Video Link दुवै भर्नुहोस्।', 'error');
+      return;
+    }
+
+    setIsSavingDirectVideo(true);
+    try {
+      const newVideo: CourseVideo = {
+        title: cleanTitle,
+        duration: cleanDuration,
+        videoUrl: cleanUrl,
+        ...(cleanChapter ? { chapterTitle: cleanChapter } : {}),
+      };
+      const updatedVideos = [...(targetCourse.videos || []), newVideo];
+      await handleSaveCourseDirect({
+        ...targetCourse,
+        videos: updatedVideos,
+        updatedAt: Date.now(),
+      });
+      if (cleanChapter) {
+        setClassroomExpandedChapters((prev) => ({
+          ...prev,
+          [`${targetCourse.id}::${cleanChapter}`]: true,
+        }));
+      }
+      setDirectVideoTitle('');
+      setDirectVideoUrl('');
+      setDirectVideoDuration('10:00');
+      setShowDirectVideoAddForm(false);
+      showToast(`🎬 "${cleanTitle}" कोर्षमा सिधै थपियो!`, 'success');
+    } catch (err) {
+      console.error('Error adding direct video lecture:', err);
+      const errMsg = err instanceof Error ? err.message : 'भिडियो सेभ गर्न समस्या भयो।';
+      showToast(errMsg, 'error');
+    } finally {
+      setIsSavingDirectVideo(false);
+    }
+  };
+
+  const handleDeleteDirectVideoLecture = async (targetCourse: Course, videoIndex: number) => {
+    if (!canEditCourse(targetCourse.id)) {
+      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्षको मात्र भिडियो हटाउने अनुमति छ।', 'error');
+      return;
+    }
+    const existingVideos = targetCourse.videos || [];
+    if (videoIndex < 0 || videoIndex >= existingVideos.length) return;
+    const removedTitle = existingVideos[videoIndex]?.title || 'Video';
+    const updatedVideos = existingVideos.filter((_, i) => i !== videoIndex);
+    try {
+      await handleSaveCourseDirect({
+        ...targetCourse,
+        videos: updatedVideos,
+        updatedAt: Date.now(),
+      });
+      setConfirmDeleteVideoIdx(null);
+      showToast(`🗑️ "${removedTitle}" हटाइयो।`, 'info');
+    } catch (err) {
+      console.error('Error removing direct video lecture:', err);
+      showToast('भिडियो हटाउन समस्या भयो।', 'error');
+    }
+  };
+
+  const handleOpenDirectCourseVideos = (course: Course) => {
+    setSelectedClassroomCourseId(course.id);
+    setClassroomTab('videos');
+    setShowDirectVideoAddForm(true);
+    setConfirmDeleteVideoIdx(null);
+    const existingVideos = course.videos || [];
+    const lastCh = existingVideos.length > 0 ? (existingVideos[existingVideos.length - 1]?.chapterTitle || '') : '';
+    setDirectVideoChapter(lastCh);
+    navigateToPath('/classroom');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // MAIN ADMIN: Move Course Up or Down in Catalog Order (persisted atomically to Firestore)
@@ -6656,32 +6750,140 @@ export default function App() {
 
           {/* Courses Cards Grid or Live Embedded Classroom */}
           {currentView === 'classroom' ? (
-            activeCourseIds.length > 0 ? (
-              <div className="space-y-8 text-left">
-                {/* Active Courses Tab bar/Switcher - rendered only if user has multiple active courses */}
-                {(() => {
-                  const activeCourses = courses.filter(course => activeCourseIds.includes(course.id));
-                  const currentClassroomCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0];
-                  
-                  if (!currentClassroomCourse) return null;
+            (() => {
+              const classroomCourses = courses.filter((course) => {
+                if (isMainAdmin) return true;
+                if (isSubAdmin && subAdminSession?.courseId === course.id) return true;
+                return activeCourseIds.includes(course.id);
+              });
 
-                  const activePlaylist = currentClassroomCourse.videos || [];
+              if (classroomCourses.length > 0) {
+                const currentClassroomCourse = classroomCourses.find(c => c.id === selectedClassroomCourseId) || classroomCourses[0];
+                if (!currentClassroomCourse) return null;
 
+                const activePlaylist = currentClassroomCourse.videos || [];
+                const canDirectEditThisCourse = canEditCourse(currentClassroomCourse.id);
+                const isEnrolledInThisCourse = activeCourseIds.includes(currentClassroomCourse.id);
+                const hasChapters = activePlaylist.some((v) => Boolean(v.chapterTitle && v.chapterTitle.trim()));
+
+                // Unique existing chapter names for quick selection when adding videos directly
+                const existingChapterNames: string[] = [];
+                activePlaylist.forEach((v) => {
+                  const ch = v.chapterTitle?.trim();
+                  if (ch && !existingChapterNames.includes(ch)) {
+                    existingChapterNames.push(ch);
+                  }
+                });
+
+                // Group playlist into ordered chapters when chapterTitle is present
+                const chaptersMap: Record<string, { video: CourseVideo; globalIndex: number }[]> = {};
+                const chapterOrder: string[] = [];
+                if (hasChapters) {
+                  activePlaylist.forEach((video, globalIdx) => {
+                    const chTitle = video.chapterTitle?.trim() || 'Other Lectures';
+                    if (!chaptersMap[chTitle]) {
+                      chaptersMap[chTitle] = [];
+                      chapterOrder.push(chTitle);
+                    }
+                    chaptersMap[chTitle].push({ video, globalIndex: globalIdx });
+                  });
+                }
+
+                const renderVideoRow = (video: CourseVideo, globalIdx: number, displayIndexLabel?: string) => {
+                  const isConfirmingDelete = confirmDeleteVideoIdx === globalIdx;
                   return (
+                    <motion.div
+                      key={globalIdx}
+                      whileHover={{ scale: 1.005, x: 2 }}
+                      onClick={() => {
+                        if (document.documentElement && document.documentElement.requestFullscreen) {
+                          document.documentElement.requestFullscreen().catch(() => {});
+                        }
+                        const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
+                        setFullscreenVideo({
+                          courseTitle: currentClassroomCourse.title,
+                          title: video.title,
+                          videoUrl: securePlayUrl,
+                          idx: globalIdx,
+                          playlist: activePlaylist,
+                          courseId: currentClassroomCourse.id,
+                        });
+                        showToast(`Opening Lecture ${globalIdx + 1} in Fullscreen! 🎥`, 'success');
+                      }}
+                      className="group bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/40 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-3 sm:gap-4 text-left shadow-md"
+                    >
+                      {/* Left: Elegant play icon box */}
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 border border-blue-500/30 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform text-blue-400">
+                        <Play className="w-4 h-4 text-blue-400 fill-blue-400 ml-0.5" />
+                      </div>
+
+                      {/* Center: Text Info */}
+                      <div className="flex-1 min-w-0">
+                        <h5 className="text-xs sm:text-base font-bold text-zinc-100 group-hover:text-blue-300 transition-colors leading-snug font-sans">
+                          {displayIndexLabel ? `${displayIndexLabel} ` : ''}{video.title}
+                        </h5>
+                        {video.duration && (
+                          <span className="text-[10px] sm:text-xs text-zinc-400 font-sans font-medium">
+                            ⏱️ {video.duration} mins
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Right: Direct Inline Delete for Sub-Admin / Main Admin */}
+                      {canDirectEditThisCourse && (
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {isConfirmingDelete ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDirectVideoLecture(currentClassroomCourse, globalIdx)}
+                                className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteVideoIdx(null)}
+                                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold px-2 py-1.5 rounded-lg transition cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteVideoIdx(globalIdx)}
+                              className="p-2 rounded-xl bg-zinc-900 hover:bg-rose-950/70 text-zinc-400 hover:text-rose-400 border border-zinc-800 hover:border-rose-500/40 transition cursor-pointer"
+                              title="Remove this video lecture"
+                              aria-label="Remove video lecture"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                };
+
+                return (
+                  <div className="space-y-8 text-left">
                     <div className="space-y-8">
-                      {activeCourses.length > 1 && (
+                      {classroomCourses.length > 1 && (
                         <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl flex flex-col md:flex-row items-center gap-4 justify-between">
                           <span className="text-xs text-blue-400 font-bold uppercase tracking-wider font-sans">
                             📚 Switch Course Program:
                           </span>
                           <div className="flex flex-wrap gap-2">
-                            {activeCourses.map((course) => {
+                            {classroomCourses.map((course) => {
                               const isActive = course.id === currentClassroomCourse.id;
                               return (
                                 <button
                                   key={course.id}
                                   onClick={() => {
                                     setSelectedClassroomCourseId(course.id);
+                                    setShowDirectVideoAddForm(false);
+                                    setConfirmDeleteVideoIdx(null);
                                     showToast(`Loaded: ${course.title}`, 'info');
                                   }}
                                   className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -6707,17 +6909,25 @@ export default function App() {
                         {/* Course Header Banner */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
                           <div className="space-y-2 text-left">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="bg-emerald-500/15 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-emerald-500/30 font-sans">
-                                🟢 Active Program
+                                {isEnrolledInThisCourse
+                                  ? '🟢 Active Program'
+                                  : isSubAdmin
+                                    ? '🟢 Sub-Admin Course Manager'
+                                    : '🟢 Main Admin Course Manager'}
                               </span>
-                              <span className="text-xs text-zinc-400 font-bold font-sans">({activePlaylist.length} Total Lectures)</span>
+                              <span className="text-xs text-zinc-400 font-bold font-sans">
+                                ({activePlaylist.length} Total Lectures{hasChapters ? ` • ${chapterOrder.length} Chapters` : ''})
+                              </span>
                             </div>
                             <h4 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight font-sans">
                               {currentClassroomCourse.title}
                             </h4>
                             <p className="text-xs text-zinc-400 font-medium font-sans">
-                              कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!
+                              {hasChapters
+                                ? 'कुनै पनि Chapter मा क्लिक गरेर त्यस भित्रका भिडियो कक्षाहरू हेर्नुहोस्!'
+                                : 'कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!'}
                             </p>
                           </div>
 
@@ -6736,7 +6946,7 @@ export default function App() {
                                 <Video className="w-3.5 h-3.5" />
                                 <span>Live Session</span>
                               </button>
-                            ) : (!secondaryCourseIds.includes(currentClassroomCourse.id) && currentClassroomCourse.includeCertificate !== false) && (
+                            ) : (isEnrolledInThisCourse && !secondaryCourseIds.includes(currentClassroomCourse.id) && currentClassroomCourse.includeCertificate !== false) && (
                               <button
                                 onClick={() => handleOpenStudentCertificate(currentClassroomCourse.id)}
                                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer font-sans active:scale-95"
@@ -6758,9 +6968,9 @@ export default function App() {
                               + Add course
                             </button>
 
-                            {(canEditCourse(currentClassroomCourse.id) || isMainAdmin) && (
+                            {(canDirectEditThisCourse || isMainAdmin) && (
                               <div className="flex gap-2">
-                                {canEditCourse(currentClassroomCourse.id) && (
+                                {canDirectEditThisCourse && (
                                   <button
                                     onClick={() => handleEditCourseClick(currentClassroomCourse)}
                                     className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-blue-300 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
@@ -6815,57 +7025,250 @@ export default function App() {
                           </button>
                         </div>
 
-                        {/* TAB 1: VIDEOS PLAYLIST */}
+                        {/* TAB 1: VIDEOS PLAYLIST (Direct Add for Sub-Admin/Main Admin + Chapter FAQ Collapsible) */}
                         {classroomTab === 'videos' && (
-                          <div className="space-y-3 mt-6">
-                            {activePlaylist.length > 0 ? (
-                              activePlaylist.map((video, idx) => {
-                                return (
-                                  <motion.div
-                                    key={idx}
-                                    whileHover={{ scale: 1.005, x: 2 }}
+                          <div className="space-y-4 mt-6">
+                            {/* Direct Add Video Lecture Bar (Sub-Admin & Main Admin — NO need to open Edit Course modal!) */}
+                            {canDirectEditThisCourse && (
+                              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 sm:p-4 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                                  <div className="text-left">
+                                    <span className="text-xs font-black text-white flex items-center gap-1.5">
+                                      <Video className="w-4 h-4 text-blue-400" />
+                                      Direct Video Lecture Manager
+                                    </span>
+                                    <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
+                                      Course Edit नखोली सिधै यहीँबाट नयाँ Video Lecture वा Chapter थप्नुहोस्।
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
                                     onClick={() => {
-                                      if (document.documentElement && document.documentElement.requestFullscreen) {
-                                        document.documentElement.requestFullscreen().catch(() => {});
-                                      }
-                                      const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
-                                      setFullscreenVideo({
-                                        courseTitle: currentClassroomCourse.title,
-                                        title: video.title,
-                                        videoUrl: securePlayUrl,
-                                        idx: idx,
-                                        playlist: activePlaylist,
-                                        courseId: currentClassroomCourse.id,
+                                      setShowDirectVideoAddForm((prev) => {
+                                        const next = !prev;
+                                        if (next && !directVideoChapter && existingChapterNames.length > 0) {
+                                          setDirectVideoChapter(existingChapterNames[existingChapterNames.length - 1]);
+                                        }
+                                        return next;
                                       });
-                                      showToast(`Opening Lecture ${idx + 1} in Fullscreen! 🎥`, 'success');
                                     }}
-                                    className="group bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/40 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-3 sm:gap-4 text-left shadow-md"
+                                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer shadow-md active:scale-95 ${
+                                      showDirectVideoAddForm
+                                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20'
+                                    }`}
                                   >
-                                    {/* Left: Elegant play icon box */}
-                                    <div className="w-10 h-10 sm:w-12 sm:h-12 border border-blue-500/30 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform text-blue-400">
-                                      <Play className="w-4 h-4 text-blue-400 fill-blue-400 ml-0.5" />
-                                    </div>
+                                    {showDirectVideoAddForm ? (
+                                      <>
+                                        <X className="w-3.5 h-3.5" /> Close Form
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Plus className="w-3.5 h-3.5" /> Add Video Lecture
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
 
-                                    {/* Center: Text Info */}
-                                    <div className="flex-1 min-w-0">
-                                      <h5 className="text-xs sm:text-base font-bold text-zinc-100 group-hover:text-blue-300 transition-colors leading-snug font-sans">
-                                        {video.title}
-                                      </h5>
-                                      {video.duration && (
-                                        <span className="text-[10px] sm:text-xs text-zinc-400 font-sans font-medium">
-                                          ⏱️ {video.duration} mins
-                                        </span>
+                                {showDirectVideoAddForm && (
+                                  <form
+                                    onSubmit={(e) => handleAddDirectVideoLecture(e, currentClassroomCourse)}
+                                    className="pt-3 border-t border-zinc-800/80 space-y-3"
+                                  >
+                                    <div>
+                                      <label className="block text-[10px] font-black uppercase tracking-wider text-blue-400 mb-1">
+                                        Chapter Name (Optional — Chapter-wise को लागि मात्र)
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={directVideoChapter}
+                                        onChange={(e) => setDirectVideoChapter(e.target.value)}
+                                        placeholder="e.g. Chapter 1: Introduction (खाली छोडेमा सिधै भिडियो लिस्टमा बस्नेछ)"
+                                        className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
+                                      />
+                                      {existingChapterNames.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                          <span className="text-[10px] text-zinc-500 font-bold">Existing Chapters:</span>
+                                          {existingChapterNames.map((chName) => (
+                                            <button
+                                              key={chName}
+                                              type="button"
+                                              onClick={() => setDirectVideoChapter(chName)}
+                                              className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                                                directVideoChapter.trim() === chName
+                                                  ? 'bg-blue-600 text-white border-blue-500'
+                                                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700'
+                                              }`}
+                                            >
+                                              {chName}
+                                            </button>
+                                          ))}
+                                          {directVideoChapter && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setDirectVideoChapter('')}
+                                              className="text-[10px] font-bold px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-rose-300 border border-zinc-800 transition cursor-pointer"
+                                            >
+                                              Clear Chapter
+                                            </button>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  </motion.div>
-                                );
-                              })
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                      <div className="sm:col-span-2">
+                                        <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                                          Lecture Title *
+                                        </label>
+                                        <input
+                                          type="text"
+                                          required
+                                          value={directVideoTitle}
+                                          onChange={(e) => setDirectVideoTitle(e.target.value)}
+                                          placeholder="e.g. 1.1 Course Setup & Overview"
+                                          className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                                          Duration
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={directVideoDuration}
+                                          onChange={(e) => setDirectVideoDuration(e.target.value)}
+                                          placeholder="e.g. 12:30"
+                                          className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                                        Video Link (YouTube or Google Drive Preview URL) *
+                                      </label>
+                                      <input
+                                        type="text"
+                                        required
+                                        value={directVideoUrl}
+                                        onChange={(e) => setDirectVideoUrl(e.target.value)}
+                                        placeholder="https://youtu.be/... or https://drive.google.com/file/d/.../preview"
+                                        className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
+                                      />
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowDirectVideoAddForm(false)}
+                                        className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-bold cursor-pointer transition"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        disabled={isSavingDirectVideo}
+                                        className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black cursor-pointer transition shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        {isSavingDirectVideo ? 'Saving...' : 'Save Video Lecture'}
+                                      </button>
+                                    </div>
+                                  </form>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Video Playlist: Chapter-wise FAQ Collapsible Accordion OR Flat List */}
+                            {activePlaylist.length > 0 ? (
+                              hasChapters ? (
+                                <div className="space-y-2.5">
+                                  {chapterOrder.map((chTitle, chIdx) => {
+                                    const items = chaptersMap[chTitle] || [];
+                                    const chKey = `${currentClassroomCourse.id}::${chTitle}`;
+                                    const isOpen = Boolean(classroomExpandedChapters[chKey]);
+
+                                    return (
+                                      <div
+                                        key={chKey}
+                                        className="border border-zinc-800/90 rounded-2xl bg-zinc-950/90 overflow-hidden shadow-md"
+                                      >
+                                        {/* Chapter FAQ-style Header (All chapters collapsed by default; click to reveal videos) */}
+                                        <button
+                                          type="button"
+                                          aria-expanded={isOpen}
+                                          onClick={() =>
+                                            setClassroomExpandedChapters((prev) => ({
+                                              ...prev,
+                                              [chKey]: !isOpen,
+                                            }))
+                                          }
+                                          className={`w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left transition cursor-pointer ${
+                                            isOpen
+                                              ? 'bg-zinc-900/90 text-blue-300 border-b border-zinc-800'
+                                              : 'hover:bg-zinc-900/70 text-zinc-100'
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <span className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center text-xs font-black shrink-0">
+                                              {chIdx + 1}
+                                            </span>
+                                            <span className="text-xs sm:text-sm md:text-base font-extrabold truncate">
+                                              {chTitle}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0">
+                                            <span className="text-[10px] sm:text-xs bg-zinc-900 text-zinc-400 px-2.5 py-1 rounded-lg font-bold border border-zinc-800">
+                                              {items.length} {items.length === 1 ? 'Video' : 'Videos'}
+                                            </span>
+                                            <ChevronDown
+                                              className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
+                                                isOpen ? 'rotate-180 text-blue-400' : ''
+                                              }`}
+                                            />
+                                          </div>
+                                        </button>
+
+                                        {/* Expanded Chapter Videos */}
+                                        {isOpen && (
+                                          <div className="p-3 sm:p-4 space-y-2.5 bg-black/50">
+                                            {items.map(({ video, globalIndex }) =>
+                                              renderVideoRow(video, globalIndex)
+                                            )}
+
+                                            {canDirectEditThisCourse && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setDirectVideoChapter(chTitle);
+                                                  setShowDirectVideoAddForm(true);
+                                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                }}
+                                                className="w-full py-2.5 rounded-xl border border-dashed border-zinc-800 hover:border-blue-500/50 bg-zinc-950/60 hover:bg-zinc-900 text-blue-400 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                                              >
+                                                <Plus className="w-3.5 h-3.5" /> Add Video to "{chTitle}"
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  {activePlaylist.map((video, idx) => renderVideoRow(video, idx))}
+                                </div>
+                              )
                             ) : (
                               <div className="text-center py-12 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-2">
                                 <div className="text-3xl">📹</div>
                                 <h5 className="text-sm font-bold text-zinc-300 font-sans">कुनै भिडियो लेक्चरहरू उपलब्ध छैनन्</h5>
                                 <p className="text-xs text-zinc-500 font-sans">
-                                  एडमिनले प्लेलिस्टमा भिडियो थपेपछि यहाँ देखिनेछ। (Videos added by admin will appear here.)
+                                  {canDirectEditThisCourse
+                                    ? 'माथि रहेको "+ Add Video Lecture" बटनमा क्लिक गरी सिधै भिडियो थप्नुहोस्।'
+                                    : 'एडमिनले प्लेलिस्टमा भिडियो थपेपछि यहाँ देखिनेछ। (Videos added by admin will appear here.)'}
                                 </p>
                               </div>
                             )}
@@ -6974,8 +7377,6 @@ export default function App() {
                         )}
                       </motion.div>
                     </div>
-                  );
-                })()}
 
               {/* Dynamic Course Creator add-on for Main Admin directly under active listing */}
               {isMainAdmin && (
@@ -6989,9 +7390,8 @@ export default function App() {
                 </div>
               )}
             </div>
-          ) : (
-            /* ==================== CLASSROOM EMPTY / EXPIRED STATE ==================== */
-            (() => {
+              );
+              }
               const expiredKeysList = userActivationKeys.filter(k => isCourseKeyExpired(k));
               const hasExpiredCourseAccess = expiredKeysList.length > 0;
 
@@ -7180,7 +7580,6 @@ export default function App() {
                 </div>
               );
             })()
-          )
         ) : isCoursesLoading && (!courses || courses.length === 0) ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5 lg:gap-6">
             {[1, 2, 3].map((n) => (
@@ -8459,6 +8858,7 @@ export default function App() {
         onSaveCourse={handleSaveCourseDirect}
         onMoveCourse={handleMoveCourse}
         onToggleCourseVisibility={handleToggleCourseVisibility}
+        onOpenDirectCourseVideos={handleOpenDirectCourseVideos}
         notifications={notifications}
         onSendNotification={handleSendNotification}
         onDeleteNotification={handleDeleteNotification}

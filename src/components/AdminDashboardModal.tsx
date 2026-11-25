@@ -87,6 +87,7 @@ interface AdminDashboardModalProps {
   onBatchDeleteCourses?: (courseIds: string[]) => Promise<void>;
   onSaveCourse?: (course: Course) => Promise<void>;
   onToggleCourseVisibility?: (course: Course) => Promise<void>;
+  onOpenDirectCourseVideos?: (course: Course) => void;
   onMoveCourse?: (courseId: string, direction: 'up' | 'down') => Promise<void>;
   // Push Notifications
   notifications?: PushNotificationItem[];
@@ -141,6 +142,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onBatchDeleteCourses,
   onSaveCourse,
   onToggleCourseVisibility,
+  onOpenDirectCourseVideos,
   onMoveCourse,
   notifications,
   onSendNotification,
@@ -3281,6 +3283,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 <ArrowDown className={`w-3.5 h-3.5 ${isMoving ? 'animate-pulse' : ''}`} />
                               </button>
                             </div>
+                          )}
+                          {onOpenDirectCourseVideos && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenDirectCourseVideos(course);
+                              }}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                              title="Open Course section to add video lectures directly without Course Edit modal"
+                            >
+                              <Plus className="w-3 h-3" /> Add Video
+                            </button>
                           )}
                           <button
                             type="button"
