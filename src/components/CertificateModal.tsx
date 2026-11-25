@@ -992,7 +992,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 <div className="w-full max-w-[550px] flex flex-col items-center">
                   <p
                     style={{ color: '#0b2147' }}
-                    className="cert-font-playfair italic text-[21px] font-medium leading-tight"
+                    className="cert-font-playfair italic text-[21px] font-medium leading-tight mb-3.5"
                   >
                     This is to certify that
                   </p>
