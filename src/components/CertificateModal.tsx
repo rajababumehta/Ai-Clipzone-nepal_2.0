@@ -997,35 +997,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     <circle cx="0" cy="0" r="59" fill="none" stroke="#fff3c4" strokeWidth="1" opacity="0.7" />
                     <circle cx="0" cy="0" r="54" fill="none" stroke="#6f4607" strokeWidth="1.2" opacity="0.65" />
 
-                    {[-1, 1].map((side) => (
-                      <g key={side} transform={`scale(${side}, 1)`}>
-                        <path
-                          d="M -16,42 C -40,34 -50,8 -42,-22"
-                          fill="none"
-                          stroke="#593605"
-                          strokeWidth="1.3"
-                        />
-                        {[
-                          [-40, -24, -45],
-                          [-44, -12, -25],
-                          [-45, 0, -5],
-                          [-43, 12, 15],
-                          [-37, 24, 35],
-                          [-28, 34, 52],
-                        ].map(([lx, ly, rot], idx) => (
-                          <ellipse
-                            key={idx}
-                            cx={lx}
-                            cy={ly}
-                            rx="5.4"
-                            ry="2.3"
-                            fill="#4d2e04"
-                            transform={`rotate(${rot} ${lx} ${ly})`}
-                          />
-                        ))}
-                      </g>
-                    ))}
-
                     <g transform="translate(0, -24)">
                       <polygon points="0,-16 21,-6 0,4 -21,-6" fill="#171717" />
                       <polygon points="-4,-8 5,-6 -4,-4" fill="#f5d36d" />
