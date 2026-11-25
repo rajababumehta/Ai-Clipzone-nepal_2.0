@@ -75,7 +75,7 @@ import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTI
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey, SupportedLocale } from './types';
 import { collection, getDocs, getDocsFromServer, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
-import { db, auth } from './firebase';
+import { db, auth, fetchCoursesViaRest } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
 import { ImageAdjustModal } from './components/ImageAdjustModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
@@ -740,20 +740,14 @@ export default function App() {
   });
 
   // Course loading & error states from database
-  // While online, wait for server-verified Firestore fetch so stale localStorage/IndexedDB cache never flashes hidden courses on reload
-  const [hasServerVerifiedCourses, setHasServerVerifiedCourses] = useState<boolean>(() => {
-    return typeof navigator !== 'undefined' && !navigator.onLine;
-  });
+  // Show cached courses directly (0ms, no reload skeleton!) and sync server state silently in background
   const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => {
-    if (typeof navigator !== 'undefined' && navigator.onLine) {
-      return true;
-    }
     try {
       const isInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
       const cached = localStorage.getItem('clipzone_dynamic_courses');
       if (isInitialized && cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return false;
+        if (Array.isArray(parsed)) return false;
       }
     } catch (e) {}
     return true;
@@ -886,31 +880,46 @@ export default function App() {
     lastCoursesServerFetchRef.current = Date.now();
 
     try {
+      const deletedIds: string[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+
+      // Fast-path REST fetch on cold loads (resolves ~80-150ms without waiting for WebChannel handshake)
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        const restDocs = await fetchCoursesViaRest(2800);
+        if (Array.isArray(restDocs) && restDocs.length > 0) {
+          const activeRest = restDocs
+            .filter((c) => c && c.id && !deletedIds.includes(c.id))
+            .map((c, idx) => sanitizeCourseRecord(c as Course, idx))
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          setCourses(activeRest);
+          setCoursesLoadError(null);
+          setIsCoursesLoading(false);
+          try {
+            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(activeRest));
+            localStorage.setItem('clipzone_courses_initialized', 'true');
+          } catch (e) {}
+          return;
+        }
+      }
+
       let querySnapshot;
       let resolvedFromServer = true;
       try {
         querySnapshot = await getDocsFromServer(collection(db, 'courses'));
       } catch (serverErr) {
-        if (typeof navigator === 'undefined' || navigator.onLine) {
-          // Retry server fetch once after brief warmup before ever falling back to local cache
-          await new Promise((res) => setTimeout(res, 350));
-          try {
-            querySnapshot = await getDocsFromServer(collection(db, 'courses'));
-          } catch {
-            resolvedFromServer = false;
-            querySnapshot = await getDocs(collection(db, 'courses'));
-          }
-        } else {
-          resolvedFromServer = false;
-          querySnapshot = await getDocs(collection(db, 'courses'));
-        }
+        resolvedFromServer = false;
+        querySnapshot = await getDocs(collection(db, 'courses'));
       }
 
       if (!querySnapshot.empty) {
         const sortedCourses = processCourseSnapshotDocs(querySnapshot.docs);
         setCourses(sortedCourses);
         setCoursesLoadError(null);
-        setHasServerVerifiedCourses(true);
         setIsCoursesLoading(false);
         if (resolvedFromServer) {
           try {
@@ -923,18 +932,9 @@ export default function App() {
 
       // If Firestore collection returned empty, verify offline/seed state cleanly
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        setHasServerVerifiedCourses(true);
         setIsCoursesLoading(false);
         return;
       }
-
-      const deletedIds: string[] = (() => {
-        try {
-          return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-        } catch {
-          return [];
-        }
-      })();
 
       let remoteSeeded = false;
       try {
@@ -969,11 +969,9 @@ export default function App() {
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify([]));
         } catch (e) {}
       }
-      setHasServerVerifiedCourses(true);
       setIsCoursesLoading(false);
     } catch (err) {
       console.warn('Error fetching courses from Firestore:', err);
-      setHasServerVerifiedCourses(true);
       setCourses(prev => {
         if (!prev || prev.length === 0) {
           setCoursesLoadError('कोर्षहरू लोड हुन सकेनन्। कृपया इन्टरनेट जडान जाँच गरी पुन: प्रयास गर्नुहोस्।');
@@ -988,22 +986,14 @@ export default function App() {
   useEffect(() => {
     let isActive = true;
 
-    // Immediately fetch fresh courses from server on mount
+    // Silently sync fresh courses from server on mount (does not block cached instant render)
     refreshCoursesFromServer(false);
-
-    // Safety guard: never leave Home stuck on loading skeleton if network stalls
-    const safetyTimer = setTimeout(() => {
-      if (isActive) {
-        setHasServerVerifiedCourses(true);
-        setIsCoursesLoading(false);
-      }
-    }, 5000);
 
     const handleVisibilityOrOnline = () => {
       if (!isActive) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-      if (Date.now() - lastCoursesServerFetchRef.current > 10000) {
+      if (Date.now() - lastCoursesServerFetchRef.current > 15000) {
         refreshCoursesFromServer(false);
       }
     };
@@ -1017,7 +1007,7 @@ export default function App() {
 
     const unsubscribe = onSnapshot(collection(db, 'courses'), (querySnapshot) => {
       if (!isActive) return;
-      // CRITICAL: Ignore stale IndexedDB cache emissions when online so hidden courses never flash on reload
+      // Ignore stale IndexedDB cache emissions when online so hidden courses never flash back
       if (querySnapshot.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) {
         return;
       }
@@ -1026,40 +1016,33 @@ export default function App() {
           const sortedCourses = processCourseSnapshotDocs(querySnapshot.docs);
           setCourses(sortedCourses);
           setCoursesLoadError(null);
-          setHasServerVerifiedCourses(true);
           setIsCoursesLoading(false);
           try {
             localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
             localStorage.setItem('clipzone_courses_initialized', 'true');
           } catch (e) {}
         } else {
-          // Ignore empty snapshots coming only from local cache or offline state
           if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            setHasServerVerifiedCourses(true);
             setIsCoursesLoading(false);
             return;
           }
           if (querySnapshot.metadata?.fromCache) {
             return;
           }
-          setHasServerVerifiedCourses(true);
           setIsCoursesLoading(false);
         }
       } catch (e) {
         console.warn('Error processing courses snapshot:', e);
-        setHasServerVerifiedCourses(true);
         setIsCoursesLoading(false);
       }
     }, (err) => {
       if (!isActive) return;
       console.warn('Realtime courses listener error (keeping available courses):', err);
-      setHasServerVerifiedCourses(true);
       setIsCoursesLoading(false);
     });
 
     return () => {
       isActive = false;
-      clearTimeout(safetyTimer);
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityOrOnline);
       }
@@ -4228,11 +4211,10 @@ export default function App() {
   }, []);
 
   const publicCatalogCourses = useMemo(() => {
-    if (!hasServerVerifiedCourses && isNetworkOnline) return [];
     if (courses && courses.length > 0) return courses.filter((c) => c.isHidden !== true);
     if (isCoursesLoading) return [];
     return COURSES.filter((c) => !deletedCourseIds.includes(c.id) && c.isHidden !== true);
-  }, [courses, deletedCourseIds, hasServerVerifiedCourses, isNetworkOnline, isCoursesLoading]);
+  }, [courses, deletedCourseIds, isCoursesLoading]);
 
   const publicInstructors = useMemo(
     () => buildPublicInstructors(publicCatalogCourses, activeSubAdmins),
@@ -4461,9 +4443,8 @@ export default function App() {
     [courses]
   );
 
-  // Filtered courses for Home page based on Top Navigation search query (never exposes hidden or stale pre-verification courses)
+  // Filtered courses for Home page based on Top Navigation search query (never exposes hidden courses)
   const filteredHomeCourses = useMemo(() => {
-    if (!hasServerVerifiedCourses && isNetworkOnline) return [];
     const visibleCourses = courses.filter((c) => c.isHidden !== true);
     if (!courseSearchQuery.trim()) return visibleCourses;
     const q = courseSearchQuery.toLowerCase().trim();
@@ -4474,7 +4455,7 @@ export default function App() {
       c.learn?.some(l => l.toLowerCase().includes(q)) ||
       c.videos?.some(v => v.title.toLowerCase().includes(q))
     );
-  }, [courses, courseSearchQuery, hasServerVerifiedCourses, isNetworkOnline]);
+  }, [courses, courseSearchQuery]);
 
   // FAQ open indexes
   const [openFaqs, setOpenFaqs] = useState<Record<number, boolean>>({});
@@ -7638,7 +7619,7 @@ export default function App() {
                 </div>
               );
             })()
-        ) : (isCoursesLoading || (!hasServerVerifiedCourses && isNetworkOnline)) ? (
+        ) : isCoursesLoading && (!courses || courses.length === 0) ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5 lg:gap-6">
             {[1, 2, 3].map((n) => (
               <div 

@@ -16,18 +16,70 @@ try {
   // ignore
 }
 
-// Initialize Firestore with persistent IndexedDB offline cache and reliable long-polling transport
+// Initialize Firestore with persistent IndexedDB offline cache and auto-detected fast streaming transport
 export const db = initializeFirestore(
   app,
   {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager(),
     }),
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
     ignoreUndefinedProperties: true,
   },
   firebaseConfig.firestoreDatabaseId
 );
+
+function decodeFirestoreRestValue(val: any): any {
+  if (!val || typeof val !== 'object') return undefined;
+  if ('stringValue' in val) return val.stringValue;
+  if ('booleanValue' in val) return Boolean(val.booleanValue);
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('nullValue' in val) return null;
+  if ('timestampValue' in val) return val.timestampValue;
+  if ('arrayValue' in val) {
+    const values = Array.isArray(val.arrayValue?.values) ? val.arrayValue.values : [];
+    return values.map(decodeFirestoreRestValue);
+  }
+  if ('mapValue' in val) {
+    const out: Record<string, any> = {};
+    const fields = val.mapValue?.fields || {};
+    for (const key of Object.keys(fields)) {
+      out[key] = decodeFirestoreRestValue(fields[key]);
+    }
+    return out;
+  }
+  return undefined;
+}
+
+export async function fetchCoursesViaRest(timeoutMs = 3500): Promise<any[] | null> {
+  if (typeof fetch === 'undefined' || !firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId) {
+    return null;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/courses?pageSize=100`;
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const docs = Array.isArray(json?.documents) ? json.documents : null;
+    if (!docs) return null;
+    return docs.map((docItem: any) => {
+      const obj: Record<string, any> = {};
+      const fields = docItem?.fields || {};
+      for (const k of Object.keys(fields)) {
+        obj[k] = decodeFirestoreRestValue(fields[k]);
+      }
+      const docId = String(docItem?.name?.split('/').pop() || obj.id || '');
+      return { ...obj, id: docId };
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',
