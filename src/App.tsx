@@ -5628,7 +5628,7 @@ export default function App() {
 
         {/* Top Floating Banner with sleek pitch-black styling matching the logo */}
         <div className="w-full bg-black text-white">
-          <div className="max-w-7xl mx-auto px-2.5 sm:px-4 py-1 sm:py-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
+          <div className="max-w-[1600px] mx-auto px-2 sm:px-3 md:px-4 lg:px-5 py-1 sm:py-1.5 grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
             {/* Left: Brand Logo Only (text removed as requested) */}
             <div 
               onClick={() => {
@@ -5646,7 +5646,7 @@ export default function App() {
                 <img 
                   src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                   alt={siteSettings.instituteName || "Logo"}
-                  className="h-8 sm:h-10 md:h-11 w-auto max-w-[92px] sm:max-w-[150px] md:max-w-[175px] object-contain shrink-0 filter drop-shadow-md"
+                  className="h-8 sm:h-10 md:h-11 w-auto max-w-[88px] sm:max-w-[150px] md:max-w-[175px] object-contain shrink-0 filter drop-shadow-md"
                   loading="eager"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
@@ -5659,7 +5659,7 @@ export default function App() {
             </div>
 
             {/* Centered Extra-Slim Pill Search Bar */}
-            <div ref={searchContainerRef} className="relative justify-self-center w-[156px] xs:w-[200px] sm:w-[300px] md:w-[380px] lg:w-[440px]">
+            <div ref={searchContainerRef} className="relative justify-self-center w-full max-w-[230px] sm:w-[300px] md:w-[380px] lg:w-[440px] sm:max-w-none">
               <div className="relative flex items-center w-full">
                 <div className="absolute left-2.5 pointer-events-none text-zinc-400 flex items-center justify-center">
                   <Search className="w-3 h-3 text-zinc-400" />
@@ -5675,7 +5675,7 @@ export default function App() {
                   }}
                   onFocus={() => setIsSearchFocused(true)}
                   placeholder="Search courses, AI tools..."
-                  className="w-full h-6.5 sm:h-7 pl-7 pr-6 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs leading-none rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
+                  className="w-full h-7.5 sm:h-7 pl-7 pr-6 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs leading-none rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
                 />
                 {courseSearchQuery && (
                   <button
@@ -5824,7 +5824,7 @@ export default function App() {
       )}
 
       {/* Main Container for Course List / Classroom / Account / Ask / Enroll */}
-      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : `flex-1 flex flex-col max-w-6xl w-full mx-auto px-4 pt-1.5 ${currentView === 'home' ? 'pb-0' : 'pb-4'}`}>
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : `flex-1 flex flex-col w-full max-w-[1600px] mx-auto px-1.5 sm:px-3 md:px-4 lg:px-5 pt-1.5 ${currentView === 'home' ? 'pb-0' : 'pb-4'}`}>
 
         {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / ENROLL / HOME VIEWS */}
         {currentView === 'enroll' && enrollCourse ? (
@@ -7137,11 +7137,11 @@ export default function App() {
             })()
           )
         ) : isCoursesLoading && (!courses || courses.length === 0) ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-            {[1, 2, 3, 4].map((n) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5 lg:gap-6">
+            {[1, 2, 3].map((n) => (
               <div 
                 key={n}
-                className="bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800/80 p-6 animate-pulse flex flex-col h-[480px]"
+                className="bg-zinc-950 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-800/80 p-4 sm:p-5 animate-pulse flex flex-col h-[440px]"
               >
                 <div className="w-full h-52 bg-zinc-900/80 rounded-2xl mb-5 flex items-center justify-center">
                   <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
@@ -7196,7 +7196,13 @@ export default function App() {
             )}
 
             {filteredHomeCourses.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
+              <div className={`grid gap-3.5 sm:gap-5 lg:gap-6 ${
+                filteredHomeCourses.length + (isMainAdmin ? 1 : 0) === 1
+                  ? 'grid-cols-1'
+                  : filteredHomeCourses.length + (isMainAdmin ? 1 : 0) === 2
+                    ? 'grid-cols-1 sm:grid-cols-2'
+                    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              }`}>
                 {filteredHomeCourses.map((course, index) => (
                   <motion.div
                     key={course.id}
@@ -7206,10 +7212,10 @@ export default function App() {
                     viewport={{ once: true, margin: '-40px' }}
                     transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.25) }}
                     whileHover={{ y: -6 }}
-                    className="group bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
+                    className="group bg-zinc-950 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
                   >
                     {course.isPopular && (
-                      <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
+                      <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-center py-1.5 sm:py-2 text-[11px] sm:text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
                         {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
                       </div>
                     )}
@@ -7232,17 +7238,17 @@ export default function App() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 right-4">
-                        <span className="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
+                      <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4">
+                        <span className="bg-blue-600 text-white text-[11px] sm:text-xs font-extrabold px-2.5 sm:px-3 py-1 rounded-lg shadow-md">
                           Instant Delivery
                         </span>
                       </div>
                     </a>
 
                     {/* Course Info */}
-                    <div className="p-6 md:p-8 flex flex-col grow justify-between">
+                    <div className="p-4 sm:p-5 md:p-6 flex flex-col grow justify-between">
                       <div className="text-left font-sans">
-                        <h3 className="text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors">
+                        <h3 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
                           <a
                             href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
                             onClick={(e) => {
@@ -7256,7 +7262,7 @@ export default function App() {
                         </h3>
                         
                         {/* Prices or Active status badge */}
-                        <div className="mt-4 flex items-center justify-between">
+                        <div className="mt-3 sm:mt-4 flex items-center justify-between">
                           {activeCourseIds.includes(course.id) ? (
                             <span className="bg-emerald-950/80 text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-emerald-500/40 flex items-center gap-1.5 shadow-2xs">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -7269,11 +7275,11 @@ export default function App() {
                             </span>
                           ) : (
                             <div className="flex items-baseline gap-2.5">
-                              <span className="text-2xl md:text-3xl font-black text-emerald-400">
+                              <span className="text-2xl sm:text-[26px] md:text-3xl font-black text-emerald-400">
                                 {isCourseFree(course) ? 'FREE' : course.price}
                               </span>
                               {course.isPopular && !isCourseFree(course) && (
-                                <span className="text-zinc-500 line-through text-sm md:text-base font-semibold">
+                                <span className="text-zinc-500 line-through text-xs sm:text-sm md:text-base font-semibold">
                                   Price Rs. 1000
                                 </span>
                               )}
@@ -7281,35 +7287,35 @@ export default function App() {
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2.5 sm:mt-3">
                           {activeCourseIds.includes(course.id) && (() => {
                             const vList = course.videos || [];
                             const chSet = new Set(vList.map(v => v.chapterTitle?.trim() || 'Chapter 1: Course Lectures'));
                             return (
-                              <span className="bg-blue-500/15 text-blue-300 text-xs font-extrabold px-3 py-1 rounded-xl border border-blue-500/30 flex items-center gap-1.5 shadow-2xs">
+                              <span className="bg-blue-500/15 text-blue-300 text-[11px] sm:text-xs font-extrabold px-2.5 sm:px-3 py-1 rounded-xl border border-blue-500/30 flex items-center gap-1.5 shadow-2xs">
                                 <span className="w-4 h-4 rounded-md bg-blue-600 text-white flex items-center justify-center text-[9px] font-black">📁</span>
                                 {chSet.size} Chapters ({vList.length} Video Lectures)
                               </span>
                             );
                           })()}
-                          <span className="bg-zinc-800 text-zinc-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-zinc-700">
+                          <span className="bg-zinc-800 text-zinc-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-zinc-700">
                             🌐 {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
                           </span>
                           {course.includeLive ? (
-                            <span className="bg-rose-950/60 text-rose-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/40">
+                            <span className="bg-rose-950/60 text-rose-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/40">
                               🎥 Live Class
                             </span>
                           ) : course.includeCertificate !== false ? (
-                            <span className="bg-blue-950/50 text-blue-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-blue-500/30">
+                            <span className="bg-blue-950/50 text-blue-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-blue-500/30">
                               📜 Certificate
                             </span>
                           ) : null}
                         </div>
 
                         {/* Highlights checklist */}
-                        <ul className="mt-6 space-y-2.5">
+                        <ul className="mt-4 sm:mt-5 space-y-2">
                           {course.learn.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2.5 text-xs md:text-sm text-zinc-300 font-medium">
+                            <li key={i} className="flex items-start gap-2 text-xs sm:text-[13px] md:text-sm text-zinc-300 font-medium leading-relaxed">
                               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                               <span>{item}</span>
                             </li>
@@ -7318,7 +7324,7 @@ export default function App() {
                       </div>
 
                       {/* Enrolment / Classroom Access Button */}
-                      <div className="mt-8 pt-6 border-t border-zinc-800/80 flex items-center gap-3">
+                      <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-zinc-800/80 flex items-center gap-2 sm:gap-3">
                         {activeCourseIds.includes(course.id) ? (
                           <button
                             onClick={() => {
@@ -7326,7 +7332,7 @@ export default function App() {
                               setCurrentView('classroom');
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className="flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20"
+                            className="flex-1 font-black text-xs sm:text-sm py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20"
                           >
                             🎓 Go to Course
                             <ArrowRight className="w-4 h-4" />
@@ -7338,7 +7344,7 @@ export default function App() {
                               setShowCodeInputModal(true);
                               showToast(`Renew access for "${course.title}". Enter your new secret code.`, 'info');
                             }}
-                            className="flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-rose-600 hover:bg-rose-500 text-white shadow-rose-500/20"
+                            className="flex-1 font-black text-xs sm:text-sm py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-rose-600 hover:bg-rose-500 text-white shadow-rose-500/20"
                           >
                             <Clock className="w-4 h-4" />
                             Renew Course Access (म्याद नवीकरण)
@@ -7346,7 +7352,7 @@ export default function App() {
                         ) : (
                           <button
                             onClick={() => handleEnrollCourse(course)}
-                            className="flex-1 font-black text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-zinc-950 shadow-emerald-500/20"
+                            className="flex-1 font-black text-xs sm:text-sm py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-zinc-950 shadow-emerald-500/20"
                           >
                             <Zap className="w-4 h-4 text-zinc-950 fill-zinc-950" />
                             Enroll & Activate Course
@@ -9812,7 +9818,7 @@ export default function App() {
         aria-label="App Navigation Bar" 
         className={`${currentView === 'ask' && isCourseActiveUser ? 'relative shrink-0' : 'sticky bottom-0 shrink-0'} inset-x-0 z-[4900] bg-zinc-950/95 border-t border-zinc-800/90 shadow-[0_-12px_45px_rgba(0,0,0,0.95)] pb-[env(safe-area-inset-bottom,0px)] select-none backdrop-blur-2xl`}
       >
-        <div className="w-full max-w-md md:max-w-5xl lg:max-w-6xl mx-auto px-2 md:px-6 py-1.5 md:py-2.5 flex items-center justify-around md:gap-3 lg:gap-5">
+        <div className="w-full max-w-[1600px] mx-auto px-1.5 sm:px-4 md:px-5 py-1.5 md:py-2 flex items-center justify-around md:justify-center md:gap-3 lg:gap-5">
           {/* 1. Home */}
           <button
             id="app-nav-home"
