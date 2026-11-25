@@ -7232,10 +7232,7 @@ export default function App() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between gap-2">
-                        <span className="bg-zinc-950/90 text-zinc-200 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-zinc-700/80">
-                          View Course Details →
-                        </span>
+                      <div className="absolute bottom-4 right-4">
                         <span className="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
                           Instant Delivery
                         </span>
