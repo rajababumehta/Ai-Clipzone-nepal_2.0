@@ -991,8 +991,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* Middle Recipient & Achievement Group (strictly inside 550px width away from Seal & Photo) */}
                 <div className="w-full max-w-[550px] flex flex-col items-center">
                   <p
-                    style={{ color: '#0b2147', top: '-14px' }}
-                    className="relative cert-font-playfair italic text-[21px] font-medium leading-tight mb-2.5"
+                    style={{ color: '#0b2147', top: '-14px', whiteSpace: 'nowrap' }}
+                    className="relative cert-font-playfair italic text-[21px] font-medium leading-tight mb-2.5 whitespace-nowrap shrink-0"
                   >
                     This is to certify that
                   </p>
