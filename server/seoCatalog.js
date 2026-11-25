@@ -631,9 +631,7 @@ export async function fetchPublicCatalogSnapshot() {
           updatedAt: d.updatedAt || docItem.updateTime || undefined,
         });
       }
-      if (liveCourses.length > 0) {
-        courses = liveCourses.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      }
+      courses = liveCourses.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     } else if (deletedIds.length > 0) {
       courses = courses.filter((c) => !deletedIds.includes(c.id));
     }
