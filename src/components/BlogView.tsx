@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Calendar, Clock, FileText, Tag, User } from 'lucide-react';
 import { BlogPost, Course, PublicInstructorProfile, SupportedLocale } from '../types';
 import { getLocaleDict } from '../utils/i18n';
@@ -26,6 +26,11 @@ export const BlogView: React.FC<BlogViewProps> = ({
   const t = getLocaleDict(locale);
   const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory || 'All');
   const [selectedTag, setSelectedTag] = useState<string>('');
+
+  useEffect(() => {
+    setSelectedCategory(initialCategory || 'All');
+    setSelectedTag('');
+  }, [initialCategory]);
 
   const categories = useMemo(
     () => ['All', ...Array.from(new Set(posts.map((p) => p.category)))],
@@ -55,13 +60,27 @@ export const BlogView: React.FC<BlogViewProps> = ({
       <article className="max-w-4xl mx-auto py-4 sm:py-6 space-y-8 text-left">
         {/* Breadcrumb Navigation */}
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-          <button type="button" onClick={() => onNavigatePath('/')} className="hover:text-white cursor-pointer">
+          <a
+            href={buildLocalizedPath('/', locale)}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigatePath('/');
+            }}
+            className="hover:text-white cursor-pointer"
+          >
             Home
-          </button>
+          </a>
           <span aria-hidden="true">/</span>
-          <button type="button" onClick={() => onNavigatePath('/blog')} className="hover:text-white cursor-pointer">
+          <a
+            href={buildLocalizedPath('/blog', locale)}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigatePath('/blog');
+            }}
+            className="hover:text-white cursor-pointer"
+          >
             {t.blogNav}
-          </button>
+          </a>
           <span aria-hidden="true">/</span>
           <span className="text-zinc-200 font-semibold truncate max-w-[260px] sm:max-w-md" aria-current="page">
             {selectedPost.title}
@@ -76,7 +95,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
               onClick={(e) => {
                 e.preventDefault();
                 setSelectedCategory(selectedPost.category);
-                onNavigatePath('/blog');
+                onNavigatePath(`/blog/category/${slugifyText(selectedPost.category)}`);
               }}
               className="px-3 py-1 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-bold"
             >
@@ -248,9 +267,16 @@ export const BlogView: React.FC<BlogViewProps> = ({
   return (
     <section className="max-w-5xl mx-auto py-4 sm:py-6 space-y-8 text-left">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-zinc-400">
-        <button type="button" onClick={() => onNavigatePath('/')} className="hover:text-white cursor-pointer">
+        <a
+          href={buildLocalizedPath('/', locale)}
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigatePath('/');
+          }}
+          className="hover:text-white cursor-pointer"
+        >
           Home
-        </button>
+        </a>
         <span aria-hidden="true">/</span>
         <span className="text-zinc-200 font-semibold" aria-current="page">
           {t.blogNav}
@@ -268,20 +294,28 @@ export const BlogView: React.FC<BlogViewProps> = ({
       {/* Categories & Tags Filter Bar */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-center gap-2">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                selectedCategory === cat || slugifyText(selectedCategory) === slugifyText(cat)
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const catPath = cat === 'All' ? '/blog' : `/blog/category/${slugifyText(cat)}`;
+            const isSelected = selectedCategory === cat || slugifyText(selectedCategory) === slugifyText(cat);
+            return (
+              <a
+                key={cat}
+                href={buildLocalizedPath(catPath, locale)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSelectedCategory(cat);
+                  onNavigatePath(catPath);
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  isSelected
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
+                }`}
+              >
+                {cat}
+              </a>
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-1.5">

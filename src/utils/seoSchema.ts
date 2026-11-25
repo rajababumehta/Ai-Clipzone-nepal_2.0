@@ -8,9 +8,10 @@ export interface BreadcrumbItem {
 
 export function buildOrganizationSchema(origin: string, brand: string, supportEmail: string) {
   return {
-    '@type': 'EducationalOrganization',
+    '@type': ['Organization', 'EducationalOrganization'],
     '@id': `${origin}/#organization`,
     name: brand,
+    alternateName: 'HamroLms',
     url: `${origin}/`,
     logo: {
       '@type': 'ImageObject',
@@ -19,8 +20,12 @@ export function buildOrganizationSchema(origin: string, brand: string, supportEm
       height: 1600,
     },
     image: `${origin}/institute-logo.png`,
-    description: `${brand} is an online multi-instructor learning platform offering practical courses in AI tools, video editing, graphic design, and web development with verifiable digital certificates.`,
+    description: `${brand} is an online learning platform in Nepal offering practical courses in AI tools, video editing, graphic design, and web development taught by multiple instructors and trainers.`,
     email: supportEmail,
+    areaServed: {
+      '@type': 'Country',
+      name: 'Nepal',
+    },
     contactPoint: [
       {
         '@type': 'ContactPoint',
@@ -111,11 +116,13 @@ export function buildCourseSchema(
       url: instructorUrl,
     },
     teaches: course.learn?.slice(0, 8) || [],
-    coursePrerequisites: course.prerequisites?.join('; ') || 'No prior experience required; smartphone or computer with internet access.',
+    coursePrerequisites:
+      course.prerequisites?.join('; ') ||
+      'No prior experience required; smartphone or computer with internet access.',
     educationalLevel: course.level || 'All Levels',
     inLanguage: course.language ? [course.language] : ['en', 'ne', 'hi'],
     educationalCredentialAwarded:
-      course.includeCertificate !== false ? 'Certificate of Completion' : undefined,
+      course.includeCertificate !== false && !course.includeLive ? 'Certificate of Completion' : undefined,
     offers: {
       '@type': 'Offer',
       category: isFree ? 'Free' : 'Paid',
@@ -133,6 +140,42 @@ export function buildCourseSchema(
         url: instructorUrl,
       },
     },
+  };
+}
+
+export function buildCourseItemListSchema(
+  origin: string,
+  brand: string,
+  courses: Course[],
+  instructors: PublicInstructorProfile[],
+  locale: SupportedLocale
+) {
+  const listItems = (courses || []).slice(0, 20).map((course, idx) => {
+    const inst =
+      instructors.find((i) => i.slug === course.instructorSlug || i.courseIds.includes(course.id)) ||
+      instructors[0];
+    const courseObj = inst
+      ? buildCourseSchema(origin, brand, course, inst, locale)
+      : {
+          '@type': 'Course',
+          name: course.title,
+          url: `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(course)}`, locale)}`,
+          provider: { '@id': `${origin}/#organization` },
+        };
+
+    return {
+      '@type': 'ListItem',
+      position: idx + 1,
+      url: courseObj.url,
+      item: courseObj,
+    };
+  });
+
+  return {
+    '@type': 'ItemList',
+    name: `${brand} Online Courses in Nepal`,
+    numberOfItems: listItems.length,
+    itemListElement: listItems,
   };
 }
 

@@ -79,15 +79,15 @@
   "rewrites": [
     {
       "source": "/sitemap.xml",
-      "destination": "/api/index.js"
+      "destination": "/api/sitemap.js"
     },
     {
       "source": "/robots.txt",
-      "destination": "/api/index.js"
+      "destination": "/api/robots.js"
     },
     {
       "source": "/.well-known/assetlinks.json",
-      "destination": "/api/assetlinks"
+      "destination": "/api/assetlinks.js"
     },
     {
       "source": "/api/:path*",
@@ -99,7 +99,7 @@
     },
     {
       "source": "/((?!api(?:/|$)|\\.well-known(?:/|$)|robots\\.txt$|sitemap\\.xml$|manifest\\.json$|sw\\.js$|firebase-messaging-sw\\.js$|widget-template\\.json$|google[a-zA-Z0-9]+\\.html$|.*\\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt)$).*)",
-      "destination": "/index.html"
+      "destination": "/api/page.js?__route=/$1"
     }
   ],
   "crons": [

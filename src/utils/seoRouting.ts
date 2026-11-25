@@ -47,19 +47,31 @@ export function getCourseSlug(course: Partial<Course>): string {
     return slugifyText(course.slug);
   }
   const baseTitle = course.title || course.id || 'course';
-  const cleaned = slugifyText(baseTitle);
-  return cleaned;
+  return slugifyText(baseTitle);
 }
 
 export function findCourseBySlug(courses: Course[], slug?: string): Course | undefined {
   if (!slug || !courses?.length) return undefined;
-  const target = slugifyText(decodeURIComponent(slug));
-  return courses.find(
-    (c) =>
-      getCourseSlug(c) === target ||
+  let decoded = slug;
+  try {
+    decoded = decodeURIComponent(slug);
+  } catch {
+    decoded = slug;
+  }
+  const target = slugifyText(decoded);
+  const altTarget = target.replace(/hamro-lms/g, 'hamrolms');
+  return courses.find((c) => {
+    const cSlug = getCourseSlug(c);
+    const cTitleSlug = slugifyText(c.title || '');
+    return (
+      cSlug === target ||
+      cSlug === altTarget ||
+      cTitleSlug === target ||
+      cTitleSlug.replace(/hamro-lms/g, 'hamrolms') === altTarget ||
       slugifyText(c.id) === target ||
       c.id.toLowerCase() === slug.toLowerCase()
-  );
+    );
+  });
 }
 
 /**

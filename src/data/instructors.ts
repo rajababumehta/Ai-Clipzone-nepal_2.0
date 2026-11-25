@@ -6,8 +6,8 @@ export const CORE_INSTRUCTORS: PublicInstructorProfile[] = [
     slug: 'rajababu-mehta',
     name: 'Rajababu Mehta',
     role: 'Founder & Lead AI Instructor',
-    headline: 'AI Website Developer, AI Educator & Digital Content Creator',
-    bio: 'Rajababu Mehta is the Founder of HamroLms and an AI Website Developer specializing in practical generative AI workflows, educational explainer production, web development, and creator growth strategies.',
+    headline: 'AI Website Developer, AI Educator & Digital Skills Trainer in Nepal',
+    bio: 'Rajababu Mehta is the Founder of Hamro LMS and an AI Website Developer from Nepal specializing in practical generative AI workflows, educational explainer production, web development, and creator growth strategies.',
     expertise: [
       'Generative AI Tools',
       'Prompt Engineering',
@@ -16,7 +16,7 @@ export const CORE_INSTRUCTORS: PublicInstructorProfile[] = [
       'Digital Product Architecture',
     ],
     avatarUrl: '/institute-logo.png',
-    location: 'South Asia (Global Online)',
+    location: 'Birgunj, Nepal',
     languages: ['English', 'Nepali', 'Hindi'],
     courseIds: [
       'Ai master class course by Ai clipzone',
@@ -29,6 +29,15 @@ export const CORE_INSTRUCTORS: PublicInstructorProfile[] = [
     },
   },
 ];
+
+const BRAND_ALIAS_INSTRUCTOR_SLUGS = new Set([
+  'ai-clipzone',
+  'ai-clipzone-nepal',
+  'al-clipzone',
+  'hamro-lms',
+  'hamrolms',
+  'hamro-lms-nepal',
+]);
 
 /**
  * Builds sanitized public instructor profiles from core educators and active Firestore sub-admins.
@@ -53,8 +62,9 @@ export function buildPublicInstructors(
   activeSubAdmins.forEach((sub) => {
     if (!sub || sub.status !== 'active' || !sub.name?.trim()) return;
     const cleanName = sub.name.trim();
-    const slug = slugifyText(cleanName);
-    if (!slug || slug === 'item') return;
+    const rawSlug = slugifyText(cleanName);
+    if (!rawSlug || rawSlug === 'item') return;
+    const slug = BRAND_ALIAS_INSTRUCTOR_SLUGS.has(rawSlug) ? 'rajababu-mehta' : rawSlug;
 
     const existing = bySlug.get(slug);
     if (existing) {
@@ -71,8 +81,8 @@ export function buildPublicInstructors(
       role: 'Course Instructor & Mentor',
       headline: assignedCourse
         ? `Instructor for ${assignedCourse.title}`
-        : `Verified Mentor on HamroLms`,
-      bio: `${cleanName} teaches and mentors learners on HamroLms, supporting students with practical feedback, project reviews, and course guidance.`,
+        : `Verified Mentor on Hamro LMS Nepal`,
+      bio: `${cleanName} teaches and mentors learners on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.`,
       expertise: assignedCourse?.learn?.slice(0, 4) || ['Digital Skills', 'Mentorship'],
       avatarUrl: sub.avatarUrl || '/institute-logo.png',
       languages: assignedCourse?.language ? [assignedCourse.language] : ['English', 'Nepali'],
@@ -94,7 +104,7 @@ export function buildPublicInstructors(
           name: c.instructorName.trim(),
           role: 'Course Instructor',
           headline: `Instructor for ${c.title}`,
-          bio: `${c.instructorName.trim()} leads ${c.title} on HamroLms with structured lessons and practical assignments.`,
+          bio: `${c.instructorName.trim()} leads ${c.title} on Hamro LMS Nepal with structured lessons and practical assignments.`,
           expertise: c.learn?.slice(0, 4) || ['Online Education'],
           languages: c.language ? [c.language] : ['English'],
           courseIds: [c.id],

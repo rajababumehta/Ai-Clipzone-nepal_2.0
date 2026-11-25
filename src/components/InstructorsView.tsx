@@ -34,13 +34,27 @@ export const InstructorsView: React.FC<InstructorsViewProps> = ({
       <article className="max-w-4xl mx-auto py-4 sm:py-6 space-y-8 text-left">
         {/* Breadcrumbs */}
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-          <button type="button" onClick={() => onNavigatePath('/')} className="hover:text-white cursor-pointer">
+          <a
+            href={buildLocalizedPath('/', locale)}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigatePath('/');
+            }}
+            className="hover:text-white cursor-pointer"
+          >
             Home
-          </button>
+          </a>
           <span aria-hidden="true">/</span>
-          <button type="button" onClick={() => onNavigatePath('/instructors')} className="hover:text-white cursor-pointer">
+          <a
+            href={buildLocalizedPath('/instructors', locale)}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigatePath('/instructors');
+            }}
+            className="hover:text-white cursor-pointer"
+          >
             {t.instructorsNav}
-          </button>
+          </a>
           <span aria-hidden="true">/</span>
           <span className="text-zinc-200 font-semibold" aria-current="page">
             {selectedInstructor.name}
@@ -213,9 +227,16 @@ export const InstructorsView: React.FC<InstructorsViewProps> = ({
   return (
     <section className="max-w-5xl mx-auto py-4 sm:py-6 space-y-8 text-left">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-zinc-400">
-        <button type="button" onClick={() => onNavigatePath('/')} className="hover:text-white cursor-pointer">
+        <a
+          href={buildLocalizedPath('/', locale)}
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigatePath('/');
+          }}
+          className="hover:text-white cursor-pointer"
+        >
           Home
-        </button>
+        </a>
         <span aria-hidden="true">/</span>
         <span className="text-zinc-200 font-semibold" aria-current="page">
           {t.instructorsNav}
@@ -245,7 +266,7 @@ export const InstructorsView: React.FC<InstructorsViewProps> = ({
               <div className="flex items-center gap-4">
                 <img
                   src={inst.avatarUrl || '/institute-logo.png'}
-                  alt={`${inst.name} – Instructor on HamroLms`}
+                  alt={`${inst.name} – Instructor on Hamro LMS Nepal`}
                   loading="lazy"
                   decoding="async"
                   className="w-16 h-16 rounded-2xl object-cover border border-zinc-800 bg-black shrink-0"

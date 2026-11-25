@@ -81,21 +81,27 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
     <article className="max-w-5xl mx-auto py-4 sm:py-6 space-y-8 text-left">
       {/* Breadcrumb Navigation */}
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-        <button
-          type="button"
-          onClick={() => onNavigatePath('/')}
+        <a
+          href={buildLocalizedPath('/', locale)}
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigatePath('/');
+          }}
           className="hover:text-white transition cursor-pointer"
         >
           Home
-        </button>
+        </a>
         <span aria-hidden="true">/</span>
-        <button
-          type="button"
-          onClick={() => onNavigatePath('/')}
+        <a
+          href={buildLocalizedPath('/', locale)}
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigatePath('/');
+          }}
           className="hover:text-white transition cursor-pointer"
         >
           {t.coursesNav}
-        </button>
+        </a>
         <span aria-hidden="true">/</span>
         <span className="text-zinc-200 font-semibold truncate max-w-[260px] sm:max-w-md" aria-current="page">
           {course.title}
@@ -107,7 +113,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
         <div className="lg:col-span-5 relative aspect-video lg:aspect-auto bg-black border-b lg:border-b-0 lg:border-r border-zinc-800">
           <img
             src={course.image || '/institute-logo.png'}
-            alt={`${course.title} – Course cover image on HamroLms`}
+            alt={`${course.title} – Online course cover on Hamro LMS Nepal`}
             loading="eager"
             decoding="async"
             referrerPolicy="no-referrer"

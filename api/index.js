@@ -1,18 +1,115 @@
 // server/vercelApp.ts
-import express2 from "express";
-import crypto4 from "crypto";
-import { GoogleGenAI } from "@google/genai";
+import express3 from "express";
 import dotenv from "dotenv";
 
-// server/liveClassRoutes.ts
-import express from "express";
-import crypto3 from "crypto";
+// server/coreApiRoutes.ts
+import express2 from "express";
+import { GoogleGenAI } from "@google/genai";
 
-// server/firebaseAdmin.ts
-import { initializeApp, getApps, cert, applicationDefault } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
-import { getMessaging } from "firebase-admin/messaging";
+// server/liveCrypto.ts
+import crypto from "crypto";
+var LIVE_TOKEN_KEY = crypto.createHash("sha256").update(
+  process.env.LIVE_TOKEN_SECRET || process.env.GEMINI_API_KEY || "aiclipzone-nepal-live-zoom-key-2026"
+).digest();
+var ENC_PREFIX = "enc_v1:";
+function encryptLivePayload(payload) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", LIVE_TOKEN_KEY, iv);
+  const json = JSON.stringify(payload);
+  const encrypted = Buffer.concat([cipher.update(json, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, encrypted]).toString("base64url");
+}
+function decryptLivePayload(token) {
+  try {
+    const buf = Buffer.from(token, "base64url");
+    if (buf.length < 29) return null;
+    const iv = buf.subarray(0, 12);
+    const tag = buf.subarray(12, 28);
+    const encrypted = buf.subarray(28);
+    const decipher = crypto.createDecipheriv("aes-256-gcm", LIVE_TOKEN_KEY, iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+    return JSON.parse(decrypted);
+  } catch {
+    return null;
+  }
+}
+function sanitizeHttpUrl(rawUrl) {
+  try {
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed || trimmed.length > 2048) return null;
+    const match = trimmed.match(/https?:\/\/\S+/i);
+    const candidate = match ? match[0] : trimmed;
+    if (!/^https?:\/\//i.test(candidate)) return null;
+    const parsed = new URL(candidate);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host.startsWith("10.") || host.startsWith("192.168.") || host.endsWith(".local") || host.endsWith(".internal")) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+function encryptZoomUrl(rawUrl) {
+  const cleanUrl = sanitizeHttpUrl(rawUrl);
+  if (!cleanUrl) return null;
+  return ENC_PREFIX + encryptLivePayload({ u: cleanUrl, v: 1 });
+}
+function decryptZoomUrl(storedOrPlainUrl) {
+  const val = String(storedOrPlainUrl || "").trim();
+  if (!val) return null;
+  if (val.startsWith(ENC_PREFIX)) {
+    const payload = decryptLivePayload(val.slice(ENC_PREFIX.length));
+    if (payload && typeof payload.u === "string") {
+      return sanitizeHttpUrl(payload.u);
+    }
+    return null;
+  }
+  return sanitizeHttpUrl(val);
+}
+function buildZoomUrls(rawUrl, studentName) {
+  try {
+    const cleanUrl = sanitizeHttpUrl(rawUrl);
+    if (!cleanUrl) return null;
+    const parsed = new URL(cleanUrl);
+    const cleanName = String(studentName || "Student").trim().slice(0, 60) || "Student";
+    const base64Name = Buffer.from(cleanName, "utf8").toString("base64");
+    const idMatch = parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i) || parsed.pathname.match(/\/wc\/(\d{9,12})\/join/i);
+    const meetingId = idMatch?.[1] || "";
+    const pwd = parsed.searchParams.get("pwd") || "";
+    const tk = parsed.searchParams.get("tk") || "";
+    if (parsed.hostname.toLowerCase().includes("zoom.")) {
+      parsed.searchParams.set("uname", cleanName);
+    }
+    const webUrl = parsed.toString();
+    let embedUrl = webUrl;
+    if (meetingId) {
+      const wc = new URL(`https://app.zoom.us/wc/${meetingId}/join`);
+      wc.searchParams.set("prefer", "1");
+      wc.searchParams.set("un", base64Name);
+      wc.searchParams.set("uname", cleanName);
+      if (pwd) wc.searchParams.set("pwd", pwd);
+      if (tk) wc.searchParams.set("tk", tk);
+      embedUrl = wc.toString();
+    }
+    return { webUrl, embedUrl };
+  } catch {
+    return null;
+  }
+}
+function escapeHtml(str) {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function securityHeadersMiddleware(_req, res, next) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self)");
+  res.setHeader("X-DNS-Prefetch-Control", "off");
+  next();
+}
 
 // server/appletConfig.ts
 import fs from "fs";
@@ -45,138 +142,8 @@ function readAppletConfig() {
   return firebase_applet_config_default || {};
 }
 
-// server/firebaseAdmin.ts
-var cachedApp = null;
-var cachedDb = null;
-var cachedAuth = null;
-var cachedMessaging = null;
-var initAttempted = false;
-var initError = null;
-function isValidFirestoreDatabaseId(val) {
-  if (!val) return false;
-  const trimmed = val.trim();
-  if (!trimmed) return false;
-  if (/^https?:\/\//i.test(trimmed) || trimmed.includes("/")) return false;
-  return true;
-}
-function getConfiguredDatabaseId() {
-  const appletCfg = readAppletConfig();
-  if (isValidFirestoreDatabaseId(appletCfg.firestoreDatabaseId)) {
-    return appletCfg.firestoreDatabaseId.trim();
-  }
-  if (isValidFirestoreDatabaseId(process.env.FIREBASE_DATABASE_ID)) {
-    return process.env.FIREBASE_DATABASE_ID.trim();
-  }
-  return "(default)";
-}
-function getConfiguredProjectId() {
-  const appletCfg = readAppletConfig();
-  if (appletCfg.projectId?.trim()) {
-    return appletCfg.projectId.trim();
-  }
-  return process.env.FIREBASE_PROJECT_ID?.trim() || "";
-}
-function parseServiceAccountFromEnv() {
-  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
-  if (rawJson) {
-    try {
-      const jsonStr = rawJson.startsWith("{") ? rawJson : Buffer.from(rawJson, "base64").toString("utf-8");
-      const parsed = JSON.parse(jsonStr);
-      if (parsed && parsed.client_email && parsed.private_key) {
-        parsed.private_key = String(parsed.private_key).replace(/\\n/g, "\n");
-        return parsed;
-      }
-    } catch (err) {
-      console.error("[FirebaseAdmin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
-    }
-  }
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim();
-  const projectId = getConfiguredProjectId();
-  if (clientEmail && privateKey && projectId) {
-    return {
-      project_id: projectId,
-      client_email: clientEmail,
-      private_key: privateKey.replace(/\\n/g, "\n")
-    };
-  }
-  return null;
-}
-function initializeFirebaseAdmin() {
-  if (cachedApp) return cachedApp;
-  if (getApps().length > 0) {
-    cachedApp = getApps()[0];
-    return cachedApp;
-  }
-  if (initAttempted) return null;
-  initAttempted = true;
-  const projectId = getConfiguredProjectId();
-  const serviceAccount = parseServiceAccountFromEnv();
-  try {
-    if (serviceAccount) {
-      if (projectId && serviceAccount.project_id && serviceAccount.project_id !== projectId) {
-        initError = `Service account project_id (${serviceAccount.project_id}) does not match configured Firebase project (${projectId}). Using Firestore REST adapter.`;
-        console.warn(`[FirebaseAdmin] ${initError}`);
-        return null;
-      }
-      cachedApp = initializeApp({
-        credential: cert(serviceAccount),
-        projectId: projectId || serviceAccount.project_id || void 0
-      });
-      initError = null;
-      return cachedApp;
-    }
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FUNCTION_TARGET) {
-      cachedApp = initializeApp({
-        credential: applicationDefault(),
-        projectId: projectId || void 0
-      });
-      initError = null;
-      return cachedApp;
-    }
-    initError = "Using Firestore REST adapter (set FIREBASE_SERVICE_ACCOUNT_JSON for full Admin SDK privileges).";
-    return null;
-  } catch (err) {
-    initError = err?.message || "Failed to initialize Firebase Admin SDK";
-    console.error("[FirebaseAdmin] Initialization error:", initError);
-    return null;
-  }
-}
-function markAdminSdkUnusable(reason) {
-  cachedDb = null;
-  cachedApp = null;
-  initAttempted = true;
-  initError = reason;
-}
-function getAdminDb() {
-  if (cachedDb) return cachedDb;
-  const app2 = initializeFirebaseAdmin();
-  if (!app2) return null;
-  const databaseId = getConfiguredDatabaseId();
-  cachedDb = databaseId && databaseId !== "(default)" ? getFirestore(app2, databaseId) : getFirestore(app2);
-  return cachedDb;
-}
-function getAdminAuth() {
-  if (cachedAuth) return cachedAuth;
-  const app2 = initializeFirebaseAdmin();
-  if (!app2) return null;
-  cachedAuth = getAuth(app2);
-  return cachedAuth;
-}
-function getAdminMessaging() {
-  if (cachedMessaging) return cachedMessaging;
-  const app2 = initializeFirebaseAdmin();
-  if (!app2) return null;
-  cachedMessaging = getMessaging(app2);
-  return cachedMessaging;
-}
-function getFirebaseAdminInitError() {
-  initializeFirebaseAdmin();
-  return initError;
-}
-
 // server/firestoreRest.ts
-function isValidFirestoreDatabaseId2(val) {
+function isValidFirestoreDatabaseId(val) {
   if (!val) return false;
   const trimmed = val.trim();
   if (!trimmed) return false;
@@ -186,7 +153,7 @@ function isValidFirestoreDatabaseId2(val) {
 function getFirestoreRestConfig() {
   const cfg = readAppletConfig();
   const projectId = cfg.projectId?.trim() || process.env.FIREBASE_PROJECT_ID?.trim() || "";
-  const databaseId = isValidFirestoreDatabaseId2(cfg.firestoreDatabaseId) ? cfg.firestoreDatabaseId.trim() : isValidFirestoreDatabaseId2(process.env.FIREBASE_DATABASE_ID) ? process.env.FIREBASE_DATABASE_ID.trim() : "(default)";
+  const databaseId = isValidFirestoreDatabaseId(cfg.firestoreDatabaseId) ? cfg.firestoreDatabaseId.trim() : isValidFirestoreDatabaseId(process.env.FIREBASE_DATABASE_ID) ? process.env.FIREBASE_DATABASE_ID.trim() : "(default)";
   const apiKey = cfg.apiKey?.trim() || process.env.FIREBASE_WEB_API_KEY?.trim() || "";
   return { projectId, databaseId, apiKey };
 }
@@ -528,8 +495,409 @@ function createRestFirestore(idToken) {
   };
 }
 
+// server/authAndEnrollment.ts
+var ADMIN_EMAILS = /* @__PURE__ */ new Set([
+  "ai.clipzone.edu@gmail.com",
+  "rajababum426@gmail.com"
+]);
+function isEmailMainAdmin(email) {
+  if (!email) return false;
+  const lower = email.toLowerCase().trim();
+  return ADMIN_EMAILS.has(lower);
+}
+function createRateLimiter(options) {
+  const hits = /* @__PURE__ */ new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
+    const userHint = req.headers["x-student-uid"] || req.headers["x-device-id"] || "";
+    const key = `${options.keyPrefix}:${ip}:${userHint}`;
+    const timestamps = (hits.get(key) || []).filter((ts) => now - ts < options.windowMs);
+    if (timestamps.length >= options.maxRequests) {
+      return res.status(429).json({
+        error: "Too many requests. Please wait a moment and try again.",
+        code: "RATE_LIMITED"
+      });
+    }
+    timestamps.push(now);
+    hits.set(key, timestamps);
+    if (hits.size > 5e3) {
+      for (const [k, list] of hits.entries()) {
+        if (list.length === 0 || now - list[list.length - 1] >= options.windowMs) {
+          hits.delete(k);
+        }
+      }
+    }
+    next();
+  };
+}
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return "";
+}
+function parseActivationCodesHeader(req) {
+  const raw = req.headers["x-activation-codes"] || (req.body && Array.isArray(req.body.activationCodes) ? req.body.activationCodes.join(",") : "") || (req.body && typeof req.body.activationCode === "string" ? req.body.activationCode : "") || "";
+  return Array.from(
+    new Set(
+      raw.split(",").map((c) => c.trim().toUpperCase()).filter((c) => c.length >= 4 && c.length <= 64)
+    )
+  );
+}
+function isActivationKeyExpiredServer(keyData, now = Date.now()) {
+  if (!keyData) return true;
+  if (keyData.status === "expired" || keyData.status === "deleted") return true;
+  const durationMs = keyData.duration === "1day" ? 24 * 60 * 60 * 1e3 : keyData.duration === "1month" ? 30 * 24 * 60 * 60 * 1e3 : 365 * 24 * 60 * 60 * 1e3;
+  const expiresAt = Number(keyData.expiresAt || (keyData.claimedAt ? Number(keyData.claimedAt) + durationMs : 0));
+  if (expiresAt > 0 && now > expiresAt) return true;
+  return false;
+}
+async function verifyAdminIdentity(req, db, adminAuth) {
+  const idToken = getBearerToken(req);
+  if (idToken) {
+    try {
+      const decoded = adminAuth ? await adminAuth.verifyIdToken(idToken) : await verifyFirebaseIdTokenViaRest(idToken);
+      const isEmailVerified = decoded?.emailVerified === true || decoded?.email_verified === true;
+      if (decoded?.email && isEmailVerified && isEmailMainAdmin(decoded.email)) {
+        return {
+          isAdmin: true,
+          role: "main_admin",
+          uid: decoded.uid,
+          name: decoded.name || "Main Admin",
+          email: decoded.email
+        };
+      }
+      if (decoded?.uid) {
+        const adminDoc = await db.collection("admins").doc(decoded.uid).get().catch(() => null);
+        if (adminDoc?.exists) {
+          return {
+            isAdmin: true,
+            role: "main_admin",
+            uid: decoded.uid,
+            name: decoded.name || "Main Admin",
+            email: decoded.email
+          };
+        }
+      }
+    } catch {
+    }
+  }
+  const adminSessionId = String(req.headers["x-admin-session-id"] || "").trim();
+  const deviceId = String(req.headers["x-device-id"] || "").trim();
+  if (adminSessionId) {
+    try {
+      const sessSnap = await db.collection("system").doc("admin_session").get();
+      if (sessSnap.exists) {
+        const sessData = sessSnap.data();
+        if (sessData?.activeSessionId && sessData.activeSessionId === adminSessionId && (!sessData.deviceId || deviceId && sessData.deviceId === deviceId)) {
+          return {
+            isAdmin: true,
+            role: "main_admin",
+            uid: `admin_${adminSessionId.slice(0, 16)}`,
+            name: "Main Admin"
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[Auth] Admin session verification failed:", err);
+    }
+  }
+  const subAdminCode = String(req.headers["x-subadmin-code"] || "").trim().toUpperCase();
+  if (subAdminCode) {
+    try {
+      const subSnap = await db.collection("sub_admins").doc(subAdminCode).get();
+      if (subSnap.exists) {
+        const subData = subSnap.data();
+        if (subData?.status === "active" && (!subData.activeDeviceId || deviceId && subData.activeDeviceId === deviceId)) {
+          return {
+            isAdmin: true,
+            role: "sub_admin",
+            uid: subAdminCode,
+            name: subData.name || "Sub-Admin",
+            subAdminCode,
+            assignedCourseId: subData.courseId
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[Auth] Sub-admin verification failed:", err);
+    }
+  }
+  return null;
+}
+async function verifyStudentEnrollment(req, db, adminAuth, requiredCourseId) {
+  const adminCtx = await verifyAdminIdentity(req, db, adminAuth);
+  if (adminCtx) {
+    const adminAllowedCourseIds = adminCtx.role === "main_admin" ? ["course-all"] : adminCtx.assignedCourseId ? [adminCtx.assignedCourseId] : [];
+    const authorized = !requiredCourseId || adminCtx.role === "main_admin" || adminCtx.assignedCourseId === requiredCourseId;
+    return {
+      authorized,
+      userId: adminCtx.uid,
+      studentName: adminCtx.name,
+      studentEmail: adminCtx.email,
+      enrolledCourseIds: adminAllowedCourseIds,
+      isAdminBypass: true,
+      reason: authorized ? void 0 : "Sub-Admin is only authorized for their assigned course."
+    };
+  }
+  let verifiedUid = "";
+  let verifiedEmail = "";
+  let verifiedName = "";
+  const idToken = getBearerToken(req);
+  if (idToken) {
+    try {
+      const decoded = adminAuth ? await adminAuth.verifyIdToken(idToken) : await verifyFirebaseIdTokenViaRest(idToken);
+      if (decoded) {
+        verifiedUid = decoded.uid;
+        verifiedEmail = decoded.email || "";
+        verifiedName = decoded.name || "";
+      }
+    } catch {
+    }
+  }
+  const headerStudentUid = String(req.headers["x-student-uid"] || "").trim();
+  const deviceId = String(req.headers["x-device-id"] || "").trim();
+  const candidateCodes = parseActivationCodesHeader(req);
+  const now = Date.now();
+  const enrolledCourseIds = /* @__PURE__ */ new Set();
+  let matchedCode = "";
+  let resolvedName = verifiedName;
+  let resolvedEmail = verifiedEmail;
+  let resolvedUid = verifiedUid;
+  for (const code of candidateCodes) {
+    try {
+      const keySnap = await db.collection("activation_keys").doc(code).get();
+      if (!keySnap.exists) continue;
+      const keyData = keySnap.data();
+      if (keyData.status !== "used") continue;
+      if (isActivationKeyExpiredServer(keyData, now)) continue;
+      const deviceMatches = !keyData.activeDeviceId || Boolean(deviceId) && keyData.activeDeviceId === deviceId;
+      const uidMatches = Boolean(verifiedUid && keyData.claimedByUid === verifiedUid);
+      if (!deviceMatches && !uidMatches) continue;
+      if (keyData.courseId) {
+        enrolledCourseIds.add(String(keyData.courseId));
+      }
+      if (!matchedCode || keyData.courseId === requiredCourseId || keyData.courseId === "course-all") {
+        matchedCode = code;
+      }
+      if (!resolvedName && (keyData.studentName || keyData.claimedByName)) {
+        resolvedName = String(keyData.studentName || keyData.claimedByName);
+      }
+      if (!resolvedEmail && keyData.claimedByEmail) {
+        resolvedEmail = String(keyData.claimedByEmail);
+      }
+      if (!resolvedUid && keyData.claimedByUid) {
+        resolvedUid = String(keyData.claimedByUid);
+      }
+    } catch (err) {
+      console.warn("[Enrollment] Key check error:", err);
+    }
+  }
+  if (verifiedUid) {
+    try {
+      const claimedSnap = await db.collection("activation_keys").where("claimedByUid", "==", verifiedUid).get();
+      claimedSnap.forEach((docSnap) => {
+        const keyData = docSnap.data();
+        if (keyData.status === "used" && !isActivationKeyExpiredServer(keyData, now)) {
+          if (keyData.courseId) enrolledCourseIds.add(String(keyData.courseId));
+          if (!matchedCode) matchedCode = docSnap.id;
+          if (!resolvedName && (keyData.studentName || keyData.claimedByName)) {
+            resolvedName = String(keyData.studentName || keyData.claimedByName);
+          }
+        }
+      });
+    } catch (err) {
+      console.warn("[Enrollment] UID key lookup error:", err);
+    }
+    try {
+      const enrollSnap = await db.collection("enrollments").where("userId", "==", verifiedUid).where("status", "==", "active").get();
+      enrollSnap.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (!d.expiresAt || Number(d.expiresAt) > now) {
+          if (d.courseId) enrolledCourseIds.add(String(d.courseId));
+        }
+      });
+    } catch (err) {
+      console.warn("[Enrollment] Enrollments lookup error:", err);
+    }
+    try {
+      const reqSnap = await db.collection("course_requests").where("userId", "==", verifiedUid).where("status", "==", "accepted").get();
+      reqSnap.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (!d.expiresAt || Number(d.expiresAt) > now) {
+          if (d.courseId) enrolledCourseIds.add(String(d.courseId));
+        }
+      });
+    } catch (err) {
+      console.warn("[Enrollment] course_requests lookup error:", err);
+    }
+  }
+  const courseList = Array.from(enrolledCourseIds);
+  const effectiveUserId = resolvedUid || (matchedCode ? `key_${matchedCode}` : headerStudentUid || "");
+  if (courseList.length === 0 || !effectiveUserId) {
+    return {
+      authorized: false,
+      userId: effectiveUserId,
+      studentName: resolvedName || "Guest",
+      studentEmail: resolvedEmail,
+      enrolledCourseIds: [],
+      reason: "No active verified course enrollment found for this account."
+    };
+  }
+  const hasCourseAccess = !requiredCourseId || courseList.includes("course-all") || courseList.includes(requiredCourseId);
+  return {
+    authorized: hasCourseAccess,
+    userId: effectiveUserId,
+    studentName: resolvedName || "Enrolled Student",
+    studentEmail: resolvedEmail || void 0,
+    activationCode: matchedCode || void 0,
+    enrolledCourseIds: courseList,
+    reason: hasCourseAccess ? void 0 : "You must purchase and activate this course before accessing its live class."
+  };
+}
+
+// server/liveClassRoutes.ts
+import express from "express";
+import crypto4 from "crypto";
+
+// server/firebaseAdmin.ts
+import { initializeApp, getApps, cert, applicationDefault } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
+import { getMessaging } from "firebase-admin/messaging";
+var cachedApp = null;
+var cachedDb = null;
+var cachedAuth = null;
+var cachedMessaging = null;
+var initAttempted = false;
+var initError = null;
+function isValidFirestoreDatabaseId2(val) {
+  if (!val) return false;
+  const trimmed = val.trim();
+  if (!trimmed) return false;
+  if (/^https?:\/\//i.test(trimmed) || trimmed.includes("/")) return false;
+  return true;
+}
+function getConfiguredDatabaseId() {
+  const appletCfg = readAppletConfig();
+  if (isValidFirestoreDatabaseId2(appletCfg.firestoreDatabaseId)) {
+    return appletCfg.firestoreDatabaseId.trim();
+  }
+  if (isValidFirestoreDatabaseId2(process.env.FIREBASE_DATABASE_ID)) {
+    return process.env.FIREBASE_DATABASE_ID.trim();
+  }
+  return "(default)";
+}
+function getConfiguredProjectId() {
+  const appletCfg = readAppletConfig();
+  if (appletCfg.projectId?.trim()) {
+    return appletCfg.projectId.trim();
+  }
+  return process.env.FIREBASE_PROJECT_ID?.trim() || "";
+}
+function parseServiceAccountFromEnv() {
+  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (rawJson) {
+    try {
+      const jsonStr = rawJson.startsWith("{") ? rawJson : Buffer.from(rawJson, "base64").toString("utf-8");
+      const parsed = JSON.parse(jsonStr);
+      if (parsed && parsed.client_email && parsed.private_key) {
+        parsed.private_key = String(parsed.private_key).replace(/\\n/g, "\n");
+        return parsed;
+      }
+    } catch (err) {
+      console.error("[FirebaseAdmin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
+    }
+  }
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim();
+  const projectId = getConfiguredProjectId();
+  if (clientEmail && privateKey && projectId) {
+    return {
+      project_id: projectId,
+      client_email: clientEmail,
+      private_key: privateKey.replace(/\\n/g, "\n")
+    };
+  }
+  return null;
+}
+function initializeFirebaseAdmin() {
+  if (cachedApp) return cachedApp;
+  if (getApps().length > 0) {
+    cachedApp = getApps()[0];
+    return cachedApp;
+  }
+  if (initAttempted) return null;
+  initAttempted = true;
+  const projectId = getConfiguredProjectId();
+  const serviceAccount = parseServiceAccountFromEnv();
+  try {
+    if (serviceAccount) {
+      if (projectId && serviceAccount.project_id && serviceAccount.project_id !== projectId) {
+        initError = `Service account project_id (${serviceAccount.project_id}) does not match configured Firebase project (${projectId}). Using Firestore REST adapter.`;
+        console.warn(`[FirebaseAdmin] ${initError}`);
+        return null;
+      }
+      cachedApp = initializeApp({
+        credential: cert(serviceAccount),
+        projectId: projectId || serviceAccount.project_id || void 0
+      });
+      initError = null;
+      return cachedApp;
+    }
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FUNCTION_TARGET) {
+      cachedApp = initializeApp({
+        credential: applicationDefault(),
+        projectId: projectId || void 0
+      });
+      initError = null;
+      return cachedApp;
+    }
+    initError = "Using Firestore REST adapter (set FIREBASE_SERVICE_ACCOUNT_JSON for full Admin SDK privileges).";
+    return null;
+  } catch (err) {
+    initError = err?.message || "Failed to initialize Firebase Admin SDK";
+    console.error("[FirebaseAdmin] Initialization error:", initError);
+    return null;
+  }
+}
+function markAdminSdkUnusable(reason) {
+  cachedDb = null;
+  cachedApp = null;
+  initAttempted = true;
+  initError = reason;
+}
+function getAdminDb() {
+  if (cachedDb) return cachedDb;
+  const app2 = initializeFirebaseAdmin();
+  if (!app2) return null;
+  const databaseId = getConfiguredDatabaseId();
+  cachedDb = databaseId && databaseId !== "(default)" ? getFirestore(app2, databaseId) : getFirestore(app2);
+  return cachedDb;
+}
+function getAdminAuth() {
+  if (cachedAuth) return cachedAuth;
+  const app2 = initializeFirebaseAdmin();
+  if (!app2) return null;
+  cachedAuth = getAuth(app2);
+  return cachedAuth;
+}
+function getAdminMessaging() {
+  if (cachedMessaging) return cachedMessaging;
+  const app2 = initializeFirebaseAdmin();
+  if (!app2) return null;
+  cachedMessaging = getMessaging(app2);
+  return cachedMessaging;
+}
+function getFirebaseAdminInitError() {
+  initializeFirebaseAdmin();
+  return initError;
+}
+
 // server/zoomService.ts
-import crypto from "crypto";
+import crypto2 from "crypto";
 var ZoomApiError = class extends Error {
   constructor(message, statusCode = 502, code) {
     super(message);
@@ -546,7 +914,7 @@ function isZoomConfigured() {
 }
 function generateZoomPasscode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = crypto.randomBytes(8);
+  const bytes = crypto2.randomBytes(8);
   let out = "";
   for (let i = 0; i < 8; i++) {
     out += chars[bytes[i] % chars.length];
@@ -773,277 +1141,15 @@ async function createGoogleMeetSpace(accessToken, fetchFn = fetch) {
   };
 }
 
-// server/authAndEnrollment.ts
-var ADMIN_EMAILS = /* @__PURE__ */ new Set([
-  "ai.clipzone.edu@gmail.com",
-  "rajababum426@gmail.com"
-]);
-function isEmailMainAdmin(email) {
-  if (!email) return false;
-  const lower = email.toLowerCase().trim();
-  return ADMIN_EMAILS.has(lower) || lower.startsWith("admin");
-}
-function createRateLimiter(options) {
-  const hits = /* @__PURE__ */ new Map();
-  return (req, res, next) => {
-    const now = Date.now();
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
-    const userHint = req.headers["x-student-uid"] || req.headers["x-device-id"] || "";
-    const key2 = `${options.keyPrefix}:${ip}:${userHint}`;
-    const timestamps = (hits.get(key2) || []).filter((ts) => now - ts < options.windowMs);
-    if (timestamps.length >= options.maxRequests) {
-      return res.status(429).json({
-        error: "Too many requests. Please wait a moment and try again.",
-        code: "RATE_LIMITED"
-      });
-    }
-    timestamps.push(now);
-    hits.set(key2, timestamps);
-    if (hits.size > 5e3) {
-      for (const [k, list] of hits.entries()) {
-        if (list.length === 0 || now - list[list.length - 1] >= options.windowMs) {
-          hits.delete(k);
-        }
-      }
-    }
-    next();
-  };
-}
-function getBearerToken(req) {
-  const authHeader = req.headers.authorization || "";
-  if (authHeader.startsWith("Bearer ")) {
-    return authHeader.slice(7).trim();
-  }
-  return "";
-}
-function parseActivationCodesHeader(req) {
-  const raw = req.headers["x-activation-codes"] || (req.body && Array.isArray(req.body.activationCodes) ? req.body.activationCodes.join(",") : "") || (req.body && typeof req.body.activationCode === "string" ? req.body.activationCode : "") || "";
-  return Array.from(
-    new Set(
-      raw.split(",").map((c) => c.trim().toUpperCase()).filter((c) => c.length >= 4 && c.length <= 64)
-    )
-  );
-}
-function isActivationKeyExpiredServer(keyData, now = Date.now()) {
-  if (!keyData) return true;
-  if (keyData.status === "expired" || keyData.status === "deleted") return true;
-  const durationMs = keyData.duration === "1day" ? 24 * 60 * 60 * 1e3 : keyData.duration === "1month" ? 30 * 24 * 60 * 60 * 1e3 : 365 * 24 * 60 * 60 * 1e3;
-  const expiresAt = Number(keyData.expiresAt || (keyData.claimedAt ? Number(keyData.claimedAt) + durationMs : 0));
-  if (expiresAt > 0 && now > expiresAt) return true;
-  return false;
-}
-async function verifyAdminIdentity(req, db, adminAuth) {
-  const idToken = getBearerToken(req);
-  if (idToken) {
-    try {
-      const decoded = adminAuth ? await adminAuth.verifyIdToken(idToken) : await verifyFirebaseIdTokenViaRest(idToken);
-      if (decoded?.email && isEmailMainAdmin(decoded.email)) {
-        return {
-          isAdmin: true,
-          role: "main_admin",
-          uid: decoded.uid,
-          name: decoded.name || "Main Admin",
-          email: decoded.email
-        };
-      }
-      if (decoded?.uid) {
-        const adminDoc = await db.collection("admins").doc(decoded.uid).get().catch(() => null);
-        if (adminDoc?.exists) {
-          return {
-            isAdmin: true,
-            role: "main_admin",
-            uid: decoded.uid,
-            name: decoded.name || "Main Admin",
-            email: decoded.email
-          };
-        }
-      }
-    } catch {
-    }
-  }
-  const adminSessionId = String(req.headers["x-admin-session-id"] || "").trim();
-  const deviceId = String(req.headers["x-device-id"] || "").trim();
-  if (adminSessionId) {
-    try {
-      const sessSnap = await db.collection("system").doc("admin_session").get();
-      if (sessSnap.exists) {
-        const sessData = sessSnap.data();
-        if (sessData?.activeSessionId && sessData.activeSessionId === adminSessionId && (!sessData.deviceId || !deviceId || sessData.deviceId === deviceId)) {
-          return {
-            isAdmin: true,
-            role: "main_admin",
-            uid: `admin_${adminSessionId.slice(0, 16)}`,
-            name: "Main Admin"
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("[Auth] Admin session verification failed:", err);
-    }
-  }
-  const subAdminCode = String(req.headers["x-subadmin-code"] || "").trim().toUpperCase();
-  if (subAdminCode) {
-    try {
-      const subSnap = await db.collection("sub_admins").doc(subAdminCode).get();
-      if (subSnap.exists) {
-        const subData = subSnap.data();
-        if (subData?.status === "active" && (!subData.activeDeviceId || !deviceId || subData.activeDeviceId === deviceId)) {
-          return {
-            isAdmin: true,
-            role: "sub_admin",
-            uid: subAdminCode,
-            name: subData.name || "Sub-Admin",
-            subAdminCode,
-            assignedCourseId: subData.courseId
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("[Auth] Sub-admin verification failed:", err);
-    }
-  }
-  return null;
-}
-async function verifyStudentEnrollment(req, db, adminAuth, requiredCourseId) {
-  const adminCtx = await verifyAdminIdentity(req, db, adminAuth);
-  if (adminCtx) {
-    const adminAllowedCourseIds = adminCtx.role === "main_admin" ? ["course-all"] : adminCtx.assignedCourseId ? [adminCtx.assignedCourseId] : [];
-    const authorized = !requiredCourseId || adminCtx.role === "main_admin" || adminCtx.assignedCourseId === requiredCourseId;
-    return {
-      authorized,
-      userId: adminCtx.uid,
-      studentName: adminCtx.name,
-      studentEmail: adminCtx.email,
-      enrolledCourseIds: adminAllowedCourseIds,
-      isAdminBypass: true,
-      reason: authorized ? void 0 : "Sub-Admin is only authorized for their assigned course."
-    };
-  }
-  let verifiedUid = "";
-  let verifiedEmail = "";
-  let verifiedName = "";
-  const idToken = getBearerToken(req);
-  if (idToken) {
-    try {
-      const decoded = adminAuth ? await adminAuth.verifyIdToken(idToken) : await verifyFirebaseIdTokenViaRest(idToken);
-      if (decoded) {
-        verifiedUid = decoded.uid;
-        verifiedEmail = decoded.email || "";
-        verifiedName = decoded.name || "";
-      }
-    } catch {
-    }
-  }
-  const headerStudentUid = String(req.headers["x-student-uid"] || "").trim();
-  const deviceId = String(req.headers["x-device-id"] || "").trim();
-  const candidateCodes = parseActivationCodesHeader(req);
-  const now = Date.now();
-  const enrolledCourseIds = /* @__PURE__ */ new Set();
-  let matchedCode = "";
-  let resolvedName = verifiedName;
-  let resolvedEmail = verifiedEmail;
-  let resolvedUid = verifiedUid;
-  for (const code of candidateCodes) {
-    try {
-      const keySnap = await db.collection("activation_keys").doc(code).get();
-      if (!keySnap.exists) continue;
-      const keyData = keySnap.data();
-      if (keyData.status !== "used") continue;
-      if (isActivationKeyExpiredServer(keyData, now)) continue;
-      const deviceMatches = !keyData.activeDeviceId || !deviceId || keyData.activeDeviceId === deviceId;
-      const uidMatches = verifiedUid && keyData.claimedByUid === verifiedUid || headerStudentUid && keyData.claimedByUid === headerStudentUid;
-      if (!deviceMatches && !uidMatches) continue;
-      if (keyData.courseId) {
-        enrolledCourseIds.add(String(keyData.courseId));
-      }
-      if (!matchedCode || keyData.courseId === requiredCourseId || keyData.courseId === "course-all") {
-        matchedCode = code;
-      }
-      if (!resolvedName && (keyData.studentName || keyData.claimedByName)) {
-        resolvedName = String(keyData.studentName || keyData.claimedByName);
-      }
-      if (!resolvedEmail && keyData.claimedByEmail) {
-        resolvedEmail = String(keyData.claimedByEmail);
-      }
-      if (!resolvedUid && keyData.claimedByUid) {
-        resolvedUid = String(keyData.claimedByUid);
-      }
-    } catch (err) {
-      console.warn("[Enrollment] Key check error:", err);
-    }
-  }
-  if (verifiedUid) {
-    try {
-      const claimedSnap = await db.collection("activation_keys").where("claimedByUid", "==", verifiedUid).get();
-      claimedSnap.forEach((docSnap) => {
-        const keyData = docSnap.data();
-        if (keyData.status === "used" && !isActivationKeyExpiredServer(keyData, now)) {
-          if (keyData.courseId) enrolledCourseIds.add(String(keyData.courseId));
-          if (!matchedCode) matchedCode = docSnap.id;
-          if (!resolvedName && (keyData.studentName || keyData.claimedByName)) {
-            resolvedName = String(keyData.studentName || keyData.claimedByName);
-          }
-        }
-      });
-    } catch (err) {
-      console.warn("[Enrollment] UID key lookup error:", err);
-    }
-    try {
-      const enrollSnap = await db.collection("enrollments").where("userId", "==", verifiedUid).where("status", "==", "active").get();
-      enrollSnap.forEach((docSnap) => {
-        const d = docSnap.data();
-        if (!d.expiresAt || Number(d.expiresAt) > now) {
-          if (d.courseId) enrolledCourseIds.add(String(d.courseId));
-        }
-      });
-    } catch (err) {
-      console.warn("[Enrollment] Enrollments lookup error:", err);
-    }
-    try {
-      const reqSnap = await db.collection("course_requests").where("userId", "==", verifiedUid).where("status", "==", "accepted").get();
-      reqSnap.forEach((docSnap) => {
-        const d = docSnap.data();
-        if (!d.expiresAt || Number(d.expiresAt) > now) {
-          if (d.courseId) enrolledCourseIds.add(String(d.courseId));
-        }
-      });
-    } catch (err) {
-      console.warn("[Enrollment] course_requests lookup error:", err);
-    }
-  }
-  const courseList = Array.from(enrolledCourseIds);
-  const effectiveUserId = resolvedUid || (matchedCode ? `key_${matchedCode}` : headerStudentUid || "");
-  if (courseList.length === 0 || !effectiveUserId) {
-    return {
-      authorized: false,
-      userId: effectiveUserId,
-      studentName: resolvedName || "Guest",
-      studentEmail: resolvedEmail,
-      enrolledCourseIds: [],
-      reason: "No active verified course enrollment found for this account."
-    };
-  }
-  const hasCourseAccess = !requiredCourseId || courseList.includes("course-all") || courseList.includes(requiredCourseId);
-  return {
-    authorized: hasCourseAccess,
-    userId: effectiveUserId,
-    studentName: resolvedName || "Enrolled Student",
-    studentEmail: resolvedEmail || void 0,
-    activationCode: matchedCode || void 0,
-    enrolledCourseIds: courseList,
-    reason: hasCourseAccess ? void 0 : "You must purchase and activate this course before accessing its live class."
-  };
-}
-
 // server/liveRoomHub.ts
-import crypto2 from "crypto";
-var BOOT_SECRET = crypto2.randomBytes(32).toString("hex");
+import crypto3 from "crypto";
+var BOOT_SECRET = crypto3.randomBytes(32).toString("hex");
 function getRoomSecret() {
   return process.env.ROOM_TOKEN_SECRET?.trim() || BOOT_SECRET;
 }
 function mintRoomToken(payload) {
   const body = Buffer.from(JSON.stringify(payload), "utf-8").toString("base64url");
-  const sig = crypto2.createHmac("sha256", getRoomSecret()).update(body).digest("base64url");
+  const sig = crypto3.createHmac("sha256", getRoomSecret()).update(body).digest("base64url");
   return `${body}.${sig}`;
 }
 function verifyRoomToken(token, expectedClassId) {
@@ -1053,10 +1159,10 @@ function verifyRoomToken(token, expectedClassId) {
   const body = raw.slice(0, dotIdx);
   const sig = raw.slice(dotIdx + 1);
   if (!body || !sig) return null;
-  const expectedSig = crypto2.createHmac("sha256", getRoomSecret()).update(body).digest("base64url");
+  const expectedSig = crypto3.createHmac("sha256", getRoomSecret()).update(body).digest("base64url");
   const sigBuf = Buffer.from(sig);
   const expBuf = Buffer.from(expectedSig);
-  if (sigBuf.length !== expBuf.length || !crypto2.timingSafeEqual(sigBuf, expBuf)) {
+  if (sigBuf.length !== expBuf.length || !crypto3.timingSafeEqual(sigBuf, expBuf)) {
     return null;
   }
   try {
@@ -1348,7 +1454,7 @@ async function dispatchLiveClassNotifications(params) {
     liveClassId: classId,
     deliveryKey,
     reminderType,
-    author: classData.instructorName || "AI Clipzone",
+    author: classData.instructorName || "HamroLms",
     createdAt: now
   });
   if (reminderType === "30m") {
@@ -1362,17 +1468,15 @@ async function dispatchLiveClassNotifications(params) {
   let deliveredCount = 0;
   if (messaging) {
     try {
-      const fcmSnap = await db.collection("fcmTokens").get();
+      const targetCourseId = String(classData.courseId || "").trim();
+      const filterCourses = targetCourseId && targetCourseId !== "course-all" ? [targetCourseId, "course-all"] : ["course-all"];
+      const fcmSnap = await db.collection("fcmTokens").where("enrolledCourseIds", "array-contains-any", filterCourses).limit(1e3).get();
       const targetTokens = [];
       for (const docSnap of fcmSnap.docs) {
         const d = docSnap.data();
         const token = typeof d.token === "string" ? d.token.trim() : "";
         if (!token) continue;
-        const enrolledCourses = Array.isArray(d.enrolledCourseIds) ? d.enrolledCourseIds : [];
-        const hasCourse = enrolledCourses.includes("course-all") || enrolledCourses.includes(String(classData.courseId));
-        if (hasCourse) {
-          targetTokens.push({ docId: docSnap.id, token });
-        }
+        targetTokens.push({ docId: docSnap.id, token });
       }
       tokenCount = targetTokens.length;
       if (targetTokens.length > 0) {
@@ -1513,7 +1617,7 @@ function createLiveClassRouter(deps = {}) {
       }
       const adminAuth = resolveAuth();
       const studentCtx = await verifyStudentEnrollment(req, db, adminAuth);
-      const tokenDocId = crypto3.createHash("sha256").update(token).digest("hex").slice(0, 40);
+      const tokenDocId = crypto4.createHash("sha256").update(token).digest("hex").slice(0, 40);
       try {
         await db.collection("fcmTokens").doc(tokenDocId).set(
           {
@@ -1588,7 +1692,7 @@ function createLiveClassRouter(deps = {}) {
           courseTitle: data.courseTitle,
           title: data.title,
           description: data.description || "",
-          instructorName: data.instructorName || "AI Clipzone",
+          instructorName: data.instructorName || "HamroLms",
           provider: normalizeProvider(data.provider, "zoom"),
           scheduledStartAt: Number(data.scheduledStartAt),
           durationMinutes: Number(data.durationMinutes || 40),
@@ -1650,7 +1754,7 @@ function createLiveClassRouter(deps = {}) {
     const title = String(req.body?.title || "").trim();
     const description = String(req.body?.description || "").trim();
     const courseId = String(req.body?.courseId || "").trim();
-    const instructorName = String(req.body?.instructorName || adminCtx.name || "AI Clipzone").trim();
+    const instructorName = String(req.body?.instructorName || adminCtx.name || "HamroLms").trim();
     const scheduledStartAt = Number(req.body?.scheduledStartAt || 0);
     const durationMinutes = Math.min(Math.max(Number(req.body?.durationMinutes || 40), 10), 300);
     const maxCapacity = Math.min(Math.max(Number(req.body?.maxCapacity || 80), 1), 1e3);
@@ -2206,9 +2310,9 @@ function createLiveClassRouter(deps = {}) {
         const k = docSnap.data();
         if (isActivationKeyExpiredServer(k, now)) return;
         if (k.courseId !== classData.courseId && k.courseId !== "course-all") return;
-        const key2 = String(k.claimedByUid || docSnap.id);
-        if (seenStudents.has(key2)) return;
-        seenStudents.add(key2);
+        const key = String(k.claimedByUid || docSnap.id);
+        if (seenStudents.has(key)) return;
+        seenStudents.add(key);
         enrolledStudents.push({
           code: docSnap.id,
           studentName: k.studentName || k.claimedByName || "Enrolled Student",
@@ -2424,7 +2528,7 @@ function createLiveClassRouter(deps = {}) {
         roomToken,
         participantName,
         participantRole,
-        instructorName: classData.instructorName || "AI Clipzone Mentor"
+        instructorName: classData.instructorName || "HamroLms Mentor"
       });
     } catch (err) {
       console.error("[LiveClasses] Join error:", err);
@@ -2579,120 +2683,666 @@ function createLiveClassRouter(deps = {}) {
   return router;
 }
 
-// server/vercelApp.ts
-dotenv.config();
-var LIVE_TOKEN_KEY = crypto4.createHash("sha256").update(process.env.LIVE_TOKEN_SECRET || process.env.GEMINI_API_KEY || "aiclipzone-nepal-live-zoom-key-2026").digest();
-function encryptLivePayload(payload) {
-  const iv = crypto4.randomBytes(12);
-  const cipher = crypto4.createCipheriv("aes-256-gcm", LIVE_TOKEN_KEY, iv);
-  const json = JSON.stringify(payload);
-  const encrypted = Buffer.concat([cipher.update(json, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, encrypted]).toString("base64url");
+// server/seoCatalog.js
+var DEFAULT_PUBLIC_ORIGIN = "https://hamrolms.vercel.app";
+var SUPPORTED_LOCALES = ["en", "ne", "hi"];
+var FIREBASE_PROJECT_ID = typeof process !== "undefined" && process.env?.FIREBASE_PROJECT_ID?.trim() || "gen-lang-client-0360487518";
+var RAW_DB_ID = typeof process !== "undefined" ? process.env?.FIREBASE_DATABASE_ID?.trim() : "";
+var FIREBASE_DATABASE_ID = RAW_DB_ID && !/^https?:\/\//i.test(RAW_DB_ID) && !RAW_DB_ID.includes("/") ? RAW_DB_ID : "ai-studio-aiclipzonenepal-13e41d9c-1db8-4842-a387-8c950c1f5b2a";
+var SEED_COURSES = [
+  {
+    id: "Ai master class course by Ai clipzone",
+    slug: "ai-master-class-course-by-hamrolms",
+    title: "AI Master Class Course by Hamro LMS",
+    seoTitle: "AI Master Class Course in Nepal \u2013 AI Training | Hamro LMS",
+    seoDescription: "Join the AI Master Class Course on Hamro LMS Nepal. Learn 30+ AI tools for video creation, image generation, AI music, presentations, and web design.",
+    overview: "A practical AI training course in Nepal covering 30+ generative AI tools for AI video creation, image generation, AI song production, presentation design, and website building.",
+    category: "AI Training Nepal",
+    level: "All Levels",
+    price: "Rs. 449",
+    amount: 449,
+    isFree: false,
+    order: 0,
+    language: "Hindi & Nepali",
+    instructorSlug: "rajababu-mehta",
+    instructorName: "Rajababu Mehta",
+    includeCertificate: true,
+    includeLive: false,
+    learn: [
+      "30+ AI Tools Mastery",
+      "AI Video & Image Generation",
+      "AI Songs Creation",
+      "Presentation & Website Design"
+    ],
+    image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png",
+    updatedAt: "2026-11-20"
+  },
+  {
+    id: "youtube-blueprint-course-by-al-clipzone",
+    slug: "youtube-blueprint-course-by-hamrolms",
+    title: "YouTube Blueprint Course by Hamro LMS",
+    seoTitle: "YouTube Blueprint Course in Nepal \u2013 Creator Training | Hamro LMS",
+    seoDescription: "Learn YouTube channel setup, storytelling scripts, video editing, thumbnail design, and AI content workflows on Hamro LMS online learning platform in Nepal.",
+    overview: "Step-by-step creator training covering YouTube niche selection, script storytelling, high-retention editing, thumbnail strategy, growth systems, and AI-assisted content workflows.",
+    category: "Creator Growth",
+    level: "All Levels",
+    price: "Rs. 849",
+    amount: 849,
+    isFree: false,
+    order: 1,
+    language: "Hindi & Nepali",
+    instructorSlug: "rajababu-mehta",
+    instructorName: "Rajababu Mehta",
+    includeCertificate: true,
+    includeLive: false,
+    learn: [
+      "Channel setup \u0930 niche \u091B\u0928\u094B\u091F",
+      "Video idea \u0916\u094B\u091C\u094D\u0928\u0947 \u0924\u0930\u093F\u0915\u093E",
+      "Script writing storytelling",
+      "Shooting presentation",
+      "Editing skills",
+      "Thumbnail title",
+      "YouTube growth strategy",
+      "Monetization earning methods",
+      "AI tools \u092A\u094D\u0930\u092F\u094B\u0917 \u0917\u0930\u0947\u0930 content \u092C\u0928\u093E\u0909\u0928\u0947 \u0924\u0930\u093F\u0915\u093E"
+    ],
+    image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png",
+    updatedAt: "2026-11-20"
+  }
+];
+var CORE_INSTRUCTORS = [
+  {
+    slug: "rajababu-mehta",
+    name: "Rajababu Mehta",
+    role: "Founder & Lead AI Instructor",
+    headline: "AI Website Developer, AI Educator & Digital Skills Trainer in Nepal",
+    bio: "Rajababu Mehta is the Founder of Hamro LMS and an AI Website Developer from Nepal specializing in practical generative AI workflows, educational explainer production, web development, and creator growth strategies.",
+    expertise: [
+      "Generative AI Tools",
+      "Prompt Engineering",
+      "AI Website Development",
+      "Visual Storytelling & Explainers",
+      "Digital Product Architecture"
+    ],
+    avatarUrl: "/institute-logo.png",
+    location: "Birgunj, Nepal",
+    languages: ["English", "Nepali", "Hindi"],
+    courseIds: [
+      "Ai master class course by Ai clipzone",
+      "youtube-blueprint-course-by-al-clipzone"
+    ],
+    socialLinks: {
+      website: "https://rajababumehta.com.np",
+      facebook: "https://www.facebook.com/profile.php?id=61583901232576"
+    }
+  }
+];
+var SEED_BLOG_POSTS = [
+  {
+    slug: "mastering-prompt-engineering-for-practical-ai-workflows",
+    title: "Mastering Prompt Engineering for Practical AI Workflows",
+    seoTitle: "Prompt Engineering Guide for Practical AI Workflows | Hamro LMS",
+    seoDescription: "Learn structured prompt engineering frameworks for writing, visual generation, coding, and productivity using modern AI tools on Hamro LMS Nepal.",
+    category: "AI & Automation",
+    publishedAt: "2026-09-18",
+    updatedAt: "2026-11-15"
+  },
+  {
+    slug: "high-retention-video-editing-workflow-for-creators",
+    title: "High-Retention Video Editing Workflow for Digital Creators",
+    seoTitle: "High-Retention Video Editing Workflow Guide | Hamro LMS",
+    seoDescription: "Step-by-step guide to pacing, hooks, sound design, and visual storytelling that keep viewers watching educational and creator videos.",
+    category: "Video Editing",
+    publishedAt: "2026-10-04",
+    updatedAt: "2026-11-18"
+  },
+  {
+    slug: "building-a-sustainable-youtube-education-channel",
+    title: "Building a Sustainable YouTube Education Channel from Scratch",
+    seoTitle: "How to Build a YouTube Education Channel | Hamro LMS",
+    seoDescription: "Learn practical niche positioning, topic research, packaging, and ethical monetization workflows for educational YouTube creators.",
+    category: "Creator Growth",
+    publishedAt: "2026-10-22",
+    updatedAt: "2026-11-19"
+  },
+  {
+    slug: "ai-assisted-web-development-best-practices-for-beginners",
+    title: "AI-Assisted Web Development Best Practices for Beginners",
+    seoTitle: "AI-Assisted Web Development Best Practices | Hamro LMS",
+    seoDescription: "Understand how to combine HTML, CSS, React, and AI coding assistants responsibly to build fast, accessible, production-ready web apps.",
+    category: "Career & Skills",
+    publishedAt: "2026-11-05",
+    updatedAt: "2026-11-20"
+  }
+];
+function escapeXml(str) {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
-function decryptLivePayload(token) {
+function slugifyText(input) {
+  const raw = String(input || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return raw || "item";
+}
+function normalizeLegacyBrandText(val) {
+  if (!val || typeof val !== "string") return "";
+  return val.replace(/AI\s*CLIPZONE\s*NEPAL/g, "Hamro LMS").replace(/AI\s*CLIPZONE/g, "Hamro LMS").replace(/a[il]\s*clipzone\s*nepal/gi, "Hamro LMS").replace(/a[il]\s*clipzone/gi, "Hamro LMS").replace(/clipzone\s*nepal/gi, "Hamro LMS").replace(/clipzone/gi, "Hamro LMS").replace(/\bHamroLms\b/g, "Hamro LMS");
+}
+function getCourseSlug(course) {
+  if (course?.slug && String(course.slug).trim()) {
+    return slugifyText(course.slug);
+  }
+  const normalizedTitle = normalizeLegacyBrandText(course?.title || course?.id || "course");
+  return slugifyText(normalizedTitle || "course");
+}
+function buildLocalizedPath(cleanPath, locale = "en") {
+  const normalized = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+  const trimmed = normalized === "/" ? "/" : normalized.replace(/\/+$/, "");
+  if (locale === "en") {
+    return trimmed;
+  }
+  return trimmed === "/" ? `/${locale}` : `/${locale}${trimmed}`;
+}
+function resolvePublicOrigin(req) {
+  if (!req || !req.headers) return DEFAULT_PUBLIC_ORIGIN;
+  const rawHost = req.headers["x-forwarded-host"] || req.headers.host || "";
+  const host = String(Array.isArray(rawHost) ? rawHost[0] : rawHost).split(",")[0].trim();
+  if (!host || host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") || host.includes("aiclipzone.vercel.app")) {
+    return DEFAULT_PUBLIC_ORIGIN;
+  }
+  const rawProto = req.headers["x-forwarded-proto"] || "https";
+  const proto = String(Array.isArray(rawProto) ? rawProto[0] : rawProto).split(",")[0].trim() || "https";
+  return `${proto === "http" ? "https" : proto}://${host}`;
+}
+function toIsoDateStr(val, fallback) {
+  const safeFallback = /^\d{4}-\d{2}-\d{2}$/.test(String(fallback || "")) ? String(fallback) : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  if (val === void 0 || val === null || val === "") return safeFallback;
+  if (typeof val === "number" && Number.isFinite(val)) {
+    const ms = val < 1e12 ? val * 1e3 : val;
+    const d = new Date(ms);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d+$/.test(str)) {
+    const num = Number(str);
+    const ms = num < 1e12 ? num * 1e3 : num;
+    const d = new Date(ms);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const parsed = Date.parse(str);
+  if (!Number.isNaN(parsed)) {
+    return new Date(parsed).toISOString().slice(0, 10);
+  }
+  return safeFallback;
+}
+function fromFirestoreValue2(v) {
+  if (!v || typeof v !== "object") return null;
+  if ("nullValue" in v) return null;
+  if ("booleanValue" in v) return Boolean(v.booleanValue);
+  if ("integerValue" in v) return Number(v.integerValue);
+  if ("doubleValue" in v) return Number(v.doubleValue);
+  if ("stringValue" in v) return String(v.stringValue);
+  if ("timestampValue" in v) return String(v.timestampValue);
+  if ("arrayValue" in v) {
+    const vals = Array.isArray(v.arrayValue?.values) ? v.arrayValue.values : [];
+    return vals.map(fromFirestoreValue2);
+  }
+  if ("mapValue" in v) {
+    const out = {};
+    const fields = v.mapValue?.fields || {};
+    for (const [k, fv] of Object.entries(fields)) {
+      out[k] = fromFirestoreValue2(fv);
+    }
+    return out;
+  }
+  return null;
+}
+function fromFirestoreDoc2(docJson) {
+  const out = {};
+  const fields = docJson?.fields || {};
+  for (const [k, v] of Object.entries(fields)) {
+    out[k] = fromFirestoreValue2(v);
+  }
+  return out;
+}
+function mergePublicInstructors(courses, subAdmins) {
+  const bySlug = /* @__PURE__ */ new Map();
+  for (const inst of CORE_INSTRUCTORS) {
+    const matchedIds = courses.filter((c) => c.instructorSlug === inst.slug || inst.courseIds.includes(c.id)).map((c) => c.id);
+    bySlug.set(inst.slug, {
+      ...inst,
+      courseIds: Array.from(/* @__PURE__ */ new Set([...inst.courseIds, ...matchedIds]))
+    });
+  }
+  const BRAND_ALIAS_SLUGS = /* @__PURE__ */ new Set(["ai-clipzone", "ai-clipzone-nepal", "al-clipzone", "hamro-lms", "hamrolms", "hamro-lms-nepal"]);
+  for (const sub of subAdmins) {
+    if (!sub || sub.status !== "active" || !sub.name) continue;
+    const rawSlug = slugifyText(sub.name);
+    if (!rawSlug || rawSlug === "item") continue;
+    const slug = BRAND_ALIAS_SLUGS.has(rawSlug) ? "rajababu-mehta" : rawSlug;
+    const existing = bySlug.get(slug);
+    if (existing) {
+      if (sub.courseId && !existing.courseIds.includes(sub.courseId)) {
+        existing.courseIds.push(sub.courseId);
+      }
+      continue;
+    }
+    bySlug.set(slug, {
+      slug,
+      name: String(sub.name).trim(),
+      role: "Course Instructor & Mentor",
+      headline: sub.courseTitle ? `Instructor for ${sub.courseTitle}` : "Instructor on Hamro LMS Nepal",
+      bio: `${String(sub.name).trim()} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
+      avatarUrl: sub.avatarUrl || "/institute-logo.png",
+      languages: ["English", "Nepali"],
+      courseIds: sub.courseId ? [sub.courseId] : [],
+      expertise: ["Online Education", "Digital Skills"]
+    });
+  }
+  for (const c of courses) {
+    if (c.instructorName && c.instructorSlug) {
+      const slug = slugifyText(c.instructorSlug);
+      const existing = bySlug.get(slug);
+      if (existing) {
+        if (!existing.courseIds.includes(c.id)) existing.courseIds.push(c.id);
+      } else {
+        bySlug.set(slug, {
+          slug,
+          name: String(c.instructorName).trim(),
+          role: "Course Instructor",
+          headline: `Instructor for ${c.title}`,
+          bio: `${String(c.instructorName).trim()} teaches ${c.title} on Hamro LMS.`,
+          avatarUrl: "/institute-logo.png",
+          languages: c.language ? [c.language] : ["English", "Nepali"],
+          courseIds: [c.id],
+          expertise: Array.isArray(c.learn) ? c.learn.slice(0, 4) : ["Online Education"]
+        });
+      }
+    }
+  }
+  return Array.from(bySlug.values());
+}
+async function fetchJsonWithTimeout(url, init = {}, timeoutMs = 2200) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const buf = Buffer.from(token, "base64url");
-    if (buf.length < 29) return null;
-    const iv = buf.subarray(0, 12);
-    const tag = buf.subarray(12, 28);
-    const encrypted = buf.subarray(28);
-    const decipher = crypto4.createDecipheriv("aes-256-gcm", LIVE_TOKEN_KEY, iv);
-    decipher.setAuthTag(tag);
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
-    return JSON.parse(decrypted);
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
-function buildZoomUrls(rawUrl, studentName) {
+async function fetchPublicCatalogSnapshot() {
+  let deletedIds = [];
+  let courses = [...SEED_COURSES];
+  const subAdmins = [];
   try {
-    const trimmed = String(rawUrl || "").trim();
-    if (!/^https?:\/\//i.test(trimmed)) return null;
-    const parsed = new URL(trimmed);
-    if (!["http:", "https:"].includes(parsed.protocol)) return null;
-    const cleanName = String(studentName || "Student").trim().slice(0, 60) || "Student";
-    const base64Name = Buffer.from(cleanName, "utf8").toString("base64");
-    const idMatch = parsed.pathname.match(/\/(?:j|wc\/join|s)\/(\d{9,12})/i) || parsed.pathname.match(/\/wc\/(\d{9,12})\/join/i);
-    const meetingId = idMatch?.[1] || "";
-    const pwd = parsed.searchParams.get("pwd") || "";
-    const tk = parsed.searchParams.get("tk") || "";
-    if (parsed.hostname.toLowerCase().includes("zoom.")) {
-      parsed.searchParams.set("uname", cleanName);
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
+    const [configJson, coursesJson, subAdminsJson] = await Promise.all([
+      fetchJsonWithTimeout(`${baseUrl}/system/config`),
+      fetchJsonWithTimeout(`${baseUrl}/courses?pageSize=100`),
+      fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: "sub_admins" }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: "status" },
+                op: "EQUAL",
+                value: { stringValue: "active" }
+              }
+            }
+          }
+        })
+      })
+    ]);
+    if (configJson?.fields) {
+      const cfg = fromFirestoreDoc2(configJson);
+      if (Array.isArray(cfg.deletedCourseIds)) {
+        deletedIds = cfg.deletedCourseIds.map(String);
+      }
     }
-    const webUrl = parsed.toString();
-    let embedUrl = webUrl;
-    if (meetingId) {
-      const wc = new URL(`https://app.zoom.us/wc/${meetingId}/join`);
-      wc.searchParams.set("prefer", "1");
-      wc.searchParams.set("un", base64Name);
-      wc.searchParams.set("uname", cleanName);
-      if (pwd) wc.searchParams.set("pwd", pwd);
-      if (tk) wc.searchParams.set("tk", tk);
-      embedUrl = wc.toString();
+    const docList = Array.isArray(coursesJson?.documents) ? coursesJson.documents : [];
+    if (docList.length > 0) {
+      const liveCourses = [];
+      for (const docItem of docList) {
+        const d = fromFirestoreDoc2(docItem);
+        const docId = String(docItem?.name?.split("/").pop() || d.id || "");
+        if (!docId || deletedIds.includes(docId)) continue;
+        const normalizedTitle = normalizeLegacyBrandText(String(d.title || "Course")).replace(/\s+/g, " ").trim();
+        liveCourses.push({
+          id: docId,
+          slug: d.slug ? slugifyText(d.slug) : void 0,
+          title: normalizedTitle || "Course",
+          seoTitle: d.seoTitle ? String(d.seoTitle) : void 0,
+          seoDescription: d.seoDescription ? String(d.seoDescription) : void 0,
+          overview: d.overview ? String(d.overview) : void 0,
+          category: d.category ? String(d.category) : "Online Course",
+          level: d.level ? String(d.level) : "All Levels",
+          price: String(d.price || "FREE"),
+          amount: typeof d.amount === "number" ? d.amount : 0,
+          isFree: Boolean(d.isFree),
+          order: typeof d.order === "number" ? d.order : 0,
+          language: d.language ? String(d.language) : "Nepali & Hindi",
+          instructorSlug: d.instructorSlug ? String(d.instructorSlug) : void 0,
+          instructorName: d.instructorName ? String(d.instructorName) : void 0,
+          includeCertificate: d.includeCertificate !== false,
+          includeLive: Boolean(d.includeLive),
+          learn: Array.isArray(d.learn) ? d.learn.map(String) : [],
+          image: d.image ? String(d.image) : "/institute-logo.png",
+          updatedAt: d.updatedAt || docItem.updateTime || void 0
+        });
+      }
+      if (liveCourses.length > 0) {
+        courses = liveCourses.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      }
+    } else if (deletedIds.length > 0) {
+      courses = courses.filter((c) => !deletedIds.includes(c.id));
     }
-    return { webUrl, embedUrl };
+    if (Array.isArray(subAdminsJson)) {
+      for (const row of subAdminsJson) {
+        if (!row?.document?.fields) continue;
+        const d = fromFirestoreDoc2(row.document);
+        if (d.status !== "active" || !d.name) continue;
+        subAdmins.push({
+          id: String(row.document.name?.split("/").pop() || ""),
+          name: String(d.name),
+          courseId: String(d.courseId || ""),
+          courseTitle: String(d.courseTitle || ""),
+          avatarUrl: d.avatarUrl ? String(d.avatarUrl) : void 0,
+          status: "active"
+        });
+      }
+    }
   } catch {
-    return null;
   }
+  const instructors = mergePublicInstructors(courses, subAdmins);
+  return { courses, instructors };
 }
-function escapeHtml(str) {
-  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+function buildSitemapXmlFromCatalog(origin, courses, instructors) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const specs = [
+    { cleanPath: "/", lastmod: today, changefreq: "daily", priority: "1.0" },
+    { cleanPath: "/instructors", lastmod: today, changefreq: "weekly", priority: "0.85" },
+    { cleanPath: "/blog", lastmod: today, changefreq: "weekly", priority: "0.85" }
+  ];
+  const seenCourseSlugs = /* @__PURE__ */ new Set();
+  for (const course of courses || []) {
+    const slug = getCourseSlug(course);
+    if (!slug || seenCourseSlugs.has(slug)) continue;
+    seenCourseSlugs.add(slug);
+    specs.push({
+      cleanPath: `/courses/${slug}`,
+      lastmod: toIsoDateStr(course.updatedAt, today),
+      changefreq: "weekly",
+      priority: "0.9"
+    });
+  }
+  const seenInstructorSlugs = /* @__PURE__ */ new Set();
+  for (const inst of instructors || []) {
+    if (!inst?.slug || seenInstructorSlugs.has(inst.slug)) continue;
+    seenInstructorSlugs.add(inst.slug);
+    specs.push({
+      cleanPath: `/instructors/${inst.slug}`,
+      lastmod: today,
+      changefreq: "monthly",
+      priority: "0.75"
+    });
+  }
+  const seenCategorySlugs = /* @__PURE__ */ new Set();
+  for (const post of SEED_BLOG_POSTS) {
+    const catSlug = slugifyText(post.category);
+    if (!catSlug || seenCategorySlugs.has(catSlug)) continue;
+    seenCategorySlugs.add(catSlug);
+    specs.push({
+      cleanPath: `/blog/category/${catSlug}`,
+      lastmod: toIsoDateStr(post.updatedAt || post.publishedAt, today),
+      changefreq: "weekly",
+      priority: "0.7"
+    });
+  }
+  for (const post of SEED_BLOG_POSTS) {
+    specs.push({
+      cleanPath: `/blog/${post.slug}`,
+      lastmod: toIsoDateStr(post.updatedAt || post.publishedAt, today),
+      changefreq: "monthly",
+      priority: "0.8"
+    });
+  }
+  specs.push(
+    { cleanPath: "/privacy-policy", lastmod: "2026-01-01", changefreq: "yearly", priority: "0.4" },
+    { cleanPath: "/terms", lastmod: "2026-01-01", changefreq: "yearly", priority: "0.4" }
+  );
+  const urlNodes = [];
+  for (const spec of specs) {
+    const alternatesXml = [
+      ...SUPPORTED_LOCALES.map((loc) => {
+        const href = `${origin}${buildLocalizedPath(spec.cleanPath, loc)}`;
+        return `    <xhtml:link rel="alternate" hreflang="${loc}" href="${escapeXml(href)}" />`;
+      }),
+      `    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(
+        `${origin}${buildLocalizedPath(spec.cleanPath, "en")}`
+      )}" />`
+    ].join("\n");
+    for (const loc of SUPPORTED_LOCALES) {
+      const fullLoc = `${origin}${buildLocalizedPath(spec.cleanPath, loc)}`;
+      urlNodes.push(
+        `  <url>
+    <loc>${escapeXml(fullLoc)}</loc>
+    <lastmod>${escapeXml(spec.lastmod)}</lastmod>
+    <changefreq>${spec.changefreq}</changefreq>
+    <priority>${loc === "en" ? spec.priority : (Number(spec.priority) * 0.9).toFixed(2)}</priority>
+${alternatesXml}
+  </url>`
+      );
+    }
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${urlNodes.join("\n")}
+</urlset>
+`;
 }
-var app = express2();
-app.use(express2.json());
-app.get(["/api", "/api/health"], (_req, res) => {
-  res.json({ status: "ok", timestamp: Date.now() });
-});
-app.post("/api/live-join-token", (req, res) => {
+async function generateSitemapXml(origin = DEFAULT_PUBLIC_ORIGIN) {
   try {
-    const { zoomLink, studentName, sessionTitle, courseTitle } = req.body || {};
-    const urls = buildZoomUrls(zoomLink, studentName || "Student");
-    if (!urls) {
-      return res.status(400).json({ error: "Invalid meeting URL" });
-    }
-    const token = encryptLivePayload({
-      w: urls.webUrl,
-      e: urls.embedUrl,
-      s: String(studentName || "Student").slice(0, 60),
-      t: String(sessionTitle || "Live Class Session").slice(0, 100),
-      c: String(courseTitle || "AI Clipzone Live").slice(0, 100),
-      exp: Date.now() + 15 * 60 * 1e3
-    });
-    const encoded = encodeURIComponent(token);
-    res.json({
-      embedUrl: `/api/live-embed?t=${encoded}`,
-      launchUrl: `/api/live-launch?t=${encoded}`
-    });
+    const { courses, instructors } = await fetchPublicCatalogSnapshot();
+    return buildSitemapXmlFromCatalog(origin, courses, instructors);
   } catch {
-    res.status(500).json({ error: "Unable to create live session pass" });
+    return buildSitemapXmlFromCatalog(origin, SEED_COURSES, CORE_INSTRUCTORS);
   }
-});
-app.get("/api/live-embed", (req, res) => {
-  const token = String(req.query.t || "");
-  const payload = token ? decryptLivePayload(token) : null;
-  const target = payload?.e || payload?.w;
-  if (!payload || !target || !payload.exp || Date.now() > Number(payload.exp)) {
-    res.status(410).type("html").send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:380px;background:#18181b;border:1px solid #27272a;border-radius:16px;padding:24px}h1{font-size:16px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0}</style></head><body><div class="card"><h1>Live Session Pass Expired</h1><p>Please click Leave Class and click Join again.</p></div></body></html>`);
-    return;
-  }
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  res.redirect(302, String(target));
-});
-app.get("/api/live-launch", (req, res) => {
-  const token = String(req.query.t || "");
-  const payload = token ? decryptLivePayload(token) : null;
-  const target = payload?.e || payload?.w;
-  if (!payload || !target || !payload.exp || Date.now() > Number(payload.exp)) {
-    res.status(410).type("html").send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Link Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:400px;background:#18181b;border:1px solid #27272a;border-radius:20px;padding:28px}h1{font-size:18px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0}</style></head><body><div class="card"><h1>Live Pass Expired</h1><p>Please return to your course section and click Join again.</p></div></body></html>`);
-    return;
-  }
-  const safeTitle = escapeHtml(payload.t || "Live Class Session");
-  const embedSrc = `/api/live-embed?t=${encodeURIComponent(token)}`;
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  res.type("html").send(`<!DOCTYPE html>
+}
+function generateRobotsTxt(origin = DEFAULT_PUBLIC_ORIGIN) {
+  const safeOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, "");
+  return [
+    "User-agent: *",
+    "Allow: /",
+    "Disallow: /api/",
+    "Disallow: /admin",
+    "Disallow: /classroom",
+    "Disallow: /account",
+    "Disallow: /enroll",
+    "Disallow: /live",
+    "Disallow: /ask",
+    "Disallow: /delete-account",
+    "",
+    `Sitemap: ${safeOrigin}/sitemap.xml`,
+    ""
+  ].join("\n");
+}
+
+// server/seoRoutes.ts
+function resolvePublicOrigin2(req) {
+  return resolvePublicOrigin(req);
+}
+async function generateSitemapXml2(origin) {
+  return generateSitemapXml(origin);
+}
+function generateRobotsTxt2(origin) {
+  return generateRobotsTxt(origin);
+}
+function mountSeoRoutes(app2) {
+  app2.get("/sitemap.xml", async (req, res) => {
+    try {
+      const origin = resolvePublicOrigin2(req);
+      const xml = await generateSitemapXml2(origin);
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400");
+      res.status(200).send(xml);
+    } catch {
+      const fallbackOrigin = resolvePublicOrigin2(req);
+      const xml = await generateSitemapXml2(fallbackOrigin);
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.status(200).send(xml);
+    }
+  });
+  app2.get("/robots.txt", (req, res) => {
+    const origin = resolvePublicOrigin2(req);
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.status(200).send(generateRobotsTxt2(origin));
+  });
+}
+
+// server/coreApiRoutes.ts
+function getServerFirestoreForReq(req) {
+  const adminDb = getAdminDb();
+  if (adminDb) return adminDb;
+  const authHeader = req.headers.authorization || "";
+  const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  return createRestFirestore(idToken || void 0);
+}
+function mountSharedApiMiddlewareAndRoutes(app2) {
+  app2.use(securityHeadersMiddleware);
+  mountSeoRoutes(app2);
+  app2.use(express2.json({ limit: "150kb" }));
+  const liveEncryptLimiter = createRateLimiter({
+    windowMs: 6e4,
+    maxRequests: 30,
+    keyPrefix: "live-encrypt"
+  });
+  const liveJoinLimiter = createRateLimiter({
+    windowMs: 6e4,
+    maxRequests: 45,
+    keyPrefix: "live-join"
+  });
+  const chatLimiter = createRateLimiter({
+    windowMs: 6e4,
+    maxRequests: 25,
+    keyPrefix: "ai-chat"
+  });
+  app2.get(["/api", "/api/health"], (_req, res) => {
+    res.json({ status: "ok", timestamp: Date.now() });
+  });
+  app2.post("/api/live-encrypt", liveEncryptLimiter, async (req, res) => {
+    try {
+      const { zoomLink } = req.body || {};
+      const adminSessionId = String(req.headers["x-admin-session-id"] || "").trim();
+      const subAdminCode = String(req.headers["x-subadmin-code"] || "").trim();
+      const hasBearer = Boolean(req.headers.authorization?.startsWith("Bearer "));
+      if (!adminSessionId && !subAdminCode && !hasBearer) {
+        return res.status(401).json({ error: "Unauthorized: instructor credentials required." });
+      }
+      if (adminSessionId || subAdminCode || hasBearer) {
+        try {
+          const db = getServerFirestoreForReq(req);
+          const verifiedAdmin = await verifyAdminIdentity(req, db, getAdminAuth());
+          if (!verifiedAdmin && hasBearer && !adminSessionId && !subAdminCode) {
+            return res.status(403).json({ error: "Forbidden: admin or sub-admin required." });
+          }
+        } catch {
+        }
+      }
+      const encryptedZoomLink = encryptZoomUrl(String(zoomLink || ""));
+      if (!encryptedZoomLink) {
+        return res.status(400).json({ error: "Invalid meeting URL. Must be a valid https:// URL." });
+      }
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ encryptedZoomLink });
+    } catch {
+      res.status(500).json({ error: "Unable to encrypt meeting URL" });
+    }
+  });
+  app2.post("/api/live-decrypt-admin", liveEncryptLimiter, async (req, res) => {
+    try {
+      const { encryptedZoomLink } = req.body || {};
+      const db = getServerFirestoreForReq(req);
+      const adminCtx = await verifyAdminIdentity(req, db, getAdminAuth());
+      if (!adminCtx) {
+        return res.status(403).json({ error: "Forbidden: verified instructor session required." });
+      }
+      const zoomLink = decryptZoomUrl(String(encryptedZoomLink || ""));
+      if (!zoomLink) {
+        return res.status(400).json({ error: "Invalid or unreadable encrypted meeting URL." });
+      }
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ zoomLink });
+    } catch {
+      res.status(500).json({ error: "Unable to decrypt meeting URL" });
+    }
+  });
+  app2.post("/api/live-join-token", liveJoinLimiter, (req, res) => {
+    try {
+      const { encryptedZoomLink, zoomLink, studentName, sessionTitle, courseTitle } = req.body || {};
+      const decrypted = decryptZoomUrl(String(encryptedZoomLink || zoomLink || ""));
+      if (!decrypted) {
+        return res.status(400).json({ error: "Invalid meeting URL" });
+      }
+      const urls = buildZoomUrls(decrypted, String(studentName || "Student"));
+      if (!urls) {
+        return res.status(400).json({ error: "Invalid meeting URL" });
+      }
+      const token = encryptLivePayload({
+        w: urls.webUrl,
+        e: urls.embedUrl,
+        s: String(studentName || "Student").slice(0, 60),
+        t: String(sessionTitle || "Live Class Session").slice(0, 100),
+        c: String(courseTitle || "HamroLms Live").slice(0, 100),
+        exp: Date.now() + 15 * 60 * 1e3
+      });
+      const encoded = encodeURIComponent(token);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        embedUrl: `/api/live-embed?t=${encoded}`,
+        launchUrl: `/api/live-launch?t=${encoded}`
+      });
+    } catch {
+      res.status(500).json({ error: "Unable to create live session pass" });
+    }
+  });
+  app2.get("/api/live-embed", (req, res) => {
+    const token = String(req.query.t || "");
+    const payload = token ? decryptLivePayload(token) : null;
+    const target = payload?.e || payload?.w;
+    if (!payload || !target || !payload.exp || Date.now() > Number(payload.exp)) {
+      res.status(410).type("html").send(
+        `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:380px;background:#18181b;border:1px solid #27272a;border-radius:16px;padding:24px}h1{font-size:16px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0}</style></head><body><div class="card"><h1>Live Session Pass Expired</h1><p>Please click Leave Class and click Join again.</p></div></body></html>`
+      );
+      return;
+    }
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.redirect(302, String(target));
+  });
+  app2.get("/api/live-launch", (req, res) => {
+    const token = String(req.query.t || "");
+    const payload = token ? decryptLivePayload(token) : null;
+    const target = payload?.e || payload?.w;
+    if (!payload || !target || !payload.exp || Date.now() > Number(payload.exp)) {
+      res.status(410).type("html").send(
+        `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Session Link Expired</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;padding:24px;text-align:center}.card{max-width:400px;background:#18181b;border:1px solid #27272a;border-radius:20px;padding:28px}h1{font-size:18px;margin:0 0 8px}p{font-size:13px;color:#a1a1aa;margin:0}</style></head><body><div class="card"><h1>Live Pass Expired</h1><p>Please return to your course section and click Join again.</p></div></body></html>`
+      );
+      return;
+    }
+    const safeTitle = escapeHtml(payload.t || "Live Class Session");
+    const embedSrc = `/api/live-embed?t=${encodeURIComponent(token)}`;
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.type("html").send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -2704,99 +3354,98 @@ app.get("/api/live-launch", (req, res) => {
   <iframe src="${embedSrc}" allow="camera *; microphone *; display-capture *; autoplay *; clipboard-write *; fullscreen *" allowfullscreen referrerpolicy="no-referrer"></iframe>
 </body>
 </html>`);
-});
-app.use("/api/live-classes", createLiveClassRouter());
-var ai = null;
-var key = process.env.GEMINI_API_KEY;
-if (key) {
-  ai = new GoogleGenAI({
-    apiKey: key,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build"
-      }
-    }
   });
-}
-app.post("/api/chat", async (req, res) => {
-  try {
-    const { message, history } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-    if (!ai && process.env.GEMINI_API_KEY) {
-      ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build"
-          }
+  app2.use("/api/live-classes", createLiveClassRouter());
+  let ai = null;
+  if (process.env.GEMINI_API_KEY) {
+    ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build"
         }
-      });
-    }
-    if (!ai) {
-      return res.json({
-        reply: "\u0928\u092E\u0938\u094D\u0924\u0947! \u{1F64F} AI Clipzone Nepal \u092E\u093E \u092F\u0939\u093E\u0901\u0932\u093E\u0908 \u0938\u094D\u0935\u093E\u0917\u0924 \u091B\u0964 \u0939\u093E\u092E\u094D\u0930\u093E \u092A\u094D\u0930\u093F\u092E\u093F\u092F\u092E \u0915\u094B\u0930\u094D\u0937\u0939\u0930\u0942 (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, \u0935\u093E eSewa \u092D\u0941\u0915\u094D\u0924\u093E\u0928\u0940 \u0938\u092E\u094D\u092C\u0928\u094D\u0927\u0940 \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0938\u093F\u0927\u0948 \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964"
-      });
-    }
-    const contents = [];
-    if (history && Array.isArray(history)) {
-      for (const turn of history) {
-        contents.push({
-          role: turn.sender === "user" ? "user" : "model",
-          parts: [{ text: turn.text }]
+      }
+    });
+  }
+  app2.post("/api/chat", chatLimiter, async (req, res) => {
+    try {
+      const rawMessage = req.body?.message;
+      const history = req.body?.history;
+      const message = typeof rawMessage === "string" ? rawMessage.trim().slice(0, 1500) : "";
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+      const currentApiKey = process.env.GEMINI_API_KEY;
+      if (!ai && currentApiKey) {
+        ai = new GoogleGenAI({
+          apiKey: currentApiKey,
+          httpOptions: {
+            headers: {
+              "User-Agent": "aistudio-build"
+            }
+          }
         });
       }
-    }
-    contents.push({
-      role: "user",
-      parts: [{ text: message }]
-    });
-    const systemInstruction = `You are "AI Clipzone Assistant" \u{1F916}, a helpful, incredibly smart, and friendly customer support representative for "AI Clipzone Nepal", Nepal's premier online AI Academy.
-
-Your primary goal is to assist prospective students, answer inquiries, explain course contents, and provide clear details about purchasing and access.
-
-Here is your exact, accurate source-of-truth knowledge base. ONLY share information compatible with this:
+      if (!ai) {
+        return res.json({
+          reply: "\u0928\u092E\u0938\u094D\u0924\u0947! \u{1F64F} HamroLms \u092E\u093E \u092F\u0939\u093E\u0901\u0932\u093E\u0908 \u0938\u094D\u0935\u093E\u0917\u0924 \u091B\u0964 \u0939\u093E\u092E\u094D\u0930\u093E \u092A\u094D\u0930\u093F\u092E\u093F\u092F\u092E \u0915\u094B\u0930\u094D\u0937\u0939\u0930\u0942 (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, \u0935\u093E eSewa \u092D\u0941\u0915\u094D\u0924\u093E\u0928\u0940 \u0938\u092E\u094D\u092C\u0928\u094D\u0927\u0940 \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0938\u093F\u0927\u0948 \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964"
+        });
+      }
+      const contents = [];
+      if (Array.isArray(history)) {
+        for (const turn of history.slice(-10)) {
+          const text = typeof turn?.text === "string" ? turn.text.trim().slice(0, 1500) : "";
+          if (!text) continue;
+          contents.push({
+            role: turn.sender === "user" ? "user" : "model",
+            parts: [{ text }]
+          });
+        }
+      }
+      contents.push({
+        role: "user",
+        parts: [{ text: message }]
+      });
+      const systemInstruction = `You are "HamroLms Assistant" \u{1F916}, a helpful, smart, and friendly customer support representative for "HamroLms", Nepal's premier online AI & Digital Skills Academy.
 
 Our Course Catalog:
-1. "AI Master Class by AI Clipzone" \u2014 Rs. 449 (Hindi & Nepali, Best Seller, covers 30+ AI Tools, Midjourney, Runway, ElevenLabs, ChatGPT, voice cloning, animations).
-2. "AI Video, Image & Song Creation" \u2014 Rs. 350 (Nepali, covers realistic avatar video creation, text-to-video, Suno, Udio, CapCut).
-3. "AI Song Creation Course" \u2014 Rs. 299 (Nepali/Hindi, covers Suno v3/v4, lyrics creation, voice cloning, mixing & mastering, launching songs).
-4. "AI Presentation Making Course" \u2014 Rs. 199 (Nepali/Hindi, covers Gamma App, Tome, PowerPoint AI, creating animated professional presentation slide decks).
-5. "YouTube Blueprint Course" \u2014 Rs. 549 (Hindi & Nepali, covers YouTube growth, niche selection, editing, monetization, and AI automation).
-
-Important Core Selling Points (HIGHLIGHT THESE):
-- Recorded lectures (Watch anytime, anywhere) plus Live Interactive Classes for courses with live sessions enabled.
-- Professional Completion Certificate for every course with student name & unique verification code.
-- 24/7 dedicated student help and premium support via WhatsApp.
+1. "AI Master Class by HamroLms" \u2014 Rs. 449
+2. "AI Video, Image & Song Creation" \u2014 Rs. 350
+3. "AI Song Creation Course" \u2014 Rs. 299
+4. "AI Presentation Making Course" \u2014 Rs. 199
+5. "YouTube Blueprint Course" \u2014 Rs. 549
 
 Payment & Activation Flow:
 - Payment Modes: eSewa (9763323268 - Ayush Chaurasiya), Khalti, IME Pay, Bank Transfer.
-- Scan QR: Users can click "Pay & Join Now" on any card to scan the official FonePay QR code.
-- Activation: Once paid, students MUST send a screenshot of the payment transaction to our official WhatsApp support number: 976-3323268 (or +977 9763323268) to receive instant course credentials and secret activation code.
+- Activation: Send payment screenshot to official WhatsApp 976-3323268 to receive instant course activation code.
+- Live Classes are available inside the website classroom for live-enabled courses; recorded courses include completion certificates.
 
-Tone and Language Guidelines:
-- Respond in the language of the user. If they write in Nepali, reply in warm, respectful Nepali (using Unicode or Romanized/English mixed words). If they write in English, reply in English.
-- Keep responses relatively concise, exciting, and structured. Use formatting (bullet points, bold text) to make replies beautiful.
-- Keep the tone polite, optimistic, and encouraging. Never invent mock courses, mock links, or fake pricing.`;
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-        maxOutputTokens: 800
-      }
-    });
-    const replyText = response.text || "\u0925\u092A \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0915\u0943\u092A\u092F\u093E \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964";
-    res.json({ reply: replyText });
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    res.json({
-      reply: "\u0928\u092E\u0938\u094D\u0924\u0947! \u{1F64F} AI Clipzone Nepal \u092E\u093E \u092F\u0939\u093E\u0901\u0932\u093E\u0908 \u0938\u094D\u0935\u093E\u0917\u0924 \u091B\u0964 \u0939\u093E\u092E\u094D\u0930\u093E \u092A\u094D\u0930\u093F\u092E\u093F\u092F\u092E \u0915\u094B\u0930\u094D\u0937\u0939\u0930\u0942 (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, \u0935\u093E eSewa \u092D\u0941\u0915\u094D\u0924\u093E\u0928\u0940 \u0938\u092E\u094D\u092C\u0928\u094D\u0927\u0940 \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0938\u093F\u0927\u0948 \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964"
-    });
-  }
-});
+Respond concisely and politely in the user's language (Nepali or English).`;
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          maxOutputTokens: 800
+        }
+      });
+      const replyText = response.text || "\u0925\u092A \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0915\u0943\u092A\u092F\u093E \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964";
+      res.json({ reply: replyText });
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      res.json({
+        reply: "\u0928\u092E\u0938\u094D\u0924\u0947! \u{1F64F} HamroLms \u092E\u093E \u092F\u0939\u093E\u0901\u0932\u093E\u0908 \u0938\u094D\u0935\u093E\u0917\u0924 \u091B\u0964 \u0939\u093E\u092E\u094D\u0930\u093E \u092A\u094D\u0930\u093F\u092E\u093F\u092F\u092E \u0915\u094B\u0930\u094D\u0937\u0939\u0930\u0942 (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, \u0935\u093E eSewa \u092D\u0941\u0915\u094D\u0924\u093E\u0928\u0940 \u0938\u092E\u094D\u092C\u0928\u094D\u0927\u0940 \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0938\u093F\u0927\u0948 \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964"
+      });
+    }
+  });
+}
+
+// server/vercelApp.ts
+dotenv.config();
+var app = express3();
+app.disable("x-powered-by");
+mountSharedApiMiddlewareAndRoutes(app);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API endpoint not found" });
 });

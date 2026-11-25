@@ -70,7 +70,7 @@ import {
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl, normalizeLegacyBrandText } from './data';
-import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey } from './types';
+import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey, SupportedLocale } from './types';
 import { collection, getDocs, getDocsFromServer, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -84,6 +84,15 @@ import { NotificationPromptModal } from './components/NotificationPromptModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './components/LiveSessionsPanel';
 import { CourseEnrollPage } from './components/CourseEnrollPage';
+import { CourseDetailView } from './components/CourseDetailView';
+import { InstructorsView } from './components/InstructorsView';
+import { BlogView } from './components/BlogView';
+import { HomePlatformOverviewSection, PrivacyPolicyView, TermsOfUseView, NotFoundView } from './components/PublicPagesView';
+import { buildPublicInstructors, resolveCourseInstructor } from './data/instructors';
+import { BLOG_POSTS, findBlogPostBySlug } from './data/blogArticles';
+import { getLocaleDict } from './utils/i18n';
+import { AppView, parsePathnameToRoute, buildLocalizedPath, getCourseSlug, findCourseBySlug, slugifyText } from './utils/seoRouting';
+import { buildOrganizationSchema, buildWebsiteSchema, buildBreadcrumbSchema, buildCourseSchema, buildCourseItemListSchema, buildPersonSchema, buildArticleSchema } from './utils/seoSchema';
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 import { compressImageFile, estimateJsonByteSize } from './utils/chatMedia';
@@ -3971,10 +3980,71 @@ export default function App() {
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'classroom' | 'course-live' | 'live' | 'ask' | 'account' | 'enroll'>('home');
+
+  const initialParsedRoute = useMemo(
+    () => parsePathnameToRoute(typeof window !== 'undefined' ? window.location.pathname : '/'),
+    []
+  );
+  const [activeLocale, setActiveLocale] = useState<SupportedLocale>(initialParsedRoute.locale);
+  const [routeSlug, setRouteSlug] = useState<string | undefined>(initialParsedRoute.slug);
+  const [routeCategory, setRouteCategory] = useState<string | undefined>(initialParsedRoute.category);
+  const [currentView, setCurrentView] = useState<AppView>(initialParsedRoute.view);
   const [isAskChatOpen, setIsAskChatOpen] = useState(false);
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
   const [selectedLiveCourseId, setSelectedLiveCourseId] = useState<string | null>(null);
+
+  const navigateToPath = useCallback(
+    (cleanPath: string, targetLocale?: SupportedLocale) => {
+      const nextLocale = targetLocale ?? activeLocale;
+      const targetUrl = buildLocalizedPath(cleanPath, nextLocale);
+      const parsed = parsePathnameToRoute(targetUrl);
+      if (typeof window !== 'undefined' && window.location.pathname !== targetUrl) {
+        window.history.pushState({}, '', targetUrl);
+      }
+      setActiveLocale(parsed.locale);
+      setRouteSlug(parsed.slug);
+      setRouteCategory(parsed.category);
+      setCurrentView(parsed.view);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
+    [activeLocale]
+  );
+
+  const switchLocale = useCallback(
+    (nextLocale: SupportedLocale) => {
+      const currentPath =
+        typeof window !== 'undefined'
+          ? parsePathnameToRoute(window.location.pathname).cleanPathWithoutLocale
+          : '/';
+      navigateToPath(currentPath, nextLocale);
+    },
+    [navigateToPath]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      const parsed = parsePathnameToRoute(window.location.pathname);
+      setActiveLocale(parsed.locale);
+      setRouteSlug(parsed.slug);
+      setRouteCategory(parsed.category);
+      setCurrentView(parsed.view);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const publicCatalogCourses = useMemo(() => {
+    if (courses && courses.length > 0) return courses;
+    return COURSES.filter((c) => !deletedCourseIds.includes(c.id));
+  }, [courses, deletedCourseIds]);
+
+  const publicInstructors = useMemo(
+    () => buildPublicInstructors(publicCatalogCourses, activeSubAdmins),
+    [publicCatalogCourses, activeSubAdmins]
+  );
 
   useEffect(() => {
     if (currentView !== 'ask') {
@@ -5474,36 +5544,180 @@ export default function App() {
     showToast('Payment confirmation message sent on WhatsApp!', 'success');
   };
 
-  // Dynamic SPA SEO metadata, canonical URL, and live Firestore JSON-LD sync
+  // Dynamic SPA SEO metadata, canonical URL, hreflang alternates, robots directives, and Schema.org JSON-LD sync
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
-    const brand = siteSettings.instituteName?.trim() || 'HamroLms';
-    const origin = window.location.origin;
-    const cleanPath = window.location.pathname === '/index.html' ? '/' : window.location.pathname;
-    const canonicalUrl = `${origin}${cleanPath}`;
+    const brand = 'Hamro LMS';
+    const supportEmail = siteSettings.supportEmail || 'support.hamrolms@gmail.com';
+    const origin =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? window.location.origin
+        : 'https://hamrolms.vercel.app';
+    const rawPathname = window.location.pathname === '/index.html' ? '/' : window.location.pathname;
+    const parsedRoute = parsePathnameToRoute(rawPathname);
+    const dict = getLocaleDict(activeLocale);
 
-    let pageTitle = `${brand} – Online Learning & AI Courses in Nepal`;
-    let pageDescription = `Learn AI tools, video editing, graphic design & web development in Nepal with lifetime access and verified certificates on ${brand}. Enroll today!`;
+    let pageTitle = dict.seoHomeTitle;
+    let pageDescription = dict.seoHomeDescription;
+    let robotsDirective = parsedRoute.isPublicIndexable
+      ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+      : 'noindex, nofollow';
+    let isRoute404 = parsedRoute.view === 'not-found';
+    let ogImage = `${origin}/institute-logo.png`;
+    let ogType = 'website';
 
-    if (currentView === 'enroll' && enrollCourse) {
+    const breadcrumbItems: Array<{ name: string; url: string }> = [
+      { name: 'Home', url: `${origin}${buildLocalizedPath('/', activeLocale)}` },
+    ];
+    const extraSchemas: Record<string, any>[] = [];
+
+    if (currentView === 'course-detail') {
+      const targetCourse = findCourseBySlug(publicCatalogCourses, routeSlug);
+      if (!targetCourse) {
+        if (!isCoursesLoading) {
+          isRoute404 = true;
+          pageTitle = `${dict.notFoundTitle} | ${brand}`;
+          pageDescription = dict.notFoundDescription;
+          robotsDirective = 'noindex, nofollow';
+        }
+      } else {
+        const cSlug = getCourseSlug(targetCourse);
+        const courseUrl = `${origin}${buildLocalizedPath(`/courses/${cSlug}`, activeLocale)}`;
+        const instructor = resolveCourseInstructor(targetCourse, publicInstructors);
+        pageTitle = targetCourse.seoTitle?.trim() || `${targetCourse.title} | ${brand}`;
+        pageDescription =
+          targetCourse.seoDescription?.trim() ||
+          targetCourse.overview?.trim() ||
+          `Enroll in ${targetCourse.title} on ${brand} Nepal. ${targetCourse.learn.slice(0, 3).join(', ')}.`;
+        if (targetCourse.image && targetCourse.image.startsWith('http')) {
+          ogImage = targetCourse.image;
+        }
+        breadcrumbItems.push({ name: targetCourse.title, url: courseUrl });
+        extraSchemas.push(buildCourseSchema(origin, brand, targetCourse, instructor, activeLocale));
+      }
+    } else if (currentView === 'instructors') {
+      pageTitle = dict.seoInstructorsTitle;
+      pageDescription = dict.seoInstructorsDescription;
+      breadcrumbItems.push({
+        name: dict.instructorsNav,
+        url: `${origin}${buildLocalizedPath('/instructors', activeLocale)}`,
+      });
+    } else if (currentView === 'instructor-detail') {
+      const instSlug = slugifyText(routeSlug || '');
+      const inst = publicInstructors.find((i) => i.slug === instSlug);
+      if (!inst) {
+        isRoute404 = true;
+        pageTitle = `${dict.notFoundTitle} | ${brand}`;
+        pageDescription = dict.notFoundDescription;
+        robotsDirective = 'noindex, nofollow';
+      } else {
+        const instUrl = `${origin}${buildLocalizedPath(`/instructors/${inst.slug}`, activeLocale)}`;
+        pageTitle = `${inst.name} – ${inst.role} | ${brand}`;
+        pageDescription = inst.bio;
+        breadcrumbItems.push(
+          { name: dict.instructorsNav, url: `${origin}${buildLocalizedPath('/instructors', activeLocale)}` },
+          { name: inst.name, url: instUrl }
+        );
+        extraSchemas.push(buildPersonSchema(origin, inst, activeLocale));
+      }
+    } else if (currentView === 'blog') {
+      const blogBaseUrl = `${origin}${buildLocalizedPath('/blog', activeLocale)}`;
+      breadcrumbItems.push({ name: dict.blogNav, url: blogBaseUrl });
+      if (routeCategory) {
+        const matched = BLOG_POSTS.find(
+          (p) => slugifyText(p.category) === slugifyText(routeCategory)
+        );
+        if (!matched) {
+          isRoute404 = true;
+          pageTitle = `${dict.notFoundTitle} | ${brand}`;
+          pageDescription = dict.notFoundDescription;
+          robotsDirective = 'noindex, nofollow';
+        } else {
+          pageTitle = `${matched.category} Guides & Articles | ${brand}`;
+          pageDescription = `Read practical ${matched.category} guides, AI training workflows, and creator tutorials on ${brand} Nepal.`;
+          breadcrumbItems.push({
+            name: matched.category,
+            url: `${origin}${buildLocalizedPath(`/blog/category/${slugifyText(matched.category)}`, activeLocale)}`,
+          });
+        }
+      } else {
+        pageTitle = dict.seoBlogTitle;
+        pageDescription = dict.seoBlogDescription;
+      }
+    } else if (currentView === 'blog-detail') {
+      const post = findBlogPostBySlug(BLOG_POSTS, routeSlug);
+      if (!post) {
+        isRoute404 = true;
+        pageTitle = `${dict.notFoundTitle} | ${brand}`;
+        pageDescription = dict.notFoundDescription;
+        robotsDirective = 'noindex, nofollow';
+      } else {
+        const author =
+          publicInstructors.find((i) => i.slug === post.authorSlug) || publicInstructors[0];
+        const postUrl = `${origin}${buildLocalizedPath(`/blog/${post.slug}`, activeLocale)}`;
+        pageTitle = post.seoTitle || `${post.title} | ${brand}`;
+        pageDescription = post.seoDescription || post.excerpt;
+        ogType = 'article';
+        breadcrumbItems.push(
+          { name: dict.blogNav, url: `${origin}${buildLocalizedPath('/blog', activeLocale)}` },
+          { name: post.title, url: postUrl }
+        );
+        if (author) {
+          extraSchemas.push(buildArticleSchema(origin, brand, post, author, activeLocale));
+        }
+      }
+    } else if (currentView === 'privacy-policy') {
+      pageTitle = `Privacy Policy | ${brand}`;
+      pageDescription = `Read how ${brand} protects learner privacy, course credentials, and account security across our online learning platform in Nepal.`;
+      breadcrumbItems.push({
+        name: 'Privacy Policy',
+        url: `${origin}${buildLocalizedPath('/privacy-policy', activeLocale)}`,
+      });
+    } else if (currentView === 'terms') {
+      pageTitle = `Terms of Use | ${brand}`;
+      pageDescription = `Review ${brand} online learning platform terms of use, course licensing, and enrollment guidelines.`;
+      breadcrumbItems.push({
+        name: 'Terms of Use',
+        url: `${origin}${buildLocalizedPath('/terms', activeLocale)}`,
+      });
+    } else if (currentView === 'enroll' && enrollCourse) {
       const priceLabel = isCourseFree(enrollCourse) ? 'Free' : (enrollCourse.price || 'Affordable');
       pageTitle = `Enroll: ${enrollCourse.title} | ${brand}`.slice(0, 60);
-      pageDescription = `Enroll in ${enrollCourse.title} (${priceLabel}) on ${brand} Nepal. Get instant course access, practical lessons, and a verified completion certificate.`;
+      pageDescription = `Enroll in ${enrollCourse.title} (${priceLabel}) on ${brand} Nepal. Get instant course access and structured lessons.`;
+      robotsDirective = 'noindex, nofollow';
     } else if (currentView === 'classroom') {
       pageTitle = `Student Classroom & Video Lectures | ${brand}`.slice(0, 60);
-      pageDescription = `Watch your unlocked HD video lectures, download PDF study notes, and earn verified digital certificates inside the ${brand} online classroom.`;
+      pageDescription = `Watch your unlocked HD video lectures, download PDF study notes, and earn certificates inside the ${brand} online classroom.`;
+      robotsDirective = 'noindex, nofollow';
     } else if (currentView === 'account') {
       pageTitle = `Student Profile & Course Activation | ${brand}`.slice(0, 60);
-      pageDescription = `Activate your course secret key, manage your student profile, and access your verified certificates on ${brand} Nepal.`;
+      pageDescription = `Activate your course secret key, manage your student profile, and access your certificates on ${brand} Nepal.`;
+      robotsDirective = 'noindex, nofollow';
     } else if (currentView === 'ask') {
       pageTitle = `Mentor Support & Course Chat | ${brand}`.slice(0, 60);
-      pageDescription = `Connect directly with your ${brand} course mentors and instructors for instant help, feedback, and learning guidance.`;
+      pageDescription = `Connect directly with your ${brand} course mentors and instructors for help and learning guidance.`;
+      robotsDirective = 'noindex, nofollow';
     } else if (currentView === 'live' || currentView === 'course-live') {
       pageTitle = `Live Interactive Sessions | ${brand}`.slice(0, 60);
       pageDescription = `Join scheduled live mentoring sessions and interactive Q&A workshops for your enrolled courses on ${brand}.`;
+      robotsDirective = 'noindex, nofollow';
+    } else if (currentView === 'not-found' || currentView === 'delete-account') {
+      pageTitle = currentView === 'delete-account' ? `Account Help | ${brand}` : `${dict.notFoundTitle} | ${brand}`;
+      pageDescription = dict.notFoundDescription;
+      robotsDirective = 'noindex, nofollow';
+    } else {
+      extraSchemas.push(
+        buildCourseItemListSchema(origin, brand, publicCatalogCourses, publicInstructors, activeLocale)
+      );
     }
 
+    const canonicalPath = isRoute404
+      ? rawPathname
+      : buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, activeLocale);
+    const canonicalUrl = `${origin}${canonicalPath}`;
+
+    document.documentElement.lang = dict.htmlLang;
     document.title = pageTitle;
 
     const setMetaTag = (attr: 'name' | 'property', key: string, content: string) => {
@@ -5518,12 +5732,20 @@ export default function App() {
 
     setMetaTag('name', 'title', pageTitle);
     setMetaTag('name', 'description', pageDescription);
+    setMetaTag('name', 'robots', robotsDirective);
+    setMetaTag('name', 'googlebot', robotsDirective);
+    setMetaTag('name', 'bingbot', robotsDirective);
+    setMetaTag('property', 'og:type', ogType);
     setMetaTag('property', 'og:title', pageTitle);
     setMetaTag('property', 'og:description', pageDescription);
     setMetaTag('property', 'og:url', canonicalUrl);
+    setMetaTag('property', 'og:image', ogImage);
+    setMetaTag('property', 'og:site_name', brand);
+    setMetaTag('property', 'og:locale', dict.ogLocale);
     setMetaTag('name', 'twitter:title', pageTitle);
     setMetaTag('name', 'twitter:description', pageDescription);
     setMetaTag('name', 'twitter:url', canonicalUrl);
+    setMetaTag('name', 'twitter:image', ogImage);
 
     let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!canonicalLink) {
@@ -5533,56 +5755,32 @@ export default function App() {
     }
     canonicalLink.setAttribute('href', canonicalUrl);
 
-    // Live Course Catalog & FAQ structured data synced from Firestore
-    const liveCoursesList = (courses || []).slice(0, 20).map((course, idx) => {
-      const free = isCourseFree(course);
-      const parsedNumericPrice = free
-        ? 0
-        : Number(course.amount ?? String(course.price || '').replace(/[^\d.]/g, '')) || 0;
-      const summary =
-        course.learn && course.learn.length > 0
-          ? `${course.title} on ${brand}: ${course.learn.slice(0, 4).join(', ')}.`
-          : `Learn ${course.title} online with lifetime access and certificate on ${brand}.`;
+    // Sync hreflang alternates for indexable public pages
+    document.querySelectorAll('link[rel="alternate"][hreflang]').forEach((node) => node.remove());
+    if (!isRoute404 && parsedRoute.isPublicIndexable) {
+      const locales: SupportedLocale[] = ['en', 'ne', 'hi'];
+      locales.forEach((loc) => {
+        const link = document.createElement('link');
+        link.rel = 'alternate';
+        link.hreflang = loc;
+        link.href = `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, loc)}`;
+        document.head.appendChild(link);
+      });
+      const xDefault = document.createElement('link');
+      xDefault.rel = 'alternate';
+      xDefault.hreflang = 'x-default';
+      xDefault.href = `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, 'en')}`;
+      document.head.appendChild(xDefault);
+    }
 
-      return {
-        '@type': 'ListItem',
-        position: idx + 1,
-        item: {
-          '@type': 'Course',
-          name: course.title,
-          description: summary,
-          url: `${origin}/#course-card-${encodeURIComponent(course.id)}`,
-          image: course.image || `${origin}/institute-logo.png`,
-          provider: {
-            '@type': 'EducationalOrganization',
-            name: brand,
-            url: `${origin}/`,
-          },
-          inLanguage: course.language ? [course.language] : ['ne', 'en'],
-          educationalCredentialAwarded:
-            course.includeCertificate !== false ? 'Certificate of Completion' : undefined,
-          offers: {
-            '@type': 'Offer',
-            category: free ? 'Free' : 'Paid',
-            priceCurrency: 'NPR',
-            price: parsedNumericPrice,
-            availability: 'https://schema.org/InStock',
-            url: `${origin}/`,
-          },
-          hasCourseInstance: {
-            '@type': 'CourseInstance',
-            courseMode: course.includeLive ? 'Blended' : 'Online',
-          },
-        },
-      };
-    });
-
-    const dynamicSchema = {
+    const dynamicGraph = {
       '@context': 'https://schema.org',
-      '@type': 'ItemList',
-      name: `${brand} Live Course Catalog`,
-      numberOfItems: liveCoursesList.length,
-      itemListElement: liveCoursesList,
+      '@graph': [
+        buildOrganizationSchema(origin, brand, supportEmail),
+        buildWebsiteSchema(origin, brand, activeLocale),
+        buildBreadcrumbSchema(breadcrumbItems),
+        ...extraSchemas,
+      ],
     };
 
     let ldScript = document.getElementById('dynamic-hamrolms-jsonld') as HTMLScriptElement | null;
@@ -5592,8 +5790,18 @@ export default function App() {
       ldScript.type = 'application/ld+json';
       document.head.appendChild(ldScript);
     }
-    ldScript.textContent = JSON.stringify(dynamicSchema);
-  }, [currentView, enrollCourse, siteSettings.instituteName, courses]);
+    ldScript.textContent = JSON.stringify(dynamicGraph);
+  }, [
+    currentView,
+    activeLocale,
+    routeSlug,
+    routeCategory,
+    enrollCourse,
+    siteSettings.supportEmail,
+    publicCatalogCourses,
+    publicInstructors,
+    isCoursesLoading,
+  ]);
 
   return (
     <div className={`${currentView === 'ask' && isCourseActiveUser ? 'h-[100dvh] overflow-hidden pb-0' : currentView === 'enroll' && enrollCourse ? 'min-h-screen overflow-x-hidden pb-0' : 'min-h-screen overflow-x-hidden justify-between pb-20'} bg-black text-zinc-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col relative`}>
@@ -5649,11 +5857,10 @@ export default function App() {
                   setShowAdminDashboard(true);
                   return;
                 }
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                navigateToPath('/');
               }}
               className="flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
-              title="HamroLms - Home"
+              title="Hamro LMS - Home"
             >
               {/* Institute Official Logo */}
               <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
@@ -5744,10 +5951,7 @@ export default function App() {
                                   setCurrentView('classroom');
                                   showToast(`Opened ${c.title}! 🎓`, 'success');
                                 } else {
-                                  setCurrentView('home');
-                                  setTimeout(() => {
-                                    document.getElementById(`course-card-${c.id}`)?.scrollIntoView({ behavior: 'smooth' });
-                                  }, 100);
+                                  navigateToPath(`/courses/${getCourseSlug(c)}`);
                                 }
                               }}
                               className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-zinc-900/90 transition cursor-pointer group text-left"
@@ -5860,8 +6064,7 @@ export default function App() {
             }
             onBack={() => {
               setEnrollCourse(null);
-              setCurrentView('home');
-              window.scrollTo({ top: 0, behavior: 'auto' });
+              navigateToPath('/');
             }}
             onFreeEnrollComplete={handleFreeEnrollComplete}
             showToast={showToast}
@@ -6055,6 +6258,109 @@ export default function App() {
               onChatOpenChange={setIsAskChatOpen}
             />
           </section>
+        ) : currentView === 'course-detail' ? (
+          (() => {
+            const targetCourse = findCourseBySlug(publicCatalogCourses, routeSlug);
+            if (!targetCourse) {
+              return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
+            }
+            const instructor = resolveCourseInstructor(targetCourse, publicInstructors);
+            const relatedPosts = BLOG_POSTS.filter((p) => p.relatedCourseIds.includes(targetCourse.id));
+            return (
+              <CourseDetailView
+                course={targetCourse}
+                allCourses={publicCatalogCourses}
+                instructor={instructor}
+                relatedPosts={relatedPosts}
+                locale={activeLocale}
+                isEnrolled={activeCourseIds.includes(targetCourse.id)}
+                isCourseFree={isCourseFree(targetCourse)}
+                onNavigatePath={navigateToPath}
+                onEnrollCourse={handleEnrollCourse}
+                onGoToClassroom={(courseId) => {
+                  setSelectedClassroomCourseId(courseId);
+                  navigateToPath('/classroom');
+                }}
+              />
+            );
+          })()
+        ) : currentView === 'instructors' ? (
+          <InstructorsView
+            instructors={publicInstructors}
+            courses={publicCatalogCourses}
+            posts={BLOG_POSTS}
+            locale={activeLocale}
+            onNavigatePath={navigateToPath}
+          />
+        ) : currentView === 'instructor-detail' ? (
+          (() => {
+            const inst = publicInstructors.find((i) => i.slug === slugifyText(routeSlug || ''));
+            if (!inst) {
+              return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
+            }
+            return (
+              <InstructorsView
+                instructors={publicInstructors}
+                selectedInstructor={inst}
+                courses={publicCatalogCourses}
+                posts={BLOG_POSTS}
+                locale={activeLocale}
+                onNavigatePath={navigateToPath}
+              />
+            );
+          })()
+        ) : currentView === 'blog' ? (
+          (() => {
+            if (routeCategory) {
+              const matched = BLOG_POSTS.find(
+                (p) => slugifyText(p.category) === slugifyText(routeCategory)
+              );
+              if (!matched) {
+                return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
+              }
+            }
+            return (
+              <BlogView
+                posts={BLOG_POSTS}
+                initialCategory={routeCategory}
+                instructors={publicInstructors}
+                courses={publicCatalogCourses}
+                locale={activeLocale}
+                onNavigatePath={navigateToPath}
+              />
+            );
+          })()
+        ) : currentView === 'blog-detail' ? (
+          (() => {
+            const post = findBlogPostBySlug(BLOG_POSTS, routeSlug);
+            if (!post) {
+              return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
+            }
+            return (
+              <BlogView
+                posts={BLOG_POSTS}
+                selectedPost={post}
+                instructors={publicInstructors}
+                courses={publicCatalogCourses}
+                locale={activeLocale}
+                onNavigatePath={navigateToPath}
+              />
+            );
+          })()
+        ) : currentView === 'privacy-policy' ? (
+          <PrivacyPolicyView
+            locale={activeLocale}
+            supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+            onNavigatePath={navigateToPath}
+          />
+        ) : currentView === 'terms' ? (
+          <TermsOfUseView
+            locale={activeLocale}
+            supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+            onNavigatePath={navigateToPath}
+          />
+        ) : currentView === 'not-found' || currentView === 'delete-account' ? (
+          <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />
         ) : currentView === 'account' ? (
           <section id="account-full-view" className="w-full max-w-3xl mx-auto space-y-5 pb-20 pt-2">
 
@@ -6504,22 +6810,83 @@ export default function App() {
           <>
             {/* Course Catalog Title & Grid Section */}
             <section id="courses-section" className="pt-2 scroll-mt-24">
-              {currentView === 'home' && (
-                <div className="text-center mb-8">
-                  <h1 className="text-xl sm:text-2xl md:text-[26px] font-black tracking-tight inline-flex items-center justify-center gap-2.5">
-                    <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
-                      <BookOpen className="w-4 h-4 text-white" />
-                    </span>
-                    <span className="bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
-                      HamroLms
-                    </span>
-                  </h1>
-                  <div className="w-16 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-2 shadow-sm shadow-blue-500/50"></div>
-                  <p className="text-zinc-400 mt-2.5 text-xs sm:text-sm max-w-xl mx-auto font-medium">
-                    तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
-                  </p>
-                </div>
-              )}
+              {currentView === 'home' && (() => {
+                const dict = getLocaleDict(activeLocale);
+                return (
+                  <div className="text-center mb-8 space-y-4">
+                    <div>
+                      <h1 className="text-xl sm:text-2xl md:text-[28px] font-black tracking-tight inline-flex items-center justify-center gap-2.5">
+                        <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/25 shrink-0">
+                          <BookOpen className="w-4 h-4 text-white" />
+                        </span>
+                        <span className="bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
+                          Hamro LMS
+                        </span>
+                      </h1>
+                      <div className="w-16 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-600 mx-auto rounded-full mt-2 shadow-sm shadow-blue-500/50"></div>
+                      <p className="text-zinc-200 mt-3 text-sm sm:text-base font-bold max-w-2xl mx-auto">
+                        {dict.homeHeading}
+                      </p>
+                      <p className="text-zinc-400 mt-1.5 text-xs sm:text-sm max-w-2xl mx-auto font-medium leading-relaxed">
+                        {dict.homeCtaSubtitle}
+                      </p>
+                    </div>
+
+                    {/* Clean Crawlable Public Subpage & Language Navigation */}
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+                      <a
+                        href="#available-courses-heading"
+                        className="px-3.5 py-1.5 rounded-xl bg-blue-600/15 text-blue-300 border border-blue-500/30 font-bold hover:bg-blue-600/25 transition"
+                      >
+                        {dict.coursesNav}
+                      </a>
+                      <a
+                        href={buildLocalizedPath('/instructors', activeLocale)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigateToPath('/instructors');
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-zinc-900 text-zinc-200 border border-zinc-800 hover:border-blue-500/40 hover:text-white font-bold transition"
+                      >
+                        {dict.instructorsNav}
+                      </a>
+                      <a
+                        href={buildLocalizedPath('/blog', activeLocale)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigateToPath('/blog');
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-zinc-900 text-zinc-200 border border-zinc-800 hover:border-blue-500/40 hover:text-white font-bold transition"
+                      >
+                        {dict.blogNav}
+                      </a>
+                      <div className="inline-flex items-center rounded-xl bg-zinc-950 border border-zinc-800 p-0.5 ml-1" aria-label="Language switcher">
+                        {(['en', 'ne', 'hi'] as SupportedLocale[]).map((loc) => (
+                          <a
+                            key={loc}
+                            href={buildLocalizedPath('/', loc)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              switchLocale(loc);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                              activeLocale === loc
+                                ? 'bg-blue-600 text-white'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {loc === 'en' ? 'EN' : loc === 'ne' ? 'नेपाली' : 'हिन्दी'}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+
+                    <h2 id="available-courses-heading" className="text-lg sm:text-xl font-black text-white pt-2">
+                      Available Online Courses on Hamro LMS Nepal
+                    </h2>
+                  </div>
+                );
+              })()}
 
           {/* Courses Cards Grid or Live Embedded Classroom */}
           {currentView === 'classroom' ? (
@@ -7126,28 +7493,48 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Course Thumbnail Image */}
-                    <div className="relative aspect-video overflow-hidden bg-black">
+                    {/* Course Thumbnail Image linking cleanly to public SEO course detail page */}
+                    <a
+                      href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath(`/courses/${getCourseSlug(course)}`);
+                      }}
+                      className="relative aspect-video overflow-hidden bg-black block"
+                    >
                       <img 
                         src={course.image} 
-                        alt={`${course.title} – Online Course on HamroLms Nepal`}
+                        alt={`${course.title} – Online Course on Hamro LMS Nepal`}
                         loading={index > 1 ? 'lazy' : 'eager'}
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-end">
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between gap-2">
+                        <span className="bg-zinc-950/90 text-zinc-200 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-zinc-700/80">
+                          View Course Details →
+                        </span>
                         <span className="bg-blue-600 text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
                           Instant Delivery
                         </span>
                       </div>
-                    </div>
+                    </a>
 
                     {/* Course Info */}
                     <div className="p-6 md:p-8 flex flex-col grow justify-between">
                       <div className="text-left font-sans">
                         <h3 className="text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors">
-                          {course.title}
+                          <a
+                            href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateToPath(`/courses/${getCourseSlug(course)}`);
+                            }}
+                            className="hover:underline"
+                          >
+                            {course.title}
+                          </a>
                         </h3>
                         
                         {/* Prices or Active status badge */}
@@ -7352,32 +7739,117 @@ export default function App() {
           )}
         </section>
 
-            {/* Home Semantic Footer */}
+            {/* Home Semantic Overview, Student Benefits, Enrollment Steps, FAQs & Footer */}
             {currentView === 'home' && (
-              <footer className="mt-12 pt-8 pb-4 border-t border-zinc-900 text-center sm:text-left">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-zinc-400">
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-black text-white">{siteSettings.instituteName || 'HamroLms'}</p>
-                    <p className="leading-relaxed text-zinc-400">
-                      Practical online courses in AI tools, video editing, graphic design, YouTube growth, and web development across Nepal.
-                    </p>
+              <>
+                <HomePlatformOverviewSection
+                  courses={publicCatalogCourses}
+                  instructors={publicInstructors}
+                  faqs={faqs}
+                  locale={activeLocale}
+                  supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+                  onNavigatePath={navigateToPath}
+                />
+
+                <footer className="mt-12 pt-8 pb-4 border-t border-zinc-900 text-center sm:text-left">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-zinc-400">
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-black text-white">Hamro LMS</p>
+                      <p className="leading-relaxed text-zinc-400">
+                        Online learning platform in Nepal for AI tools, video editing, graphic design, creator growth, and practical digital skills.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Explore Platform</p>
+                      <ul className="space-y-1.5">
+                        <li>
+                          <a
+                            href={buildLocalizedPath('/', activeLocale)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateToPath('/');
+                            }}
+                            className="hover:text-blue-400 transition"
+                          >
+                            Online Courses Nepal
+                          </a>
+                        </li>
+                        <li>
+                          <a
+                            href={buildLocalizedPath('/instructors', activeLocale)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateToPath('/instructors');
+                            }}
+                            className="hover:text-blue-400 transition"
+                          >
+                            Teachers &amp; Instructors
+                          </a>
+                        </li>
+                        <li>
+                          <a
+                            href={buildLocalizedPath('/blog', activeLocale)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateToPath('/blog');
+                            }}
+                            className="hover:text-blue-400 transition"
+                          >
+                            Learning Blog &amp; AI Guides
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Trust &amp; Policies</p>
+                      <ul className="space-y-1.5">
+                        <li>
+                          <a
+                            href={buildLocalizedPath('/privacy-policy', activeLocale)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateToPath('/privacy-policy');
+                            }}
+                            className="hover:text-blue-400 transition"
+                          >
+                            Privacy Policy
+                          </a>
+                        </li>
+                        <li>
+                          <a
+                            href={buildLocalizedPath('/terms', activeLocale)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigateToPath('/terms');
+                            }}
+                            className="hover:text-blue-400 transition"
+                          >
+                            Terms of Use
+                          </a>
+                        </li>
+                        <li>Birgunj, Madhesh Province, Nepal</li>
+                      </ul>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Official Support</p>
+                      <p>
+                        Email:{' '}
+                        <a
+                          href={`mailto:${siteSettings.supportEmail || 'support.hamrolms@gmail.com'}`}
+                          className="text-blue-400 hover:underline"
+                        >
+                          {siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+                        </a>
+                      </p>
+                      <p>Portal: https://hamrolms.vercel.app/</p>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Location &amp; Credentials</p>
-                    <p>Birgunj, Madhesh Province, Nepal</p>
-                    <p>Verified QR Digital Certificates • Lifetime Access</p>
+                  <div className="mt-6 pt-4 border-t border-zinc-900/80 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
+                    <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-300">Official Support</p>
-                    <p>Email: {siteSettings.supportEmail || 'support.hamrolms@gmail.com'}</p>
-                    <p>Website: https://hamrolms.vercel.app/</p>
-                  </div>
-                </div>
-                <div className="mt-6 pt-4 border-t border-zinc-900/80 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-                  <span>© {new Date().getFullYear()} {siteSettings.instituteName || 'HamroLms'}. All rights reserved.</span>
-                  <span>Online Learning &amp; AI Skills Platform — Nepal</span>
-                </div>
-              </footer>
+                </footer>
+              </>
             )}
 
           </>
@@ -8670,7 +9142,7 @@ export default function App() {
                     required
                     value={formTitle}
                     onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="e.g. Dhruv Rathee YouTube Blueprint Course"
+                    placeholder="e.g. YouTube Blueprint Course by Hamro LMS"
                     className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600"
                   />
                 </div>
@@ -8775,7 +9247,7 @@ export default function App() {
                     type="text"
                     value={formMessage}
                     onChange={(e) => setFormMessage(e.target.value)}
-                    placeholder="e.g. I want to buy Dhruv Rathee YouTube Blueprint course"
+                    placeholder="e.g. I want to enroll in the YouTube Blueprint course"
                     className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-medium text-zinc-200 transition outline-hidden placeholder-zinc-600"
                   />
                 </div>
@@ -9729,11 +10201,10 @@ export default function App() {
             id="app-nav-home"
             onClick={() => {
               setShowProfileModal(false);
-              setCurrentView('home');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              navigateToPath('/');
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              currentView === 'home'
+              currentView === 'home' || currentView === 'course-detail' || currentView === 'instructors' || currentView === 'instructor-detail' || currentView === 'blog' || currentView === 'blog-detail'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
@@ -9747,8 +10218,7 @@ export default function App() {
             id="app-nav-classroom"
             onClick={() => {
               setShowProfileModal(false);
-              setCurrentView('classroom');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              navigateToPath('/classroom');
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 relative ${
               currentView === 'classroom' || currentView === 'course-live'
@@ -9839,8 +10309,7 @@ export default function App() {
             id="app-nav-profile"
             onClick={() => {
               setShowProfileModal(false);
-              setCurrentView('account');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              navigateToPath('/account');
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
               currentView === 'account'

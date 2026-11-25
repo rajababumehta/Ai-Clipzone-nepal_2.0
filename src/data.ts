@@ -41,9 +41,9 @@ export const normalizeLegacyBrandText = (val?: string): string => {
 };
 
 export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
-  siteTitle: "TOP AI COURSE NEPAL 🇳🇵",
-  siteTagline: "Nepal's #1  AI  course  & Learning Platform",
-  instituteName: "HamroLms",
+  siteTitle: "Hamro LMS – Online Courses & Learning Platform in Nepal",
+  siteTagline: "Nepal's Online Learning Platform & Multi-Instructor LMS",
+  instituteName: "Hamro LMS",
   instituteLogoUrl: "/logo.png",
   noticeBannerText: "🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount.",
   showNoticeBanner: false,
@@ -69,30 +69,38 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
 export const COURSES: Course[] = [
   {
     id: "Ai master class course by Ai clipzone",
-    title: "AI Master Class Course by HamroLms",
+    slug: "ai-master-class-course-by-hamrolms",
+    title: "AI Master Class Course by Hamro LMS",
+    seoTitle: "AI Master Class Course in Nepal – AI Training | Hamro LMS",
+    seoDescription: "Join the AI Master Class Course on Hamro LMS Nepal. Learn 30+ AI tools for video creation, image generation, AI music, presentations, and web design.",
+    overview: "A practical AI training course in Nepal covering 30+ generative AI tools for AI video creation, image generation, AI song production, presentation design, and website building.",
+    category: "AI Training Nepal",
+    level: "All Levels",
+    instructorSlug: "rajababu-mehta",
+    instructorName: "Rajababu Mehta",
     order: 0,
     price: "Rs. 449",
     amount: 449,
-    message: "I want to buy AI Master Class Course by HamroLms",
+    message: "I want to buy AI Master Class Course by Hamro LMS",
     learn: [
-      "30+ Al Tools Mastery",
-      "Al Video & Image Generation",
-      "Al Songs Creation",
+      "30+ AI Tools Mastery",
+      "AI Video & Image Generation",
+      "AI Songs Creation",
       "Presentation & Website Design"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png",
     isPopular: true,
     popularText: "🔥 MOST POPULAR - BEST SELLER",
-    language: "Hindi",
+    language: "Hindi & Nepali",
     videos: [
       {
         videoUrl: "https://youtu.be/QivoSbWmD9o?si=34&t=34",
         chapterTitle: "Chapter 1: Course Introduction",
-        title: "AI Master Class Full Course by HamroLms (2026 September 6)",
+        title: "AI Master Class Full Course by Hamro LMS (2026 September 6)",
         duration: "3:07:37"
       },
       {
-        title: "AI Master Class Full Course by HamroLms (2026 January)",
+        title: "AI Master Class Full Course by Hamro LMS (2026 January)",
         videoUrl: "https://youtu.be/EqbNaDUVdqA?si=A-5giAweE0pRsPPm",
         duration: "3:11:13",
         chapterTitle: "Chapter 1: Course Introduction"
@@ -115,11 +123,19 @@ export const COURSES: Course[] = [
   },
   {
     id: "youtube-blueprint-course-by-al-clipzone",
-    title: "YouTube Blueprint Course by HamroLms",
+    slug: "youtube-blueprint-course-by-hamrolms",
+    title: "YouTube Blueprint Course by Hamro LMS",
+    seoTitle: "YouTube Blueprint Course in Nepal – Creator Training | Hamro LMS",
+    seoDescription: "Learn YouTube channel setup, storytelling scripts, video editing, thumbnail design, and AI content workflows on Hamro LMS online learning platform in Nepal.",
+    overview: "Step-by-step creator training covering YouTube niche selection, script storytelling, high-retention editing, thumbnail strategy, growth systems, and AI-assisted content workflows.",
+    category: "Creator Growth",
+    level: "All Levels",
+    instructorSlug: "rajababu-mehta",
+    instructorName: "Rajababu Mehta",
     order: 1,
     price: "Rs. 849",
     amount: 849,
-    message: "I want to buy YouTube blue print course",
+    message: "I want to buy YouTube Blueprint Course by Hamro LMS",
     learn: [
       "Channel setup र niche छनोट",
       "Video idea खोज्ने तरिका",
@@ -128,12 +144,12 @@ export const COURSES: Course[] = [
       "Editing skills",
       "Thumbnail title",
       "YouTube growth strategy",
-      "Monetizationearning methods",
-      "Al tools प्रयोग गरेर content बनाउने  तरिका"
+      "Monetization earning methods",
+      "AI tools प्रयोग गरेर content बनाउने तरिका"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png",
     isPopular: false,
-    language: "Hindi",
+    language: "Hindi & Nepali",
     videos: [],
     pdfs: []
   }
@@ -144,7 +160,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Anamol Sharma",
     location: "Kathmandu",
     course: "AI Master Class",
-    text: "30+ AI tools एकै कोर्समा सिक्न पाउँदा धेरै फाइदा भयो। Dhruv Rathee style presentation ले मेरो काम अझ professional बनायो।",
+    text: "30+ AI tools एकै कोर्समा सिक्न पाउँदा धेरै फाइदा भयो। Studio-style presentation र practical workflows ले मेरो काम अझ professional बनायो।",
     avatar: "🧔",
     rating: 5
   },
