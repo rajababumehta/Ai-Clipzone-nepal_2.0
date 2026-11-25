@@ -31,6 +31,7 @@ export interface Course {
   includeLive?: boolean;
   includeCertificate?: boolean;
   hasLiveSessions?: boolean;
+  isHidden?: boolean;
   // Per-course Certificate Customization
   certificateTitle?: string;
   certificateSubtitle?: string;

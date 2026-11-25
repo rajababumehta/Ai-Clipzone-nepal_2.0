@@ -604,7 +604,7 @@ export async function fetchPublicCatalogSnapshot() {
       for (const docItem of docList) {
         const d = fromFirestoreDoc(docItem);
         const docId = String(docItem?.name?.split('/').pop() || d.id || '');
-        if (!docId || deletedIds.includes(docId)) continue;
+        if (!docId || deletedIds.includes(docId) || d.isHidden === true) continue;
         const normalizedTitle = normalizeLegacyBrandText(String(d.title || 'Course'))
           .replace(/\s+/g, ' ')
           .trim();

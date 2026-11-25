@@ -35,7 +35,9 @@ import {
   Clock,
   UserCheck,
   Camera,
-  Video
+  Video,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import { Course, FAQItem, PaymentQrConfig, SiteSettingsConfig, PushNotificationItem, SubAdminAccount, SubAdminPublicProfile, LiveSession } from '../types';
@@ -84,6 +86,7 @@ interface AdminDashboardModalProps {
   onDeleteCourseClick: (courseId: string) => Promise<void>;
   onBatchDeleteCourses?: (courseIds: string[]) => Promise<void>;
   onSaveCourse?: (course: Course) => Promise<void>;
+  onToggleCourseVisibility?: (course: Course) => Promise<void>;
   onMoveCourse?: (courseId: string, direction: 'up' | 'down') => Promise<void>;
   // Push Notifications
   notifications?: PushNotificationItem[];
@@ -137,6 +140,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onDeleteCourseClick,
   onBatchDeleteCourses,
   onSaveCourse,
+  onToggleCourseVisibility,
   onMoveCourse,
   notifications,
   onSendNotification,
@@ -1224,9 +1228,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       {isMainAdmin ? 'Select Course Catalog *' : 'Assigned Course (Locked) *'}
                     </label>
                     {isSubAdmin ? (
-                      <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-purple-900 flex items-center justify-between gap-2">
-                        <span className="truncate">🔒 {assignedCourse?.title || subAdminSession?.courseTitle || assignedCourseId}</span>
-                        <span className="text-[9px] bg-purple-200 text-purple-800 px-2 py-0.5 rounded-md uppercase shrink-0">Only This Course</span>
+                      <div className="space-y-1.5">
+                        <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-purple-900 flex items-center justify-between gap-2">
+                          <span className="truncate">🔒 {assignedCourse?.title || subAdminSession?.courseTitle || assignedCourseId}</span>
+                          <span className="text-[9px] bg-purple-200 text-purple-800 px-2 py-0.5 rounded-md uppercase shrink-0">Only This Course</span>
+                        </div>
+                        {assignedCourse?.isHidden && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-amber-800 flex items-center gap-1.5">
+                            <EyeOff className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                            <span>यो कोर्ष Home Screen बाट लुकाइएको छ, तर तपाईंले Student Code बनाएर विद्यार्थीलाई Enroll गराउन सक्नुहुन्छ।</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <select 
@@ -1236,7 +1248,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       >
                         <option value="">-- Choose Course --</option>
                         {courses.map(course => (
-                          <option key={course.id} value={course.id}>{course.title}</option>
+                          <option key={course.id} value={course.id}>
+                            {course.title}{course.isHidden ? ' (Hidden from Home)' : ''}
+                          </option>
                         ))}
                       </select>
                     )}
@@ -3214,6 +3228,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               📜 Certificate
                             </span>
                           ) : null}
+                          {course.isHidden && (
+                            <span className="text-amber-800 bg-amber-100 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-300 flex items-center gap-1">
+                              <EyeOff className="w-3 h-3" /> Hidden from Home
+                            </span>
+                          )}
                         </div>
                         <h5 className="text-xs font-black text-slate-900 truncate">
                           {course.title}
@@ -3273,6 +3292,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           >
                             <Edit3 className="w-3 h-3" /> Edit Course Details
                           </button>
+                          {isMainAdmin && onToggleCourseVisibility && (
+                            <button
+                              type="button"
+                              onClick={() => onToggleCourseVisibility(course)}
+                              className={`font-bold px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1 border ${
+                                course.isHidden
+                                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                              }`}
+                              title={course.isHidden ? 'Show this course on Home screen' : 'Hide this course from Home screen (Sub-Admin can still create codes)'}
+                            >
+                              {course.isHidden ? (
+                                <>
+                                  <Eye className="w-3 h-3" /> Show on Home
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="w-3 h-3" /> Hide from Home
+                                </>
+                              )}
+                            </button>
+                          )}
                           {isMainAdmin && (
                             <button
                               type="button"

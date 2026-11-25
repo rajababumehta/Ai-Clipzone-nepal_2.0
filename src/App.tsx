@@ -66,7 +66,9 @@ import {
   TrendingUp,
   Layers,
   Globe,
-  Cpu
+  Cpu,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl, normalizeLegacyBrandText } from './data';
@@ -816,6 +818,7 @@ export default function App() {
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
   const [formIncludeLive, setFormIncludeLive] = useState(false);
   const [formIncludeCertificate, setFormIncludeCertificate] = useState(true);
+  const [formIsHidden, setFormIsHidden] = useState(false);
   const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string; chapterTitle?: string }[]>([]);
@@ -3372,6 +3375,7 @@ export default function App() {
           ...updatedCourse,
           includeLive: existingCourse?.includeLive,
           includeCertificate: existingCourse?.includeCertificate,
+          isHidden: Boolean(existingCourse?.isHidden),
         };
     const cleaned = cleanUndefined(safeCourse);
     if (estimateJsonByteSize(cleaned) > 950 * 1024) {
@@ -3406,6 +3410,30 @@ export default function App() {
     } catch (err) {
       console.error('Error saving updated course to Firestore:', err);
       handleFirestoreError(err, OperationType.UPDATE, `courses/${updatedCourse.id}`);
+    }
+  };
+
+  // MAIN ADMIN ONLY: Hide or Unhide Course from Home & Public Screen
+  const handleToggleCourseVisibility = async (course: Course) => {
+    if (!isMainAdmin) {
+      showToast('केवल Main Admin ले मात्र कोर्ष Hide/Unhide गर्न सक्छ।', 'error');
+      return;
+    }
+    const nextHidden = !Boolean(course.isHidden);
+    try {
+      await handleSaveCourseDirect({
+        ...course,
+        isHidden: nextHidden,
+        updatedAt: Date.now(),
+      });
+      showToast(
+        nextHidden
+          ? `🙈 "${course.title}" Home स्क्रिनबाट लुकाइयो! (Sub-Admin ले अझै Student Code बनाउन सक्छ)`
+          : `👁️ "${course.title}" Home स्क्रिनमा पुन: देखाइयो!`,
+        nextHidden ? 'info' : 'success'
+      );
+    } catch (err) {
+      console.error('Error toggling course visibility:', err);
     }
   };
 
@@ -4037,8 +4065,8 @@ export default function App() {
   }, []);
 
   const publicCatalogCourses = useMemo(() => {
-    if (courses && courses.length > 0) return courses;
-    return COURSES.filter((c) => !deletedCourseIds.includes(c.id));
+    if (courses && courses.length > 0) return courses.filter((c) => !c.isHidden);
+    return COURSES.filter((c) => !deletedCourseIds.includes(c.id) && !c.isHidden);
   }, [courses, deletedCourseIds]);
 
   const publicInstructors = useMemo(
@@ -4263,11 +4291,17 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filtered courses for Home page based on Top Navigation search query
+  const hiddenCoursesCount = useMemo(
+    () => courses.filter((c) => Boolean(c.isHidden)).length,
+    [courses]
+  );
+
+  // Filtered courses for Home page based on Top Navigation search query (never exposes hidden courses)
   const filteredHomeCourses = useMemo(() => {
-    if (!courseSearchQuery.trim()) return courses;
+    const visibleCourses = courses.filter((c) => !c.isHidden);
+    if (!courseSearchQuery.trim()) return visibleCourses;
     const q = courseSearchQuery.toLowerCase().trim();
-    return courses.filter(c => 
+    return visibleCourses.filter(c => 
       c.title?.toLowerCase().includes(q) ||
       c.message?.toLowerCase().includes(q) ||
       c.popularText?.toLowerCase().includes(q) ||
@@ -4979,6 +5013,7 @@ export default function App() {
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
     setFormIncludeLive(Boolean(course.includeLive));
     setFormIncludeCertificate(course.includeCertificate !== false);
+    setFormIsHidden(Boolean(course.isHidden));
     setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
@@ -5005,6 +5040,7 @@ export default function App() {
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
     setFormIncludeLive(false);
     setFormIncludeCertificate(true);
+    setFormIsHidden(false);
     setFormLanguage('Hindi & Nepali');
     setFormLearnText('');
     setFormVideos([]);
@@ -5112,6 +5148,7 @@ export default function App() {
       // Strictly Main-Admin-only editable flags: Sub-Admins preserve existing values unchanged
       includeLive: isMainAdmin ? formIncludeLive : Boolean(editingCourse?.includeLive),
       includeCertificate: isMainAdmin ? formIncludeCertificate : (editingCourse?.includeCertificate ?? true),
+      isHidden: isMainAdmin ? formIsHidden : Boolean(editingCourse?.isHidden),
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos,
@@ -7186,6 +7223,28 @@ export default function App() {
           </div>
         ) : (courses && courses.length > 0) ? (
           <div>
+            {isMainAdmin && hiddenCoursesCount > 0 && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5 bg-amber-950/35 border border-amber-500/35 rounded-2xl px-4 py-2.5 text-xs text-amber-200 shadow-md">
+                <div className="flex items-center gap-2">
+                  <EyeOff className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    <strong className="font-black text-amber-300">{hiddenCoursesCount}</strong> {hiddenCoursesCount === 1 ? 'course is' : 'courses are'} currently hidden from the Home screen (Sub-Admins can still generate Student Codes).
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminInitialTab('courses');
+                    setShowAdminDashboard(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold px-3 py-1.5 rounded-xl transition cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Manage / Unhide in Admin
+                </button>
+              </div>
+            )}
+
             {courseSearchQuery.trim() && (
               <div className="mb-6 flex items-center justify-between bg-zinc-950 border border-blue-500/30 rounded-2xl px-4 py-3 text-xs text-zinc-300 shadow-md">
                 <div className="flex items-center gap-2">
@@ -7388,13 +7447,24 @@ export default function App() {
                               </button>
                             )}
                             {isMainAdmin && (
-                              <button
-                                onClick={() => handlePromptDeleteCourse(course.id)}
-                                className="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-rose-800"
-                                title="Delete Course"
-                              >
-                                🗑️
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCourseVisibility(course)}
+                                  className="bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-amber-700/70"
+                                  title="Hide Course from Home Screen"
+                                  aria-label="Hide course from Home screen"
+                                >
+                                  <EyeOff className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handlePromptDeleteCourse(course.id)}
+                                  className="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-rose-800"
+                                  title="Delete Course"
+                                >
+                                  🗑️
+                                </button>
+                              </>
                             )}
                           </div>
                         )}
@@ -7420,7 +7490,7 @@ export default function App() {
                 </motion.div>
               )}
               </div>
-            ) : (
+            ) : courseSearchQuery.trim() ? (
               <div className="py-16 text-center bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-lg mx-auto">
                 <Search className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
                 <h3 className="text-base font-bold text-white mb-1">कुनै कोर्ष भेटिएन</h3>
@@ -7431,6 +7501,38 @@ export default function App() {
                 >
                   सबै कोर्षहरू हेर्नुहोस् (View All Courses)
                 </button>
+              </div>
+            ) : (
+              <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-3xl p-10 md:p-14 text-center max-w-xl mx-auto shadow-2xl">
+                <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 text-blue-400 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-5 shadow-inner">
+                  🎓
+                </div>
+                <h4 className="text-xl font-black text-white font-sans">हाल कुनै पनि कोर्ष उपलब्ध छैन</h4>
+                <p className="text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
+                  नयाँ कोर्षहरू चाँडै उपलब्ध हुनेछन्। यदि तपाईंसँग Activation Code छ भने Course वा Profile ट्याबबाट कोर्ष खोल्न सक्नुहुन्छ।
+                </p>
+                {isMainAdmin && (
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    {hiddenCoursesCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminInitialTab('courses');
+                          setShowAdminDashboard(true);
+                        }}
+                        className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-5 py-3 rounded-2xl shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"
+                      >
+                        <Eye className="w-4 h-4" /> लुकाइएका कोर्षहरू हेर्नुहोस् ({hiddenCoursesCount})
+                      </button>
+                    )}
+                    <button
+                      onClick={handleCreateCourseClick}
+                      className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 cursor-pointer transition active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" /> नयाँ कोर्ष थप्नुहोस् (Add New Course)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -8356,6 +8458,7 @@ export default function App() {
         onBatchDeleteCourses={handleBatchDeleteCourses}
         onSaveCourse={handleSaveCourseDirect}
         onMoveCourse={handleMoveCourse}
+        onToggleCourseVisibility={handleToggleCourseVisibility}
         notifications={notifications}
         onSendNotification={handleSendNotification}
         onDeleteNotification={handleDeleteNotification}
@@ -9036,6 +9139,21 @@ export default function App() {
                         <span>📜 Include Course Certificate</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
                           Live Session सक्रिय नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 text-xs font-bold text-zinc-100 cursor-pointer select-none pt-1 border-t border-zinc-800">
+                      <input
+                        type="checkbox"
+                        checked={formIsHidden}
+                        onChange={(e) => setFormIsHidden(e.target.checked)}
+                        className="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 w-4 h-4 bg-black mt-0.5"
+                      />
+                      <div>
+                        <span>🙈 Hide Course from Home Screen (Private / Code-Only)</span>
+                        <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
+                          यो कोर्षको thumbnail, about र जानकारी Home मा देखिने छैन, तर Sub-Admin ले Student Code बनाउन र विद्यार्थीले Code बाट पढ्न सक्नेछन्।
                         </span>
                       </div>
                     </label>

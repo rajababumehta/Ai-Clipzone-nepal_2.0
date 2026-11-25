@@ -204,6 +204,10 @@
           "type": "boolean",
           "description": "Whether completion certificate is enabled for this course"
         },
+        "isHidden": {
+          "type": "boolean",
+          "description": "When true, Main Admin hides this course from the public Home screen while Sub-Admin can still generate student enrollment codes"
+        },
         "paymentConfig": {
           "type": "object",
           "description": "Optional per-course payment QR, eSewa, bank, and WhatsApp override"
