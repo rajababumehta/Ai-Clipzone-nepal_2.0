@@ -5729,7 +5729,12 @@ export default function App() {
                                   setCurrentView('classroom');
                                   showToast(`Opened ${c.title}! 🎓`, 'success');
                                 } else {
-                                  navigateToPath(`/courses/${getCourseSlug(c)}`);
+                                  if (currentView !== 'home') {
+                                    navigateToPath('/');
+                                  }
+                                  setTimeout(() => {
+                                    document.getElementById(`course-card-${c.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  }, 80);
                                 }
                               }}
                               className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-zinc-900/90 transition cursor-pointer group text-left"
@@ -7220,15 +7225,8 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Course Thumbnail Image linking cleanly to public SEO course detail page */}
-                    <a
-                      href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath(`/courses/${getCourseSlug(course)}`);
-                      }}
-                      className="relative aspect-video overflow-hidden bg-black block"
-                    >
+                    {/* Course Thumbnail Image */}
+                    <div className="relative aspect-video overflow-hidden bg-black">
                       <img 
                         src={course.image} 
                         alt={`${course.title} – Online Course on Hamro LMS Nepal`}
@@ -7243,22 +7241,13 @@ export default function App() {
                           Instant Delivery
                         </span>
                       </div>
-                    </a>
+                    </div>
 
                     {/* Course Info */}
                     <div className="p-4 sm:p-5 md:p-6 flex flex-col grow justify-between">
                       <div className="text-left font-sans">
                         <h3 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
-                          <a
-                            href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              navigateToPath(`/courses/${getCourseSlug(course)}`);
-                            }}
-                            className="hover:underline"
-                          >
-                            {course.title}
-                          </a>
+                          {course.title}
                         </h3>
                         
                         {/* Prices or Active status badge */}
