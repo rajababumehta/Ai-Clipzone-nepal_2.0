@@ -5628,8 +5628,8 @@ export default function App() {
 
         {/* Top Floating Banner with sleek pitch-black styling matching the logo */}
         <div className="w-full bg-black text-white">
-          <div className="max-w-[1600px] mx-auto px-2 sm:px-3 md:px-4 lg:px-5 py-1 sm:py-1.5 grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
-            {/* Left: Brand Logo Only (text removed as requested) */}
+          <div className="max-w-[1600px] mx-auto px-2 sm:px-3 md:px-4 lg:px-5 h-11 sm:h-12 relative flex items-center justify-between">
+            {/* Left: Brand Logo Only */}
             <div 
               onClick={() => {
                 if (isUserAdminSession) {
@@ -5638,15 +5638,15 @@ export default function App() {
                 }
                 navigateToPath('/');
               }}
-              className="justify-self-start flex items-center gap-2 cursor-pointer select-none relative group shrink-0"
+              className="flex items-center cursor-pointer select-none relative group shrink-0 z-10"
               title="Hamro LMS - Home"
             >
               {/* Institute Official Logo */}
-              <div className="h-8 sm:h-10 md:h-11 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
+              <div className="h-7.5 sm:h-9.5 md:h-10.5 flex items-center justify-center bg-transparent overflow-hidden group-hover:scale-105 transition-transform duration-200 shrink-0">
                 <img 
                   src={siteSettings.instituteLogoUrl?.trim() || "/logo.png"} 
                   alt={siteSettings.instituteName || "Logo"}
-                  className="h-8 sm:h-10 md:h-11 w-auto max-w-[88px] sm:max-w-[150px] md:max-w-[175px] object-contain shrink-0 filter drop-shadow-md"
+                  className="h-7.5 sm:h-9.5 md:h-10.5 w-auto max-w-[68px] sm:max-w-[135px] md:max-w-[165px] object-contain shrink-0 filter drop-shadow-md"
                   loading="eager"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
@@ -5658,11 +5658,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* Centered Extra-Slim Pill Search Bar */}
-            <div ref={searchContainerRef} className="relative justify-self-center w-full max-w-[230px] sm:w-[300px] md:w-[380px] lg:w-[440px] sm:max-w-none">
+            {/* Centered Slim Pill Search Bar */}
+            <div
+              ref={searchContainerRef}
+              className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-[clamp(144px,46vw,220px)] sm:w-[290px] md:w-[370px] lg:w-[430px] z-20"
+            >
               <div className="relative flex items-center w-full">
-                <div className="absolute left-2.5 pointer-events-none text-zinc-400 flex items-center justify-center">
-                  <Search className="w-3 h-3 text-zinc-400" />
+                <div className="absolute inset-y-0 left-2.5 pointer-events-none text-zinc-400 flex items-center justify-center">
+                  <Search className="w-3.5 h-3.5 text-zinc-400" />
                 </div>
                 <input
                   type="text"
@@ -5675,7 +5678,7 @@ export default function App() {
                   }}
                   onFocus={() => setIsSearchFocused(true)}
                   placeholder="Search courses, AI tools..."
-                  className="w-full h-7.5 sm:h-7 pl-7 pr-6 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-[11px] sm:text-xs leading-none rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
+                  className="w-full h-7.5 pl-8 pr-7 bg-zinc-900/90 hover:bg-zinc-900 text-white placeholder-zinc-400 text-xs rounded-full border border-zinc-700/80 hover:border-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 focus:outline-none transition-all shadow-inner"
                 />
                 {courseSearchQuery && (
                   <button
@@ -5684,7 +5687,7 @@ export default function App() {
                       setCourseSearchQuery('');
                       setIsSearchFocused(false);
                     }}
-                    className="absolute right-1.5 w-4 h-4 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                    className="absolute inset-y-0 right-1.5 my-auto w-4.5 h-4.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
                     title="Clear search"
                   >
                     <X className="w-2.5 h-2.5" />
@@ -5779,15 +5782,15 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            <div className="justify-self-end flex items-center gap-1.5 sm:gap-2.5">
+            <div className="min-w-[70px] sm:min-w-0 flex items-center justify-end gap-1.5 sm:gap-2.5 shrink-0 z-10">
               {/* Notification Bell Button - ALWAYS VISIBLE LIKE NATIVE PWA APP */}
               <button
                 id="header-notification-bell-btn"
                 onClick={() => setShowNotifCenterModal(true)}
-                className="relative w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group shrink-0"
+                className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-900 border border-zinc-700/80 text-zinc-200 hover:text-white hover:bg-zinc-800 hover:border-blue-500/50 transition flex items-center justify-center cursor-pointer select-none shadow-md group shrink-0"
                 title="Notifications & Announcements"
               >
-                <Bell className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-zinc-300 group-hover:text-blue-400 transition" />
+                <Bell className="w-4 h-4 text-zinc-300 group-hover:text-blue-400 transition" />
                 {unreadNotifCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ring-2 ring-black shadow-md animate-pulse">
                     {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
@@ -5798,7 +5801,7 @@ export default function App() {
               {/* Student Profile Avatar Badge (No dropdown menu on click as requested) */}
               <div className="relative shrink-0">
                 <div
-                  className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-900 border border-zinc-700/80 text-white flex items-center justify-center select-none font-bold text-xs relative shadow-md overflow-hidden"
                   title={hasStudentProfile && currentUser ? (currentUser.displayName || currentUser.email || 'Student') : 'HamroLms'}
                 >
                   {hasStudentProfile && userAvatar ? (
@@ -5818,7 +5821,7 @@ export default function App() {
                       </span>
                     </>
                   ) : (
-                    <User className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-zinc-400" />
+                    <User className="w-4 h-4 text-zinc-400" />
                   )}
                 </div>
               </div>
