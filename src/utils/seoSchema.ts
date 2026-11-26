@@ -11,7 +11,7 @@ export function buildOrganizationSchema(origin: string, brand: string, supportEm
     '@type': ['Organization', 'EducationalOrganization'],
     '@id': `${origin}/#organization`,
     name: brand,
-    alternateName: 'HamroLms',
+    alternateName: ['Hamro LMS', 'HamroLms Nepal'],
     url: `${origin}/`,
     logo: {
       '@type': 'ImageObject',
@@ -20,7 +20,7 @@ export function buildOrganizationSchema(origin: string, brand: string, supportEm
       height: 1600,
     },
     image: `${origin}/institute-logo.png`,
-    description: `${brand} is an online learning platform in Nepal offering practical courses in AI tools, video editing, graphic design, and web development taught by multiple instructors and trainers.`,
+    description: `Learn AI tools, video editing, graphic design, and web development from verified instructors on ${brand} with structured lessons and certificates.`,
     email: supportEmail,
     areaServed: {
       '@type': 'Country',
@@ -48,6 +48,7 @@ export function buildWebsiteSchema(origin: string, brand: string, locale: Suppor
     '@id': `${origin}/#website`,
     url: `${origin}${buildLocalizedPath('/', locale)}`,
     name: brand,
+    alternateName: ['Hamro LMS', 'HamroLms Nepal'],
     inLanguage: locale,
     publisher: { '@id': `${origin}/#organization` },
     potentialAction: {
@@ -58,6 +59,27 @@ export function buildWebsiteSchema(origin: string, brand: string, locale: Suppor
       },
       'query-input': 'required name=search_term_string',
     },
+  };
+}
+
+export function buildSiteNavigationSchema(origin: string, locale: SupportedLocale) {
+  const navItems = [
+    { name: 'Home', cleanPath: '/' },
+    { name: 'Course', cleanPath: '/courses' },
+    { name: 'Privacy Policy', cleanPath: '/privacy-policy' },
+    { name: 'About Us', cleanPath: '/about-us' },
+    { name: 'Learn. Apply. Grow.', cleanPath: '/learn' },
+  ];
+  return {
+    '@type': 'ItemList',
+    '@id': `${origin}/#site-navigation`,
+    name: 'HamroLms Site Navigation',
+    itemListElement: navItems.map((item, idx) => ({
+      '@type': 'SiteNavigationElement',
+      position: idx + 1,
+      name: item.name,
+      url: `${origin}${buildLocalizedPath(item.cleanPath, locale)}`,
+    })),
   };
 }
 

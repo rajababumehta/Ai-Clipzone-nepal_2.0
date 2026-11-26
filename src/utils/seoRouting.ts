@@ -2,7 +2,10 @@ import type { Course, SupportedLocale } from '../types.ts';
 
 export type AppView =
   | 'home'
+  | 'courses'
   | 'course-detail'
+  | 'about-us'
+  | 'learn'
   | 'instructors'
   | 'instructor-detail'
   | 'blog'
@@ -113,7 +116,7 @@ export function parsePathnameToRoute(pathname: string): ParsedRoute {
 
   if (first === 'courses') {
     if (!second) {
-      return { locale, view: 'home', isPublicIndexable: true, cleanPathWithoutLocale: '/' };
+      return { locale, view: 'courses', isPublicIndexable: true, cleanPathWithoutLocale: '/courses' };
     }
     if (!third) {
       return {
@@ -124,6 +127,13 @@ export function parsePathnameToRoute(pathname: string): ParsedRoute {
         cleanPathWithoutLocale,
       };
     }
+  }
+
+  if ((first === 'about-us' || first === 'about') && !second) {
+    return { locale, view: 'about-us', isPublicIndexable: true, cleanPathWithoutLocale: '/about-us' };
+  }
+  if ((first === 'learn' || first === 'learn-apply-grow') && !second) {
+    return { locale, view: 'learn', isPublicIndexable: true, cleanPathWithoutLocale: '/learn' };
   }
 
   if (first === 'instructors') {

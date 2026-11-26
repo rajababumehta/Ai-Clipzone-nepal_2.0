@@ -33,6 +33,12 @@ export interface LocaleDictionary {
   backHomeBtn: string;
   seoHomeTitle: string;
   seoHomeDescription: string;
+  seoCoursesTitle: string;
+  seoCoursesDescription: string;
+  seoAboutTitle: string;
+  seoAboutDescription: string;
+  seoLearnTitle: string;
+  seoLearnDescription: string;
   seoInstructorsTitle: string;
   seoInstructorsDescription: string;
   seoBlogTitle: string;
@@ -71,12 +77,18 @@ export const LOCALE_DICTIONARIES: Record<SupportedLocale, LocaleDictionary> = {
     notFoundTitle: 'Page Not Found (404)',
     notFoundDescription: 'The page you are looking for may have moved or does not exist. Explore our online courses, instructors, or articles below.',
     backHomeBtn: 'Back to Home',
-    seoHomeTitle: 'Hamro LMS – Online Courses & Learning Platform in Nepal',
-    seoHomeDescription: 'Learn AI tools, video editing, graphic design, and digital skills on Hamro LMS, an online learning platform in Nepal with expert teachers and certificates.',
-    seoInstructorsTitle: 'Instructors & Teachers Directory Nepal | Hamro LMS',
-    seoInstructorsDescription: 'Meet the teachers, trainers, and mentors teaching online courses in AI tools, video editing, graphic design, and web development on Hamro LMS Nepal.',
-    seoBlogTitle: 'Online Learning Blog, AI Course & Skill Guides | Hamro LMS',
-    seoBlogDescription: 'Read practical guides on AI training in Nepal, video production, prompt engineering, and digital skills on the Hamro LMS Learning Blog.',
+    seoHomeTitle: 'HamroLms – Online Learning & Digital Skill Courses',
+    seoHomeDescription: 'Learn AI tools, video editing, graphic design, and web development from verified instructors on HamroLms with structured lessons and certificates.',
+    seoCoursesTitle: 'Course Catalog – Online Digital Skill Courses | HamroLms',
+    seoCoursesDescription: 'Explore all structured online courses on HamroLms including AI tools, video editing, graphic design, and web development with certificates.',
+    seoAboutTitle: 'About Us – HamroLms Online Learning Platform',
+    seoAboutDescription: 'Learn about HamroLms, our verified instructors, structured video modules, study notes, and digital skill certificates for learners in Nepal and beyond.',
+    seoLearnTitle: 'Learn. Apply. Grow. – Skill Learning Pathway | HamroLms',
+    seoLearnDescription: 'Learn practical digital skills, apply them on real creative projects, and grow your career with verified certificates on HamroLms.',
+    seoInstructorsTitle: 'Instructors & Teachers Directory | HamroLms',
+    seoInstructorsDescription: 'Meet the teachers, trainers, and mentors teaching online courses in AI tools, video editing, graphic design, and web development on HamroLms.',
+    seoBlogTitle: 'Online Learning Blog, AI Course & Skill Guides | HamroLms',
+    seoBlogDescription: 'Read practical guides on AI training, video production, prompt engineering, and digital skills on the HamroLms Learning Blog.',
   },
   ne: {
     code: 'ne',
@@ -109,12 +121,18 @@ export const LOCALE_DICTIONARIES: Record<SupportedLocale, LocaleDictionary> = {
     notFoundTitle: 'पृष्ठ भेटिएन (404)',
     notFoundDescription: 'तपाईंले खोज्नुभएको पृष्ठ उपलब्ध छैन। कृपया मुख्य पृष्ठ, कोर्ष वा ब्लगमा जानुहोस्।',
     backHomeBtn: 'गृहपृष्ठमा फर्कनुहोस्',
-    seoHomeTitle: 'Hamro LMS – नेपालको अनलाइन कोर्ष र सिकाइ प्लेटफर्म',
-    seoHomeDescription: 'Hamro LMS नेपालको अनलाइन सिकाइ प्लेटफर्ममा अनुभवी प्रशिक्षकहरूबाट AI तालिम, भिडियो सम्पादन, ग्राफिक डिजाइन र डिजिटल सीप कोर्षहरू सिक्नुहोस्।',
-    seoInstructorsTitle: 'प्रशिक्षक र मेन्टरहरू | Hamro LMS Nepal',
-    seoInstructorsDescription: 'Hamro LMS मा AI, भिडियो सम्पादन र डिजिटल सीप सिकाउने प्रमाणित प्रशिक्षकहरूको प्रोफाइल हेर्नुहोस्।',
-    seoBlogTitle: 'डिजिटल सीप र AI सिकाइ ब्लग | Hamro LMS Nepal',
-    seoBlogDescription: 'AI उपकरण, भिडियो निर्माण, प्रम्प्ट इन्जिनियरिङ र अनलाइन करियर बारे उपयोगी लेखहरू Hamro LMS ब्लगमा पढ्नुहोस्।',
+    seoHomeTitle: 'HamroLms – अनलाइन कोर्ष र डिजिटल सीप सिकाइ प्लेटफर्म',
+    seoHomeDescription: 'HamroLms मा प्रमाणित प्रशिक्षकहरूबाट AI उपकरण, भिडियो सम्पादन, ग्राफिक डिजाइन र वेब विकास कोर्षहरू प्रमाणपत्रसहित सिक्नुहोस्।',
+    seoCoursesTitle: 'सबै अनलाइन कोर्षहरू | HamroLms',
+    seoCoursesDescription: 'AI तालिम, भिडियो सम्पादन, ग्राफिक डिजाइन र वेब विकासका सम्पूर्ण अनलाइन कोर्षहरू HamroLms मा हेर्नुहोस्।',
+    seoAboutTitle: 'हाम्रो बारेमा (About Us) | HamroLms',
+    seoAboutDescription: 'HamroLms को उद्देश्य, प्रमाणित प्रशिक्षकहरू र व्यावहारिक डिजिटल सीप प्रमाणपत्र प्रणाली बारे विस्तृत जानकारी।',
+    seoLearnTitle: 'Learn. Apply. Grow. – डिजिटल सीप यात्रा | HamroLms',
+    seoLearnDescription: 'नयाँ सीप सिक्नुहोस्, वास्तविक प्रोजेक्टमा प्रयोग गर्नुहोस् र HamroLms बाट प्रमाणित प्रमाणपत्रसहित करियर अघि बढाउनुहोस्।',
+    seoInstructorsTitle: 'प्रशिक्षक र शिक्षकहरू | HamroLms',
+    seoInstructorsDescription: 'HamroLms मा AI, भिडियो सम्पादन र डिजिटल सीप सिकाउने प्रमाणित प्रशिक्षकहरूको प्रोफाइल हेर्नुहोस्।',
+    seoBlogTitle: 'डिजिटल सीप र AI सिकाइ ब्लग | HamroLms',
+    seoBlogDescription: 'AI उपकरण, भिडियो निर्माण, प्रम्प्ट इन्जिनियरिङ र अनलाइन करियर बारे उपयोगी लेखहरू HamroLms ब्लगमा पढ्नुहोस्।',
   },
   hi: {
     code: 'hi',
@@ -147,12 +165,18 @@ export const LOCALE_DICTIONARIES: Record<SupportedLocale, LocaleDictionary> = {
     notFoundTitle: 'पेज नहीं मिला (404)',
     notFoundDescription: 'आप जिस पेज को खोज रहे हैं वह उपलब्ध नहीं है। नीचे दिए गए कोर्स, प्रशिक्षक या ब्लॉग देखें।',
     backHomeBtn: 'होम पर वापस जाएं',
-    seoHomeTitle: 'Hamro LMS – ऑनलाइन कोर्स और लर्निंग प्लेटफॉर्म नेपाल',
-    seoHomeDescription: 'Hamro LMS ऑनलाइन लर्निंग प्लेटफॉर्म पर अनुभवी शिक्षकों से AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और डिजिटल कौशल सीखें।',
-    seoInstructorsTitle: 'प्रशिक्षक और मेंटर्स डायरेक्टरी | Hamro LMS',
-    seoInstructorsDescription: 'Hamro LMS पर AI, वीडियो एडिटिंग और डिजिटल स्किल्स सिखाने वाले प्रशिक्षकों की प्रोफाइल और कोर्स देखें।',
-    seoBlogTitle: 'लर्निंग ब्लॉग और AI गाइड्स | Hamro LMS',
-    seoBlogDescription: 'AI टूल्स, वीडियो प्रोडक्शन, प्रॉम्प्ट इंजीनियरिंग और डिजिटल स्किल्स से जुड़े गाइड्स Hamro LMS ब्लॉग पर पढ़ें।',
+    seoHomeTitle: 'HamroLms – ऑनलाइन लर्निंग और डिजिटल कौशल कोर्स',
+    seoHomeDescription: 'HamroLms पर सत्यापित प्रशिक्षकों से AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और वेब डेवलपमेंट सर्टिफिकेट के साथ सीखें।',
+    seoCoursesTitle: 'सभी ऑनलाइन कोर्स | HamroLms',
+    seoCoursesDescription: 'HamroLms पर AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और वेब डेवलपमेंट के संरचित कोर्स देखें।',
+    seoAboutTitle: 'हमारे बारे में (About Us) | HamroLms',
+    seoAboutDescription: 'HamroLms ऑनलाइन लर्निंग प्लेटफॉर्म, सत्यापित प्रशिक्षकों और डिजिटल कौशल प्रमाणपत्र के बारे में जानें।',
+    seoLearnTitle: 'Learn. Apply. Grow. – कौशल विकास मार्ग | HamroLms',
+    seoLearnDescription: 'संरचित पाठों से सीखें, प्रोजेक्ट्स पर लागू करें और HamroLms के सत्यापित सर्टिफिकेट के साथ आगे बढ़ें।',
+    seoInstructorsTitle: 'प्रशिक्षक और मेंटर्स डायरेक्टरी | HamroLms',
+    seoInstructorsDescription: 'HamroLms पर AI, वीडियो एडिटिंग और डिजिटल स्किल्स सिखाने वाले प्रशिक्षकों की प्रोफाइल और कोर्स देखें।',
+    seoBlogTitle: 'लर्निंग ब्लॉग और AI गाइड्स | HamroLms',
+    seoBlogDescription: 'AI टूल्स, वीडियो प्रोडक्शन, प्रॉम्प्ट इंजीनियरिंग और डिजिटल स्किल्स से जुड़े गाइड्स HamroLms ब्लॉग पर पढ़ें।',
   },
 };
 

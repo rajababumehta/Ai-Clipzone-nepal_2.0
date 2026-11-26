@@ -15,6 +15,7 @@ import {
   buildCourseSchema,
   buildOrganizationSchema,
   buildPersonSchema,
+  buildSiteNavigationSchema,
   buildWebsiteSchema,
 } from './seoSchema.ts';
 
@@ -66,7 +67,7 @@ export interface DynamicPageSeoInput {
   brand?: string;
 }
 
-const DEFAULT_BRAND = 'Hamro LMS';
+const DEFAULT_BRAND = 'HamroLms';
 
 function clampText(text: string, maxLen: number): string {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
@@ -85,7 +86,7 @@ export function resolveAbsoluteImageUrl(imagePath: string | undefined, origin: s
 }
 
 function normalizeBrandSuffix(val: string, brand: string): string {
-  return val.replace(/\bHamroLms\b/gi, brand).trim();
+  return val.replace(/\bHamro\s*LMS\b/gi, brand).trim();
 }
 
 export function buildCourseSeoMetadata(
@@ -221,13 +222,13 @@ export function generateDynamicPageMetadata(
 
   let pageTitle = dict.seoHomeTitle;
   let pageDescription = dict.seoHomeDescription;
-  let keywords = `${brand}, Hamro LMS Nepal, Online Learning Platform Nepal, Online Courses Nepal, AI Course Nepal, AI Training Nepal`;
+  let keywords = `${brand}, Hamro LMS, HamroLms Nepal, Online Learning, Digital Skill Courses, AI Course, Video Editing, Web Development`;
   let robotsDirective = parsedRoute.isPublicIndexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
     : 'noindex, nofollow';
   let isRoute404 = parsedRoute.view === 'not-found';
   let ogImage = `${origin}/institute-logo.png`;
-  let ogImageAlt = `${brand} – Online Courses & Learning Platform in Nepal`;
+  let ogImageAlt = `${brand} – Online Learning & Digital Skill Courses`;
   let ogType: 'website' | 'article' = 'website';
   let articleMeta: ArticleOpenGraphMeta | undefined;
 
@@ -364,9 +365,42 @@ export function generateDynamicPageMetadata(
       );
       extraSchemas.push(buildPersonSchema(origin, inst, input.activeLocale));
     }
+  } else if (input.currentView === 'courses') {
+    pageTitle = dict.seoCoursesTitle;
+    pageDescription = dict.seoCoursesDescription;
+    ogImageAlt = `Course Catalog – ${brand}`;
+    breadcrumbItems.push({
+      name: 'Course',
+      url: `${origin}${buildLocalizedPath('/courses', input.activeLocale)}`,
+    });
+    extraSchemas.push(
+      buildCourseItemListSchema(
+        origin,
+        brand,
+        input.publicCatalogCourses,
+        input.publicInstructors,
+        input.activeLocale
+      )
+    );
+  } else if (input.currentView === 'about-us') {
+    pageTitle = dict.seoAboutTitle;
+    pageDescription = dict.seoAboutDescription;
+    ogImageAlt = `About Us – ${brand}`;
+    breadcrumbItems.push({
+      name: 'About Us',
+      url: `${origin}${buildLocalizedPath('/about-us', input.activeLocale)}`,
+    });
+  } else if (input.currentView === 'learn') {
+    pageTitle = dict.seoLearnTitle;
+    pageDescription = dict.seoLearnDescription;
+    ogImageAlt = `Learn. Apply. Grow. – ${brand}`;
+    breadcrumbItems.push({
+      name: 'Learn. Apply. Grow.',
+      url: `${origin}${buildLocalizedPath('/learn', input.activeLocale)}`,
+    });
   } else if (input.currentView === 'privacy-policy') {
     pageTitle = `Privacy Policy | ${brand}`;
-    pageDescription = `Read how ${brand} protects learner privacy, course credentials, and account security across our online learning platform in Nepal.`;
+    pageDescription = `Read how ${brand} protects learner privacy, course credentials, and account security across our online learning platform.`;
     breadcrumbItems.push({
       name: 'Privacy Policy',
       url: `${origin}${buildLocalizedPath('/privacy-policy', input.activeLocale)}`,
@@ -386,7 +420,7 @@ export function generateDynamicPageMetadata(
     const priceLabel = isFree ? 'Free' : input.enrollCourse.price || 'Affordable';
     pageTitle = clampText(`Enroll: ${input.enrollCourse.title} | ${brand}`, 60);
     pageDescription = clampText(
-      `Enroll in ${input.enrollCourse.title} (${priceLabel}) on ${brand} Nepal for structured video lessons and notes.`,
+      `Enroll in ${input.enrollCourse.title} (${priceLabel}) on ${brand} for structured video lessons and notes.`,
       160
     );
     ogImage = resolveAbsoluteImageUrl(input.enrollCourse.image, origin);
@@ -398,7 +432,7 @@ export function generateDynamicPageMetadata(
     robotsDirective = 'noindex, nofollow';
   } else if (input.currentView === 'account') {
     pageTitle = `Student Profile & Course Activation | ${brand}`;
-    pageDescription = `Activate your course secret key, manage your student profile, and access your certificates on ${brand} Nepal.`;
+    pageDescription = `Activate your course secret key, manage your student profile, and access your certificates on ${brand}.`;
     robotsDirective = 'noindex, nofollow';
   } else if (input.currentView === 'ask') {
     pageTitle = `Mentor Support & Course Chat | ${brand}`;
@@ -451,7 +485,12 @@ export function generateDynamicPageMetadata(
     '@context': 'https://schema.org',
     '@graph': [
       buildOrganizationSchema(origin, brand, supportEmail),
-      buildWebsiteSchema(origin, brand, input.activeLocale),
+      ...(input.currentView === 'home'
+        ? [
+            buildWebsiteSchema(origin, brand, input.activeLocale),
+            buildSiteNavigationSchema(origin, input.activeLocale),
+          ]
+        : []),
       buildBreadcrumbSchema(breadcrumbItems),
       ...extraSchemas,
     ],

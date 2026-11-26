@@ -89,7 +89,7 @@ import { CourseEnrollPage } from './components/CourseEnrollPage';
 import { CourseDetailView } from './components/CourseDetailView';
 import { InstructorsView } from './components/InstructorsView';
 import { BlogView } from './components/BlogView';
-import { PrivacyPolicyView, TermsOfUseView, NotFoundView } from './components/PublicPagesView';
+import { AboutUsView, LearnApplyGrowView, PrivacyPolicyView, TermsOfUseView, NotFoundView } from './components/PublicPagesView';
 import { buildPublicInstructors, resolveCourseInstructor } from './data/instructors';
 import { BLOG_POSTS, findBlogPostBySlug } from './data/blogArticles';
 import { getLocaleDict } from './utils/i18n';
@@ -5750,7 +5750,7 @@ export default function App() {
       enrollCourse,
       isCoursesLoading,
       supportEmail: siteSettings.supportEmail || 'support.hamrolms@gmail.com',
-      brand: 'Hamro LMS',
+      brand: 'HamroLms',
     });
 
     injectDynamicPageMetadata(metadata);
@@ -5856,7 +5856,7 @@ export default function App() {
                   value={courseSearchQuery}
                   onChange={(e) => {
                     setCourseSearchQuery(e.target.value);
-                    if (currentView !== 'home' && e.target.value.trim()) {
+                    if (currentView !== 'home' && currentView !== 'courses' && e.target.value.trim()) {
                       setCurrentView('home');
                     }
                   }}
@@ -5916,7 +5916,7 @@ export default function App() {
                                   setCurrentView('classroom');
                                   showToast(`Opened ${c.title}! 🎓`, 'success');
                                 } else {
-                                  if (currentView !== 'home') {
+                                  if (currentView !== 'home' && currentView !== 'courses') {
                                     navigateToPath('/');
                                   }
                                   setTimeout(() => {
@@ -6016,7 +6016,7 @@ export default function App() {
       )}
 
       {/* Main Container for Course List / Classroom / Account / Ask / Enroll */}
-      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : `flex-1 flex flex-col w-full max-w-[1600px] mx-auto px-1.5 sm:px-3 md:px-4 lg:px-5 pt-1.5 ${currentView === 'home' ? 'pb-0' : 'pb-4'}`}>
+      <main className={currentView === 'ask' && isCourseActiveUser ? 'flex-1 min-h-0 w-full max-w-none p-0 flex flex-col overflow-hidden bg-black' : currentView === 'enroll' && enrollCourse ? 'flex-1 w-full max-w-none p-0 flex flex-col bg-black' : `flex-1 flex flex-col w-full max-w-[1600px] mx-auto px-1.5 sm:px-3 md:px-4 lg:px-5 pt-1.5 ${currentView === 'home' || currentView === 'courses' ? 'pb-0' : 'pb-4'}`}>
 
         {/* 1. EMBEDDED ACCOUNT / LIVE / ASK / CLASSROOM / ENROLL / HOME VIEWS */}
         {currentView === 'enroll' && enrollCourse ? (
@@ -6317,6 +6317,18 @@ export default function App() {
               />
             );
           })()
+        ) : currentView === 'about-us' ? (
+          <AboutUsView
+            locale={activeLocale}
+            supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+            onNavigatePath={navigateToPath}
+          />
+        ) : currentView === 'learn' ? (
+          <LearnApplyGrowView
+            locale={activeLocale}
+            supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+            onNavigatePath={navigateToPath}
+          />
         ) : currentView === 'privacy-policy' ? (
           <PrivacyPolicyView
             locale={activeLocale}
@@ -6780,7 +6792,7 @@ export default function App() {
           <>
             {/* Course Catalog Title & Grid Section */}
             <section id="courses-section" className="pt-0 scroll-mt-24">
-              {currentView === 'home' && (
+              {(currentView === 'home' || currentView === 'courses') && (
                 <div className="flex flex-col items-center justify-center text-center pt-0.5 pb-0.5 mb-3 sm:mb-4">
                   <div className="inline-flex items-center gap-2.5">
                     <span
@@ -6790,7 +6802,7 @@ export default function App() {
                       <GraduationCap className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-sky-300" />
                     </span>
                     <h1 className="font-['Outfit',sans-serif] text-2xl sm:text-[28px] font-extrabold tracking-tight leading-none bg-gradient-to-r from-white via-sky-100 to-blue-400 bg-clip-text text-transparent">
-                      Hamro Lms
+                      {currentView === 'courses' ? 'Courses – HamroLms' : 'HamroLms'}
                     </h1>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2.5 w-48 sm:w-64" aria-hidden="true">
@@ -7995,13 +8007,88 @@ export default function App() {
           )}
         </section>
 
-            {/* Compact Footer */}
-            {currentView === 'home' && (
+            {/* Compact Footer with Crawlable Sitelinks */}
+            {(currentView === 'home' || currentView === 'courses') && (
               <footer className="mt-auto pt-4">
-                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left">
+                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left space-y-2">
+                  <nav
+                    aria-label="Footer Site Links"
+                    className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-[11px] font-medium text-zinc-400"
+                  >
+                    <a
+                      href={buildLocalizedPath('/', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      Home
+                    </a>
+                    <a
+                      href={buildLocalizedPath('/courses', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/courses');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      Course
+                    </a>
+                    <a
+                      href={buildLocalizedPath('/privacy-policy', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/privacy-policy');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      Privacy Policy
+                    </a>
+                    <a
+                      href={buildLocalizedPath('/about-us', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/about-us');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      About Us
+                    </a>
+                    <a
+                      href={buildLocalizedPath('/learn', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/learn');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      Learn. Apply. Grow.
+                    </a>
+                    <a
+                      href={buildLocalizedPath('/instructors', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/instructors');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      Instructors
+                    </a>
+                    <a
+                      href={buildLocalizedPath('/terms', activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigateToPath('/terms');
+                      }}
+                      className="hover:text-blue-400 transition-colors"
+                    >
+                      Terms
+                    </a>
+                  </nav>
                   <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-                    <span>© {new Date().getFullYear()} Hamro LMS. All rights reserved.</span>
-                    <span>E-Learning Platform &amp; Learning Management System — Nepal</span>
+                    <span>© {new Date().getFullYear()} HamroLms. All rights reserved.</span>
+                    <span>Learn. Apply. Grow. — Structured Online Courses &amp; Certificates</span>
                   </div>
                 </div>
               </footer>
@@ -10368,12 +10455,12 @@ export default function App() {
               navigateToPath('/');
             }}
             className={`flex-1 md:max-w-[210px] flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2.5 py-1.5 md:py-2.5 px-1.5 md:px-4 rounded-xl md:rounded-2xl transition-all duration-150 cursor-pointer active:scale-95 ${
-              currentView === 'home' || currentView === 'course-detail' || currentView === 'instructors' || currentView === 'instructor-detail' || currentView === 'blog' || currentView === 'blog-detail'
+              currentView === 'home' || currentView === 'courses' || currentView === 'course-detail' || currentView === 'about-us' || currentView === 'learn' || currentView === 'instructors' || currentView === 'instructor-detail' || currentView === 'blog' || currentView === 'blog-detail'
                 ? 'text-blue-400 font-bold bg-blue-500/10 md:bg-blue-600/15 md:border md:border-blue-500/40 md:shadow-md md:shadow-blue-500/15'
                 : 'text-zinc-400 hover:text-zinc-200 md:hover:bg-zinc-900/80 md:hover:border-zinc-700/60 md:border md:border-transparent'
             }`}
           >
-            <Home className={`w-5 h-5 mb-0.5 md:mb-0 shrink-0 ${currentView === 'home' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
+            <Home className={`w-5 h-5 mb-0.5 md:mb-0 shrink-0 ${currentView === 'home' || currentView === 'courses' ? 'stroke-[2.5] text-blue-400' : 'stroke-[1.8]'}`} />
             <span className="text-[10.5px] md:text-sm font-semibold md:font-extrabold tracking-tight">Home</span>
           </button>
 

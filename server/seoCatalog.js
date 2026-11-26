@@ -186,45 +186,72 @@ export const SEED_BLOG_POSTS = [
 const SEO_LOCALE_TEXT = {
   en: {
     htmlLang: 'en',
-    homeTitle: 'Hamro LMS – Online Courses & Learning Platform in Nepal',
+    homeTitle: 'HamroLms – Online Learning & Digital Skill Courses',
     homeDescription:
-      'Learn AI tools, video editing, graphic design, and digital skills on Hamro LMS, an online learning platform in Nepal with expert teachers and certificates.',
-    instructorsTitle: 'Instructors & Teachers Directory Nepal | Hamro LMS',
+      'Learn AI tools, video editing, graphic design, and web development from verified instructors on HamroLms with structured lessons and certificates.',
+    coursesTitle: 'Course Catalog – Online Digital Skill Courses | HamroLms',
+    coursesDescription:
+      'Explore all structured online courses on HamroLms including AI tools, video editing, graphic design, and web development with certificates.',
+    aboutTitle: 'About Us – HamroLms Online Learning Platform',
+    aboutDescription:
+      'Learn about HamroLms, our verified instructors, structured video modules, study notes, and digital skill certificates for learners in Nepal and beyond.',
+    learnTitle: 'Learn. Apply. Grow. – Skill Learning Pathway | HamroLms',
+    learnDescription:
+      'Learn practical digital skills, apply them on real creative projects, and grow your career with verified certificates on HamroLms.',
+    instructorsTitle: 'Instructors & Teachers Directory | HamroLms',
     instructorsDescription:
-      'Meet the teachers, trainers, and mentors teaching online courses in AI tools, video editing, graphic design, and web development on Hamro LMS Nepal.',
-    blogTitle: 'Online Learning Blog, AI Course & Skill Guides | Hamro LMS',
+      'Meet the teachers, trainers, and mentors teaching online courses in AI tools, video editing, graphic design, and web development on HamroLms.',
+    blogTitle: 'Online Learning Blog, AI Course & Skill Guides | HamroLms',
     blogDescription:
-      'Read practical guides on AI training in Nepal, video production, prompt engineering, and digital skills on the Hamro LMS Learning Blog.',
-    notFoundTitle: 'Page Not Found (404) | Hamro LMS',
+      'Read practical guides on AI training, video production, prompt engineering, and digital skills on the HamroLms Learning Blog.',
+    notFoundTitle: 'Page Not Found (404) | HamroLms',
     notFoundDescription:
-      'The requested page could not be found. Browse online courses, instructors, and AI training guides on Hamro LMS Nepal.',
+      'The requested page could not be found. Browse online courses, instructors, and AI training guides on HamroLms.',
   },
   ne: {
     htmlLang: 'ne',
-    homeTitle: 'Hamro LMS – नेपालको अनलाइन कोर्ष र सिकाइ प्लेटफर्म',
+    homeTitle: 'HamroLms – अनलाइन कोर्ष र डिजिटल सीप सिकाइ प्लेटफर्म',
     homeDescription:
-      'Hamro LMS नेपालको अनलाइन सिकाइ प्लेटफर्ममा अनुभवी प्रशिक्षकहरूबाट AI तालिम, भिडियो सम्पादन, ग्राफिक डिजाइन र डिजिटल सीप कोर्षहरू सिक्नुहोस्।',
-    instructorsTitle: 'प्रशिक्षक र शिक्षकहरू | Hamro LMS Nepal',
+      'HamroLms मा प्रमाणित प्रशिक्षकहरूबाट AI उपकरण, भिडियो सम्पादन, ग्राफिक डिजाइन र वेब विकास कोर्षहरू प्रमाणपत्रसहित सिक्नुहोस्।',
+    coursesTitle: 'सबै अनलाइन कोर्षहरू | HamroLms',
+    coursesDescription:
+      'AI तालिम, भिडियो सम्पादन, ग्राफिक डिजाइन र वेब विकासका सम्पूर्ण अनलाइन कोर्षहरू HamroLms मा हेर्नुहोस्।',
+    aboutTitle: 'हाम्रो बारेमा (About Us) | HamroLms',
+    aboutDescription:
+      'HamroLms को उद्देश्य, प्रमाणित प्रशिक्षकहरू र व्यावहारिक डिजिटल सीप प्रमाणपत्र प्रणाली बारे विस्तृत जानकारी।',
+    learnTitle: 'Learn. Apply. Grow. – डिजिटल सीप यात्रा | HamroLms',
+    learnDescription:
+      'नयाँ सीप सिक्नुहोस्, वास्तविक प्रोजेक्टमा प्रयोग गर्नुहोस् र HamroLms बाट प्रमाणित प्रमाणपत्रसहित करियर अघि बढाउनुहोस्।',
+    instructorsTitle: 'प्रशिक्षक र शिक्षकहरू | HamroLms',
     instructorsDescription:
-      'Hamro LMS मा AI, भिडियो सम्पादन र डिजिटल सीप सिकाउने अनुभवी प्रशिक्षक र मेन्टरहरूको प्रोफाइल हेर्नुहोस्।',
-    blogTitle: 'डिजिटल सीप र AI सिकाइ ब्लग | Hamro LMS Nepal',
+      'HamroLms मा AI, भिडियो सम्पादन र डिजिटल सीप सिकाउने अनुभवी प्रशिक्षक र मेन्टरहरूको प्रोफाइल हेर्नुहोस्।',
+    blogTitle: 'डिजिटल सीप र AI सिकाइ ब्लग | HamroLms',
     blogDescription:
-      'AI उपकरण, भिडियो निर्माण, प्रम्प्ट इन्जिनियरिङ र अनलाइन शिक्षा सम्बन्धी उपयोगी लेखहरू Hamro LMS ब्लगमा पढ्नुहोस्।',
-    notFoundTitle: 'पृष्ठ भेटिएन (404) | Hamro LMS',
+      'AI उपकरण, भिडियो निर्माण, प्रम्प्ट इन्जिनियरिङ र अनलाइन शिक्षा सम्बन्धी उपयोगी लेखहरू HamroLms ब्लगमा पढ्नुहोस्।',
+    notFoundTitle: 'पृष्ठ भेटिएन (404) | HamroLms',
     notFoundDescription: 'तपाईंले खोज्नुभएको पृष्ठ उपलब्ध छैन। कृपया मुख्य पृष्ठ, कोर्ष वा ब्लगमा जानुहोस्।',
   },
   hi: {
     htmlLang: 'hi',
-    homeTitle: 'Hamro LMS – ऑनलाइन कोर्स और लर्निंग प्लेटफॉर्म नेपाल',
+    homeTitle: 'HamroLms – ऑनलाइन लर्निंग और डिजिटल कौशल कोर्स',
     homeDescription:
-      'Hamro LMS ऑनलाइन लर्निंग प्लेटफॉर्म पर अनुभवी शिक्षकों से AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और डिजिटल कौशल सीखें।',
-    instructorsTitle: 'प्रशिक्षक और मेंटर्स डायरेक्टरी | Hamro LMS',
+      'HamroLms पर सत्यापित प्रशिक्षकों से AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और वेब डेवलपमेंट सर्टिफिकेट के साथ सीखें।',
+    coursesTitle: 'सभी ऑनलाइन कोर्स | HamroLms',
+    coursesDescription:
+      'HamroLms पर AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और वेब डेवलपमेंट के संरचित कोर्स देखें।',
+    aboutTitle: 'हमारे बारे में (About Us) | HamroLms',
+    aboutDescription:
+      'HamroLms ऑनलाइन लर्निंग प्लेटफॉर्म, सत्यापित प्रशिक्षकों और डिजिटल कौशल प्रमाणपत्र के बारे में जानें।',
+    learnTitle: 'Learn. Apply. Grow. – कौशल विकास मार्ग | HamroLms',
+    learnDescription:
+      'संरचित पाठों से सीखें, प्रोजेक्ट्स पर लागू करें और HamroLms के सत्यापित सर्टिफिकेट के साथ आगे बढ़ें।',
+    instructorsTitle: 'प्रशिक्षक और मेंटर्स डायरेक्टरी | HamroLms',
     instructorsDescription:
-      'Hamro LMS पर AI, वीडियो एडिटिंग और डिजिटल स्किल्स सिखाने वाले प्रशिक्षकों की प्रोफाइल और कोर्स देखें।',
-    blogTitle: 'लर्निंग ब्लॉग और AI गाइड्स | Hamro LMS',
+      'HamroLms पर AI, वीडियो एडिटिंग और डिजिटल स्किल्स सिखाने वाले प्रशिक्षकों की प्रोफाइल और कोर्स देखें।',
+    blogTitle: 'लर्निंग ब्लॉग और AI गाइड्स | HamroLms',
     blogDescription:
-      'AI टूल्स, वीडियो प्रोडक्शन, प्रॉम्प्ट इंजीनियरिंग और ऑनलाइन शिक्षा से जुड़े गाइड्स Hamro LMS ब्लॉग पर पढ़ें।',
-    notFoundTitle: 'पेज नहीं मिला (404) | Hamro LMS',
+      'AI टूल्स, वीडियो प्रोडक्शन, प्रॉम्प्ट इंजीनियरिंग और ऑनलाइन शिक्षा से जुड़े गाइड्स HamroLms ब्लॉग पर पढ़ें।',
+    notFoundTitle: 'पेज नहीं मिला (404) | HamroLms',
     notFoundDescription: 'आप जिस पेज को खोज रहे हैं वह उपलब्ध नहीं है। होम पेज, कोर्स या ब्लॉग देखें।',
   },
 };
@@ -329,7 +356,7 @@ export function parsePathnameToRoute(pathname) {
 
   if (first === 'courses') {
     if (!second) {
-      return { locale, view: 'home', isPublicIndexable: true, cleanPathWithoutLocale: '/' };
+      return { locale, view: 'courses', isPublicIndexable: true, cleanPathWithoutLocale: '/courses' };
     }
     if (!third) {
       return {
@@ -340,6 +367,13 @@ export function parsePathnameToRoute(pathname) {
         cleanPathWithoutLocale,
       };
     }
+  }
+
+  if ((first === 'about-us' || first === 'about') && !second) {
+    return { locale, view: 'about-us', isPublicIndexable: true, cleanPathWithoutLocale: '/about-us' };
+  }
+  if ((first === 'learn' || first === 'learn-apply-grow') && !second) {
+    return { locale, view: 'learn', isPublicIndexable: true, cleanPathWithoutLocale: '/learn' };
   }
 
   if (first === 'instructors') {
@@ -664,6 +698,9 @@ export function buildSitemapXmlFromCatalog(origin, courses, instructors) {
   const today = new Date().toISOString().slice(0, 10);
   const specs = [
     { cleanPath: '/', lastmod: today, changefreq: 'daily', priority: '1.0' },
+    { cleanPath: '/courses', lastmod: today, changefreq: 'daily', priority: '0.95' },
+    { cleanPath: '/about-us', lastmod: today, changefreq: 'monthly', priority: '0.85' },
+    { cleanPath: '/learn', lastmod: today, changefreq: 'monthly', priority: '0.85' },
     { cleanPath: '/instructors', lastmod: today, changefreq: 'weekly', priority: '0.85' },
     { cleanPath: '/blog', lastmod: today, changefreq: 'weekly', priority: '0.85' },
   ];
@@ -721,8 +758,8 @@ export function buildSitemapXmlFromCatalog(origin, courses, instructors) {
 
   // Legal / trust pages
   specs.push(
-    { cleanPath: '/privacy-policy', lastmod: '2026-01-01', changefreq: 'yearly', priority: '0.4' },
-    { cleanPath: '/terms', lastmod: '2026-01-01', changefreq: 'yearly', priority: '0.4' }
+    { cleanPath: '/privacy-policy', lastmod: '2026-01-01', changefreq: 'yearly', priority: '0.7' },
+    { cleanPath: '/terms', lastmod: '2026-01-01', changefreq: 'yearly', priority: '0.5' }
   );
 
   const urlNodes = [];
@@ -812,10 +849,10 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
   let statusCode = 200;
   let title = dict.homeTitle;
   let description = dict.homeDescription;
-  let keywords = 'Hamro LMS, Hamro LMS Nepal, Online Learning Platform Nepal, Online Courses Nepal, AI Course Nepal, AI Training Nepal';
+  let keywords = 'HamroLms, Hamro LMS, HamroLms Nepal, Online Learning, Digital Skill Courses, AI Course, Video Editing, Web Development';
   let ogType = 'website';
   let ogImage = `${origin}/institute-logo.png`;
-  let ogImageAlt = 'Hamro LMS – Online Courses & Learning Platform in Nepal';
+  let ogImageAlt = 'HamroLms – Online Learning & Digital Skill Courses';
   let articleMeta = null;
   let robots = parsed.isPublicIndexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
@@ -1009,14 +1046,58 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
         mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
       });
     }
+  } else if (parsed.view === 'courses') {
+    title = dict.coursesTitle;
+    description = dict.coursesDescription;
+    ogImageAlt = 'Course Catalog – HamroLms';
+    breadcrumbItems.push({
+      name: 'Course',
+      url: `${origin}${buildLocalizedPath('/courses', parsed.locale)}`,
+    });
+    extraSchemas.push({
+      '@type': 'ItemList',
+      '@id': `${origin}/courses#course-catalog`,
+      name: 'Online Courses on HamroLms',
+      numberOfItems: courses.length,
+      itemListElement: courses.map((c, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        url: `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale)}`,
+        name: c.title,
+      })),
+    });
+  } else if (parsed.view === 'about-us') {
+    title = dict.aboutTitle;
+    description = dict.aboutDescription;
+    ogImageAlt = 'About Us – HamroLms';
+    breadcrumbItems.push({
+      name: 'About Us',
+      url: `${origin}${buildLocalizedPath('/about-us', parsed.locale)}`,
+    });
+  } else if (parsed.view === 'learn') {
+    title = dict.learnTitle;
+    description = dict.learnDescription;
+    ogImageAlt = 'Learn. Apply. Grow. – HamroLms';
+    breadcrumbItems.push({
+      name: 'Learn. Apply. Grow.',
+      url: `${origin}${buildLocalizedPath('/learn', parsed.locale)}`,
+    });
   } else if (parsed.view === 'privacy-policy') {
-    title = 'Privacy Policy | Hamro LMS';
+    title = 'Privacy Policy | HamroLms';
     description =
-      'Read how Hamro LMS protects student privacy, enrollment records, course credentials, and account security across our online learning platform in Nepal.';
+      'Read how HamroLms protects student privacy, enrollment records, course credentials, and account security across our online learning platform.';
+    breadcrumbItems.push({
+      name: 'Privacy Policy',
+      url: `${origin}${buildLocalizedPath('/privacy-policy', parsed.locale)}`,
+    });
   } else if (parsed.view === 'terms') {
-    title = 'Terms of Use | Hamro LMS';
+    title = 'Terms of Use | HamroLms';
     description =
-      'Review Hamro LMS online learning platform terms of use, course enrollment policy, intellectual property rules, and learner guidelines.';
+      'Review HamroLms online learning platform terms of use, course enrollment policy, intellectual property rules, and learner guidelines.';
+    breadcrumbItems.push({
+      name: 'Terms of Use',
+      url: `${origin}${buildLocalizedPath('/terms', parsed.locale)}`,
+    });
   } else if (parsed.view === 'not-found') {
     statusCode = 404;
     title = dict.notFoundTitle;
@@ -1028,7 +1109,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     extraSchemas.push({
       '@type': 'ItemList',
       '@id': `${origin}/#course-catalog`,
-      name: 'Online Courses on Hamro LMS Nepal',
+      name: 'Online Courses on HamroLms',
       numberOfItems: courses.length,
       itemListElement: courses.map((c, idx) => ({
         '@type': 'ListItem',
@@ -1083,21 +1164,65 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
           .join('\n    ')
       : '';
 
+  const siteNavItems = [
+    { name: 'Home', url: `${origin}${buildLocalizedPath('/', parsed.locale)}` },
+    { name: 'Course', url: `${origin}${buildLocalizedPath('/courses', parsed.locale)}` },
+    { name: 'Privacy Policy', url: `${origin}${buildLocalizedPath('/privacy-policy', parsed.locale)}` },
+    { name: 'About Us', url: `${origin}${buildLocalizedPath('/about-us', parsed.locale)}` },
+    { name: 'Learn. Apply. Grow.', url: `${origin}${buildLocalizedPath('/learn', parsed.locale)}` },
+  ];
+
+  const isHomeRoute = parsed.view === 'home';
+
   const dynamicGraphScript = `<script id="dynamic-hamrolms-jsonld" type="application/ld+json">${JSON.stringify({
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': ['Organization', 'EducationalOrganization'],
         '@id': `${origin}/#organization`,
-        name: 'Hamro LMS',
+        name: 'HamroLms',
+        alternateName: ['Hamro LMS', 'HamroLms Nepal'],
         url: `${origin}/`,
+        logo: {
+          '@type': 'ImageObject',
+          url: `${origin}/institute-logo.png`,
+          width: 1600,
+          height: 1600,
+        },
+        email: 'support.hamrolms@gmail.com',
       },
-      {
-        '@type': 'WebSite',
-        '@id': `${origin}/#website`,
-        url: `${origin}/`,
-        name: 'Hamro LMS',
-      },
+      ...(isHomeRoute
+        ? [
+            {
+              '@type': 'WebSite',
+              '@id': `${origin}/#website`,
+              url: `${origin}${buildLocalizedPath('/', parsed.locale)}`,
+              name: 'HamroLms',
+              alternateName: ['Hamro LMS', 'HamroLms Nepal'],
+              inLanguage: parsed.locale,
+              publisher: { '@id': `${origin}/#organization` },
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: {
+                  '@type': 'EntryPoint',
+                  urlTemplate: `${origin}/?search={search_term_string}`,
+                },
+                'query-input': 'required name=search_term_string',
+              },
+            },
+            {
+              '@type': 'ItemList',
+              '@id': `${origin}/#site-navigation`,
+              name: 'HamroLms Site Navigation',
+              itemListElement: siteNavItems.map((item, idx) => ({
+                '@type': 'SiteNavigationElement',
+                position: idx + 1,
+                name: item.name,
+                url: item.url,
+              })),
+            },
+          ]
+        : []),
       {
         '@type': 'BreadcrumbList',
         itemListElement: breadcrumbItems.map((b, idx) => ({
@@ -1110,6 +1235,29 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       ...extraSchemas,
     ],
   }).replace(/<\/script/gi, '<\\/script')}</script>`;
+
+  // Semantic SSR shell inside #root (cleanly replaced by React createRoot on mount) for Googlebot / crawlers
+  const ssrNavHtml = siteNavItems
+    .map(
+      (item) =>
+        `<a href="${escapeHtmlAttr(item.url.replace(origin, '') || '/')}" style="color:#60a5fa;margin-right:16px;text-decoration:none;font-weight:600;">${escapeHtmlAttr(item.name)}</a>`
+    )
+    .join('');
+
+  const ssrCourseLinksHtml =
+    parsed.view === 'home' || parsed.view === 'courses'
+      ? `<ul>${courses
+          .slice(0, 10)
+          .map((c) => {
+            const cHref = buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale);
+            return `<li><a href="${escapeHtmlAttr(cHref)}" style="color:#93c5fd;">${escapeHtmlAttr(c.title)}</a></li>`;
+          })
+          .join('')}</ul>`
+      : '';
+
+  const ssrShellHtml = parsed.isPublicIndexable
+    ? `<div id="root"><main style="max-width:900px;margin:32px auto;padding:20px;font-family:Inter,system-ui,sans-serif;color:#f4f4f5;background:#000;"><header><nav aria-label="Primary Site Navigation">${ssrNavHtml}</nav></header><section style="margin-top:20px;"><h1>${escapeHtmlAttr(title)}</h1><p style="color:#d4d4d8;">${escapeHtmlAttr(description)}</p>${ssrCourseLinksHtml}</section></main></div>`
+    : '<div id="root"></div>';
 
   let updated = html;
   updated = updated.replace(/<html lang="[^"]*"/i, `<html lang="${escapeHtmlAttr(dict.htmlLang)}"`);
@@ -1142,6 +1290,10 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
   updated = updated.replace(/<link rel="alternate" hreflang="[^"]*" href="[^"]*"\s*\/?>\s*/gi, '');
   updated = updated.replace(/<meta property="article:[^"]*" content="[^"]*"\s*\/?>\s*/gi, '');
   updated = updated.replace(/<script id="dynamic-hamrolms-jsonld" type="application\/ld\+json">[\s\S]*?<\/script>\s*/gi, '');
+  updated = updated.replace(
+    /<meta property="og:site_name" content="[^"]*"\s*\/?>/i,
+    `<meta property="og:site_name" content="HamroLms" />`
+  );
   updated = updated.replace(
     /<meta property="og:type" content="[^"]*"\s*\/?>/i,
     `<meta property="og:type" content="${escapeHtmlAttr(ogType)}" />`
@@ -1186,6 +1338,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     /<meta name="twitter:image:alt" content="[^"]*"\s*\/?>/i,
     `<meta name="twitter:image:alt" content="${escapeHtmlAttr(ogImageAlt)}" />`
   );
+  updated = updated.replace(/<div id="root"><\/div>/i, ssrShellHtml);
 
   const extraHeadParts = [
     `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
