@@ -1,5 +1,5 @@
 // HamroLms - High-Speed PWA Service Worker
-const CACHE_NAME = 'hamrolms-pwa-v41';
+const CACHE_NAME = 'hamrolms-pwa-v42';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/logo.png',
@@ -58,6 +58,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   if (!url.protocol.startsWith('http')) return;
+  if (url.origin !== location.origin) return;
   if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('ais-dev-')) return;
   if (url.pathname.startsWith('/api/')) return;
   if (

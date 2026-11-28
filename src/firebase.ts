@@ -52,6 +52,26 @@ function decodeFirestoreRestValue(val: any): any {
   return undefined;
 }
 
+export interface PublicBootstrapSnapshot {
+  courses: any[] | null;
+  config: Record<string, any> | null;
+  siteSettings: Record<string, any> | null;
+  paymentQr: Record<string, any> | null;
+  faqs: any[] | null;
+  subAdmins: any[] | null;
+  liveSessions: any[] | null;
+}
+
+function decodeFirestoreDocItem(docItem: any): Record<string, any> {
+  const obj: Record<string, any> = {};
+  const fields = docItem?.fields || {};
+  for (const k of Object.keys(fields)) {
+    obj[k] = decodeFirestoreRestValue(fields[k]);
+  }
+  const docId = String(docItem?.name?.split('/').pop() || obj.id || '');
+  return { ...obj, id: docId };
+}
+
 export async function fetchCoursesViaRest(timeoutMs = 3500): Promise<any[] | null> {
   if (typeof fetch === 'undefined' || !firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId) {
     return null;
@@ -63,19 +83,131 @@ export async function fetchCoursesViaRest(timeoutMs = 3500): Promise<any[] | nul
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
     const json = await res.json();
-    const docs = Array.isArray(json?.documents) ? json.documents : null;
-    if (!docs) return null;
-    return docs.map((docItem: any) => {
-      const obj: Record<string, any> = {};
-      const fields = docItem?.fields || {};
-      for (const k of Object.keys(fields)) {
-        obj[k] = decodeFirestoreRestValue(fields[k]);
-      }
-      const docId = String(docItem?.name?.split('/').pop() || obj.id || '');
-      return { ...obj, id: docId };
-    });
+    const docs = Array.isArray(json?.documents) ? json.documents : [];
+    return docs.map(decodeFirestoreDocItem);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function fetchPublicBootstrapViaRest(timeoutMs = 3500): Promise<PublicBootstrapSnapshot> {
+  const empty: PublicBootstrapSnapshot = {
+    courses: null,
+    config: null,
+    siteSettings: null,
+    paymentQr: null,
+    faqs: null,
+    subAdmins: null,
+    liveSessions: null,
+  };
+  if (typeof fetch === 'undefined' || !firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId) {
+    return empty;
+  }
+
+  const baseUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const fetchDocSafe = async (docPath: string): Promise<Record<string, any> | null> => {
+    try {
+      const res = await fetch(`${baseUrl}/${docPath}`, { signal: controller.signal, cache: 'no-store' });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json?.fields) return null;
+      return decodeFirestoreDocItem(json);
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchCollectionSafe = async (colPath: string, pageSize = 100): Promise<any[] | null> => {
+    try {
+      const res = await fetch(`${baseUrl}/${colPath}?pageSize=${pageSize}`, {
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const docs = Array.isArray(json?.documents) ? json.documents : [];
+      return docs.map(decodeFirestoreDocItem);
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchActiveSubAdminsSafe = async (): Promise<any[] | null> => {
+    try {
+      const res = await fetch(`${baseUrl}:runQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        cache: 'no-store',
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: 'sub_admins' }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: 'status' },
+                op: 'EQUAL',
+                value: { stringValue: 'active' },
+              },
+            },
+          },
+        }),
+      });
+      if (!res.ok) return null;
+      const rows = await res.json();
+      if (!Array.isArray(rows)) return null;
+      const subs: any[] = [];
+      for (const row of rows) {
+        if (!row?.document?.fields) continue;
+        const d = decodeFirestoreDocItem(row.document);
+        if (d.status !== 'active' || !d.name) continue;
+        // Public-safe fields only (never expose secret `code` or `activeDeviceId` from public bootstrap)
+        subs.push({
+          id: d.id,
+          name: String(d.name),
+          courseId: String(d.courseId || ''),
+          courseTitle: String(d.courseTitle || ''),
+          courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
+          courseTitles: Array.isArray(d.courseTitles) ? d.courseTitles.map(String).filter(Boolean) : [],
+          avatarUrl: d.avatarUrl ? String(d.avatarUrl) : undefined,
+          status: 'active',
+        });
+      }
+      return subs;
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const [courses, config, siteSettings, paymentQr, faqsDoc, subAdmins, liveSessionsRaw] =
+      await Promise.all([
+        fetchCollectionSafe('courses', 100),
+        fetchDocSafe('system/config'),
+        fetchDocSafe('system/site_settings'),
+        fetchDocSafe('system/payment_qr'),
+        fetchDocSafe('system/faqs'),
+        fetchActiveSubAdminsSafe(),
+        fetchCollectionSafe('live_sessions', 50),
+      ]);
+
+    const liveSessions = Array.isArray(liveSessionsRaw)
+      ? [...liveSessionsRaw].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      : null;
+
+    return {
+      courses,
+      config,
+      siteSettings,
+      paymentQr,
+      faqs: Array.isArray(faqsDoc?.items) ? faqsDoc.items : null,
+      subAdmins,
+      liveSessions,
+    };
   } finally {
     clearTimeout(timer);
   }

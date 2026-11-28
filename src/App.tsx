@@ -73,9 +73,9 @@ import {
 
 import { COURSES, TESTIMONIALS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl, normalizeLegacyBrandText } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey, SupportedLocale } from './types';
-import { collection, getDocs, getDocsFromServer, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, getDocFromServer, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
-import { db, auth, fetchCoursesViaRest } from './firebase';
+import { db, auth, fetchPublicBootstrapViaRest } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
 import { ImageAdjustModal } from './components/ImageAdjustModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
@@ -354,7 +354,12 @@ export default function App() {
       const saved = localStorage.getItem('clipzone_sub_admin_session');
       if (saved) {
         const parsed = JSON.parse(saved) as SubAdminAccount;
-        if (parsed && parsed.code && parsed.courseId && parsed.status === 'active') {
+        if (
+          parsed &&
+          parsed.code &&
+          parsed.status === 'active' &&
+          (parsed.courseId || (Array.isArray(parsed.courseIds) && parsed.courseIds.length > 0))
+        ) {
           return parsed;
         }
       }
@@ -716,8 +721,11 @@ export default function App() {
     };
   }, []);
 
-  // Dynamic Courses state - hydrate ONLY from verified Firestore-synced cache; never pre-seed hardcoded defaults before DB loads
+  // Dynamic Courses state - hydrate from cache immediately ONLY when offline; when online wait for live server fetch so stale cache never flashes on first open
   const [courses, setCourses] = useState<Course[]>(() => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (!isOffline) return [];
+
     const deletedIds: string[] = (() => {
       try {
         return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
@@ -734,7 +742,7 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const activeList = parsed.filter(c => c && c.id && !deletedIds.includes(c.id));
           if (activeList.length > 0) {
-            const sanitized = activeList
+            return activeList
               .map((c, index) => ({
                 ...c,
                 id: c.id === 'al-master-class-course-by-al-clipzone' ? 'Ai master class course by Ai clipzone' : c.id,
@@ -746,13 +754,11 @@ export default function App() {
                 order: typeof c.order === 'number' ? c.order : index
               }))
               .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-            return sanitized;
           }
         }
       }
     } catch (e) {}
 
-    // Start empty so loading skeleton shows immediately until Firestore returns the full dynamic catalog
     return [];
   });
 
@@ -779,8 +785,10 @@ export default function App() {
   });
 
   // Course loading & error states from database
-  // Show cached courses directly (0ms, no reload skeleton!) and sync server state silently in background
+  // While online, wait for the live server bootstrap (~100-200ms) instead of flashing stale localStorage on first open
   const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (!isOffline) return true;
     try {
       const isInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
       const cached = localStorage.getItem('clipzone_dynamic_courses');
@@ -908,7 +916,7 @@ export default function App() {
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [sanitizeCourseRecord]);
 
-  // Explicit server-first fetch so all published & hidden courses match Firestore live state on initial open/reload
+  // Explicit server-first fetch so courses, settings, payment QR, sub-admins & deleted list match Firestore live state on first open
   const lastCoursesServerFetchRef = useRef<number>(0);
   const refreshCoursesFromServer = useCallback(async (showSpinner = false) => {
     if (showSpinner) {
@@ -917,8 +925,23 @@ export default function App() {
     setCoursesLoadError(null);
     lastCoursesServerFetchRef.current = Date.now();
 
+    const readLocalCachedCourses = (deletedIdsList: string[]): Course[] => {
+      try {
+        const cached = localStorage.getItem('clipzone_dynamic_courses');
+        if (!cached) return [];
+        const parsed = JSON.parse(cached);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .filter((c: any) => c && c.id && !deletedIdsList.includes(c.id))
+          .map((c: any, idx: number) => sanitizeCourseRecord(c as Course, idx))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      } catch {
+        return [];
+      }
+    };
+
     try {
-      const deletedIds: string[] = (() => {
+      let deletedIds: string[] = (() => {
         try {
           return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
         } catch {
@@ -926,22 +949,80 @@ export default function App() {
         }
       })();
 
-      // Fast-path REST fetch on cold loads (resolves ~80-150ms without waiting for WebChannel handshake)
+      // Fast-path parallel REST bootstrap on cold loads (~100-200ms without waiting for WebChannel handshake)
       if (typeof navigator === 'undefined' || navigator.onLine) {
-        const restDocs = await fetchCoursesViaRest(2800);
-        if (Array.isArray(restDocs) && restDocs.length > 0) {
-          const activeRest = restDocs
+        const bootstrap = await fetchPublicBootstrapViaRest(3500);
+
+        if (bootstrap.config) {
+          if (Array.isArray(bootstrap.config.deletedCourseIds)) {
+            deletedIds = bootstrap.config.deletedCourseIds.map(String);
+            setDeletedCourseIds(deletedIds);
+            try {
+              localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedIds));
+            } catch {}
+          }
+        }
+
+        if (bootstrap.siteSettings) {
+          const data = bootstrap.siteSettings as SiteSettingsConfig;
+          const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
+          const cleaned: SiteSettingsConfig = {
+            ...data,
+            instituteName: normalizeLegacyBrandText(data.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
+            siteTitle: normalizeLegacyBrandText(data.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
+            siteTagline: normalizeLegacyBrandText(data.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
+            certificateInstituteName: normalizeLegacyBrandText(data.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
+            certificateCeoName: normalizeLegacyBrandText(data.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
+            certificateCeoTitle: normalizeLegacyBrandText(data.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
+            certificateSealText: normalizeLegacyBrandText(data.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
+            supportEmail: (data.supportEmail === 'ai.clipzone.edu@gmail.com' || data.supportEmail === 'support@hamrolms.com') ? DEFAULT_SITE_SETTINGS.supportEmail : data.supportEmail,
+            instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
+            certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
+          };
+          setSiteSettings(prev => ({ ...prev, ...cleaned }));
+          try {
+            localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned));
+          } catch {}
+        }
+
+        if (bootstrap.paymentQr) {
+          const qrData = bootstrap.paymentQr as PaymentQrConfig;
+          setPaymentConfig(prev => ({ ...prev, ...qrData }));
+          try {
+            localStorage.setItem('clipzone_payment_config', JSON.stringify(qrData));
+          } catch {}
+        }
+
+        if (Array.isArray(bootstrap.faqs)) {
+          setFaqs(bootstrap.faqs as FAQItem[]);
+        }
+
+        if (Array.isArray(bootstrap.subAdmins)) {
+          const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+          if (!mainAdminActive) {
+            setActiveSubAdmins(bootstrap.subAdmins as SubAdminAccount[]);
+          }
+        }
+
+        if (Array.isArray(bootstrap.liveSessions)) {
+          setLiveSessions(bootstrap.liveSessions as LiveSession[]);
+        }
+
+        if (Array.isArray(bootstrap.courses)) {
+          const activeRest = bootstrap.courses
             .filter((c) => c && c.id && !deletedIds.includes(c.id))
             .map((c, idx) => sanitizeCourseRecord(c as Course, idx))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-          setCourses(activeRest);
-          setCoursesLoadError(null);
-          setIsCoursesLoading(false);
-          try {
-            localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(activeRest));
-            localStorage.setItem('clipzone_courses_initialized', 'true');
-          } catch (e) {}
-          return;
+          if (activeRest.length > 0 || bootstrap.config?.courses_seeded === true) {
+            setCourses(activeRest);
+            setCoursesLoadError(null);
+            setIsCoursesLoading(false);
+            try {
+              localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(activeRest));
+              localStorage.setItem('clipzone_courses_initialized', 'true');
+            } catch (e) {}
+            return;
+          }
         }
       }
 
@@ -970,13 +1051,17 @@ export default function App() {
 
       // If Firestore collection returned empty, verify offline/seed state cleanly
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const cachedFallback = readLocalCachedCourses(deletedIds);
+        if (cachedFallback.length > 0) setCourses(cachedFallback);
         setIsCoursesLoading(false);
         return;
       }
 
       let remoteSeeded = false;
       try {
-        const configSnap = await getDoc(doc(db, 'system', 'config'));
+        const configSnap = resolvedFromServer
+          ? await getDocFromServer(doc(db, 'system', 'config'))
+          : await getDoc(doc(db, 'system', 'config'));
         remoteSeeded = Boolean(configSnap.exists() && configSnap.data()?.courses_seeded === true);
       } catch (e) {}
 
@@ -988,7 +1073,7 @@ export default function App() {
         }
       })();
 
-      if (!remoteSeeded && !alreadyInitialized && deletedIds.length === 0) {
+      if (resolvedFromServer && !remoteSeeded && !alreadyInitialized && deletedIds.length === 0) {
         const initialCourses = COURSES.map((c, i) =>
           sanitizeCourseRecord({ ...c, order: typeof c.order === 'number' ? c.order : i }, i)
         );
@@ -1006,19 +1091,35 @@ export default function App() {
         try {
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify([]));
         } catch (e) {}
+      } else {
+        const cachedFallback = readLocalCachedCourses(deletedIds);
+        if (cachedFallback.length > 0) {
+          setCourses(cachedFallback);
+        }
       }
       setIsCoursesLoading(false);
     } catch (err) {
       console.warn('Error fetching courses from Firestore:', err);
-      setCourses(prev => {
-        if (!prev || prev.length === 0) {
-          setCoursesLoadError('Unable to load courses. Please check your internet connection and try again.');
+      const cachedFallback = readLocalCachedCourses((() => {
+        try {
+          return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+        } catch {
+          return [];
         }
-        return prev;
-      });
+      })());
+      if (cachedFallback.length > 0) {
+        setCourses(cachedFallback);
+      } else {
+        setCourses(prev => {
+          if (!prev || prev.length === 0) {
+            setCoursesLoadError('Unable to load courses. Please check your internet connection and try again.');
+          }
+          return prev;
+        });
+      }
       setIsCoursesLoading(false);
     }
-  }, [processCourseSnapshotDocs, sanitizeCourseRecord]);
+  }, [processCourseSnapshotDocs, sanitizeCourseRecord, isAdminActivated, currentUser?.email]);
 
   // Initial server fetch + realtime synchronization of courses from Firestore
   useEffect(() => {
@@ -1116,6 +1217,9 @@ export default function App() {
   useEffect(() => {
     const notifQuery = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
+      if (snapshot.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) {
+        return;
+      }
       try {
         const list: PushNotificationItem[] = [];
         snapshot.forEach((d) => {
@@ -1141,6 +1245,9 @@ export default function App() {
   useEffect(() => {
     const liveQuery = query(collection(db, 'live_sessions'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(liveQuery, (snapshot) => {
+      if (snapshot.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) {
+        return;
+      }
       try {
         const list: LiveSession[] = [];
         snapshot.forEach((d) => {
@@ -1201,19 +1308,15 @@ export default function App() {
   // Realtime listener for global admin session logout commands and deleted courses blacklist across all user devices
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'system', 'config'), (docSnap) => {
+      if ((docSnap as any)?.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) {
+        return;
+      }
       if (docSnap.exists()) {
         const data = docSnap.data();
 
         // 1. Synchronize remote deletedCourseIds blacklist from Firestore
-        if (Array.isArray(data.deletedCourseIds) && data.deletedCourseIds.length > 0) {
-          const currentDeleted: string[] = (() => {
-            try {
-              return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-            } catch {
-              return [];
-            }
-          })();
-          const mergedDeleted = Array.from(new Set([...currentDeleted, ...data.deletedCourseIds]));
+        if (Array.isArray(data.deletedCourseIds)) {
+          const mergedDeleted = Array.from(new Set(data.deletedCourseIds.map(String)));
           try {
             localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(mergedDeleted));
           } catch (e) {}
@@ -1288,6 +1391,7 @@ export default function App() {
   useEffect(() => {
     // 1. Payment QR config listener
     const unsubPayment = onSnapshot(doc(db, 'system', 'payment_qr'), (snap) => {
+      if (snap.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       if (snap.exists()) {
         const data = snap.data() as PaymentQrConfig;
         setPaymentConfig(prev => ({ ...prev, ...data }));
@@ -1301,6 +1405,7 @@ export default function App() {
 
     // 2. FAQs listener (only accept explicit array updates; keep empty when cleared)
     const unsubFaqs = onSnapshot(doc(db, 'system', 'faqs'), (snap) => {
+      if (snap.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       if (snap.exists()) {
         const data = snap.data();
         if (Array.isArray(data?.items)) {
@@ -1313,6 +1418,7 @@ export default function App() {
 
     // 3. Overall Site Settings listener
     const unsubSettings = onSnapshot(doc(db, 'system', 'site_settings'), (snap) => {
+      if (snap.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       if (snap.exists()) {
         const data = snap.data() as SiteSettingsConfig;
         const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
@@ -1521,6 +1627,7 @@ export default function App() {
   // Realtime enforcement: Single-device Admin Login
   useEffect(() => {
     const unsubAdminSession = onSnapshot(doc(db, 'system', 'admin_session'), (snap) => {
+      if ((snap as any)?.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       if (!snap.exists()) return;
       const data = snap.data();
       const remoteSessionId = data?.activeSessionId;
@@ -1546,7 +1653,7 @@ export default function App() {
       localStorage.removeItem('clipzone_admin_activated');
       setIsAdminActivated(false);
     } else if (localSessionId) {
-      getDoc(doc(db, 'system', 'admin_session')).then((snap) => {
+      getDocFromServer(doc(db, 'system', 'admin_session')).then((snap) => {
         if (snap.exists()) {
           const remoteSessionId = snap.data()?.activeSessionId;
           if (remoteSessionId && remoteSessionId !== localSessionId) {
@@ -1632,7 +1739,13 @@ export default function App() {
 
       for (const code of activeCodes) {
         try {
-          const keyDocSnap = await getDoc(doc(db, 'activation_keys', code));
+          const keyRef = doc(db, 'activation_keys', code);
+          let keyDocSnap;
+          try {
+            keyDocSnap = await getDocFromServer(keyRef);
+          } catch {
+            keyDocSnap = await getDoc(keyRef);
+          }
           if (keyDocSnap && typeof keyDocSnap.exists === 'function') {
             if (keyDocSnap.exists()) {
               const keyData = keyDocSnap.data();
@@ -1745,9 +1858,10 @@ export default function App() {
         lastFetchedAuthUidRef.current = null;
         try {
           const localName = localStorage.getItem('clipzone_student_name');
+          let virtualUser: any = null;
           if (localName) {
-            const virtualUser = getOrCreateLocalUser(localName);
-            setCurrentUser(virtualUser as any);
+            virtualUser = getOrCreateLocalUser(localName);
+            setCurrentUser(virtualUser);
           }
           // Always preserve activated courses from persistent local storage so student is never auto-logged out
           const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
@@ -1757,6 +1871,15 @@ export default function App() {
           const localKeys = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
           if (Array.isArray(localKeys) && localKeys.length > 0) {
             setUserActivationKeys(localKeys);
+          }
+          const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+          if (Array.isArray(activeCodes) && activeCodes.length > 0) {
+            void fetchUserActiveKeys(
+              (virtualUser || {
+                uid: localStorage.getItem('clipzone_student_uid') || '',
+                isAnonymous: true,
+              }) as FirebaseUser
+            );
           }
         } catch (e) {}
         setAuthLoading(false);
@@ -2084,10 +2207,16 @@ export default function App() {
       const verifiedCourseIds = new Set<string>();
       const secondaryCourseIdsSet = new Set<string>();
 
-      // 1. Verify every code stored locally on this device directly from Firestore
+      // 1. Verify every code stored locally on this device directly from Firestore server
       for (const code of activeCodes) {
         try {
-          const keySnap = await getDoc(doc(db, 'activation_keys', code));
+          const keyRef = doc(db, 'activation_keys', code);
+          let keySnap;
+          try {
+            keySnap = await getDocFromServer(keyRef);
+          } catch {
+            keySnap = await getDoc(keyRef);
+          }
           if (keySnap && typeof keySnap.exists === 'function' && keySnap.exists()) {
             const data = keySnap.data();
             // If admin marked forceLogoutAt
@@ -2164,7 +2293,12 @@ export default function App() {
             collection(db, 'activation_keys'),
             where('claimedByUid', '==', user.uid)
           );
-          const qSnap = await getDocs(q);
+          let qSnap;
+          try {
+            qSnap = await getDocsFromServer(q);
+          } catch {
+            qSnap = await getDocs(q);
+          }
           qSnap.forEach((docSnap) => {
             const data = docSnap.data();
             const durationMs = data.duration === '1day' ? 24 * 3600000 : data.duration === '1month' ? 30 * 86400000 : 365 * 86400000;
@@ -2287,7 +2421,12 @@ export default function App() {
         ? query(collection(db, 'activation_keys'), where('courseId', '==', subCourseIds[0]))
         : query(collection(db, 'activation_keys'), where('courseId', 'in', subCourseIds));
 
-      const querySnapshot = await getDocs(keysRef);
+      let querySnapshot;
+      try {
+        querySnapshot = await getDocsFromServer(keysRef);
+      } catch {
+        querySnapshot = await getDocs(keysRef);
+      }
 
       const firestoreKeys: any[] = [];
       querySnapshot.forEach((docSnap: any) => {
@@ -2336,6 +2475,7 @@ export default function App() {
       : query(collection(db, 'activation_keys'), where('courseId', 'in', subCourseIds));
 
     const unsubKeys = onSnapshot(keysQuery, (snapshot) => {
+      if (snapshot.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       const keys: any[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -2355,7 +2495,22 @@ export default function App() {
 
     let unsubSubAdmins: (() => void) | null = null;
     if (mainAdminActive) {
+      getDocsFromServer(collection(db, 'sub_admins'))
+        .then((snapshot) => {
+          const list: SubAdminAccount[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
+          });
+          list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          setSubAdminList(list);
+          try {
+            localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(list));
+          } catch {}
+        })
+        .catch(() => {});
+
       unsubSubAdmins = onSnapshot(collection(db, 'sub_admins'), (snapshot) => {
+        if (snapshot.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
         const list: SubAdminAccount[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
@@ -2370,7 +2525,7 @@ export default function App() {
       // Live watch own Sub-Admin document so Main Admin disable / delete / reassign applies immediately
       const myDeviceId = getOrCreateDeviceId();
       unsubSubAdmins = onSnapshot(doc(db, 'sub_admins', subAdminSession.code), (docSnap) => {
-        if ((docSnap as any)?.metadata?.fromCache && typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if ((docSnap as any)?.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
         if (!docSnap.exists()) {
           setSubAdminSession(null);
           localStorage.removeItem('clipzone_sub_admin_session');
@@ -2422,6 +2577,7 @@ export default function App() {
     try {
       const activeSubsQuery = query(collection(db, 'sub_admins'), where('status', '==', 'active'));
       const unsub = onSnapshot(activeSubsQuery, (snapshot) => {
+        if (snapshot.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
         const list: SubAdminAccount[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
@@ -4327,10 +4483,8 @@ export default function App() {
   }, []);
 
   const publicCatalogCourses = useMemo(() => {
-    if (courses && courses.length > 0) return courses.filter((c) => c.isHidden !== true);
-    if (isCoursesLoading) return [];
-    return COURSES.filter((c) => !deletedCourseIds.includes(c.id) && c.isHidden !== true);
-  }, [courses, deletedCourseIds, isCoursesLoading]);
+    return (courses || []).filter((c) => c.isHidden !== true);
+  }, [courses]);
 
   const effectiveSubAdminsForInstructors = useMemo(() => {
     const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
@@ -6384,6 +6538,18 @@ export default function App() {
               : undefined;
             const targetCourse = selectedMatch || findCourseBySlug(publicCatalogCourses, routeSlug);
             if (!targetCourse) {
+              if (isCoursesLoading) {
+                return (
+                  <div className="max-w-5xl mx-auto py-8 px-4 animate-pulse space-y-6">
+                    <div className="h-6 bg-zinc-900 rounded-lg w-48" />
+                    <div className="h-72 bg-zinc-950 border border-zinc-800 rounded-3xl" />
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      <div className="lg:col-span-8 h-64 bg-zinc-950 border border-zinc-800 rounded-3xl" />
+                      <div className="lg:col-span-4 h-64 bg-zinc-950 border border-zinc-800 rounded-3xl" />
+                    </div>
+                  </div>
+                );
+              }
               return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
             }
             const instructor = resolveCourseInstructor(targetCourse, publicInstructors);
@@ -6418,6 +6584,14 @@ export default function App() {
           (() => {
             const inst = publicInstructors.find((i) => i.slug === slugifyText(routeSlug || ''));
             if (!inst) {
+              if (isCoursesLoading) {
+                return (
+                  <div className="max-w-4xl mx-auto py-8 px-4 animate-pulse space-y-6">
+                    <div className="h-6 bg-zinc-900 rounded-lg w-40" />
+                    <div className="h-56 bg-zinc-950 border border-zinc-800 rounded-3xl" />
+                  </div>
+                );
+              }
               return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
             }
             return (

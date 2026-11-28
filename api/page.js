@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader(
       'Cache-Control',
-      statusCode === 404 ? 'no-store' : 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600'
+      'no-store, no-cache, must-revalidate, proxy-revalidate'
     );
     res.end(html);
   } catch {
