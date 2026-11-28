@@ -24,6 +24,19 @@
       ]
     },
     {
+      "source": "/(llms\\.txt|llms-full\\.txt)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=1800"
+        }
+      ]
+    },
+    {
       "source": "/sitemap.xml",
       "headers": [
         {
@@ -86,6 +99,14 @@
       "destination": "/api/robots.js"
     },
     {
+      "source": "/llms.txt",
+      "destination": "/api/llms.js"
+    },
+    {
+      "source": "/llms-full.txt",
+      "destination": "/api/llms.js?full=1"
+    },
+    {
       "source": "/.well-known/assetlinks.json",
       "destination": "/api/assetlinks.js"
     },
@@ -98,7 +119,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api(?:/|$)|\\.well-known(?:/|$)|robots\\.txt$|sitemap\\.xml$|manifest\\.json$|sw\\.js$|firebase-messaging-sw\\.js$|widget-template\\.json$|google[a-zA-Z0-9]+\\.html$|.*\\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt)$).*)",
+      "source": "/((?!api(?:/|$)|\\.well-known(?:/|$)|robots\\.txt$|sitemap\\.xml$|llms\\.txt$|llms-full\\.txt$|manifest\\.json$|sw\\.js$|firebase-messaging-sw\\.js$|widget-template\\.json$|google[a-zA-Z0-9]+\\.html$|.*\\.(?:png|jpg|jpeg|webp|gif|svg|ico|css|js|woff2?|ttf|json|xml|txt)$).*)",
       "destination": "/api/page.js?__route=/$1"
     }
   ],

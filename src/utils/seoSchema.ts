@@ -34,10 +34,88 @@ export function buildOrganizationSchema(origin: string, brand: string, supportEm
         availableLanguage: ['English'],
       },
     ],
+    founder: {
+      '@type': 'Person',
+      '@id': `${origin}/instructors/rajababu-mehta#person`,
+      name: 'Rajababu Mehta',
+      jobTitle: 'Founder & Lead AI Instructor',
+      url: `${origin}/instructors/rajababu-mehta`,
+    },
+    knowsAbout: [
+      'Artificial Intelligence Tools',
+      'Prompt Engineering',
+      'Video Editing',
+      'Graphic Design',
+      'YouTube Content Creation',
+      'Web Development',
+    ],
     sameAs: [
       `${origin}/`,
       'https://rajababumehta.com.np',
       'https://www.facebook.com/profile.php?id=61583901232576',
+    ],
+  };
+}
+
+export function buildWebApplicationSchema(origin: string, brand: string) {
+  return {
+    '@type': 'WebApplication',
+    '@id': `${origin}/#webapp`,
+    name: brand,
+    url: `${origin}/`,
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'All',
+    browserRequirements: 'Requires JavaScript. Requires HTML5.',
+    description: `Learn AI tools, video editing, graphic design, and web development from verified instructors on ${brand} with structured lessons and certificates.`,
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'NPR',
+    },
+  };
+}
+
+export function buildPlatformFaqSchema(origin: string, brand: string, courses: Course[]) {
+  const courseSample = courses
+    .slice(0, 5)
+    .map((c) => c.title)
+    .join(', ');
+  return {
+    '@type': 'FAQPage',
+    '@id': `${origin}/#platform-faq`,
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: `What is ${brand}?`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: `${brand} is an online learning platform and learning management system in Nepal offering practical digital skill courses in AI tools, prompt engineering, video editing, graphic design, and web development taught in English by verified instructors.`,
+        },
+      },
+      {
+        '@type': 'Question',
+        name: `What courses are available on ${brand}?`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: `${brand} offers structured courses${courseSample ? ` including ${courseSample}` : ''} with step-by-step video chapters and downloadable study notes.`,
+        },
+      },
+      {
+        '@type': 'Question',
+        name: `Do ${brand} courses include certificates?`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: `Yes. Eligible self-paced courses on ${brand} provide a verifiable digital Certificate of Completion in the student dashboard.`,
+        },
+      },
+      {
+        '@type': 'Question',
+        name: `How do students enroll and access lessons on ${brand}?`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: `Students select a course from the ${brand} catalog, complete enrollment, and enter their activation code inside the student profile to unlock all HD video lectures and PDF study guides.`,
+        },
+      },
     ],
   };
 }

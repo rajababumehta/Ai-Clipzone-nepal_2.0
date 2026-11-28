@@ -829,7 +829,6 @@ export default function App() {
   const [formIncludeLive, setFormIncludeLive] = useState(false);
   const [formIncludeCertificate, setFormIncludeCertificate] = useState(true);
   const [formIsHidden, setFormIsHidden] = useState(false);
-  const [formLanguage, setFormLanguage] = useState('English');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string; chapterTitle?: string }[]>([]);
   const [formPdfs, setFormPdfs] = useState<CoursePdf[]>([]);
@@ -5175,7 +5174,6 @@ export default function App() {
     setFormIncludeLive(Boolean(course.includeLive));
     setFormIncludeCertificate(course.includeCertificate !== false);
     setFormIsHidden(Boolean(course.isHidden));
-    setFormLanguage(course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English');
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
     setFormPdfs(course.pdfs && Array.isArray(course.pdfs) ? [...course.pdfs] : []);
@@ -5202,7 +5200,6 @@ export default function App() {
     setFormIncludeLive(false);
     setFormIncludeCertificate(true);
     setFormIsHidden(false);
-    setFormLanguage('English');
     setFormLearnText('');
     setFormVideos([]);
     setFormPdfs([]);
@@ -5310,7 +5307,7 @@ export default function App() {
       includeLive: isMainAdmin ? formIncludeLive : Boolean(editingCourse?.includeLive),
       includeCertificate: isMainAdmin ? formIncludeCertificate : (editingCourse?.includeCertificate ?? true),
       isHidden: isMainAdmin ? formIsHidden : Boolean(editingCourse?.isHidden),
-      language: (formLanguage.trim() && !/nepali|hindi/i.test(formLanguage)) ? formLanguage.trim() : 'English',
+      language: 'English',
       order: currentOrder,
       videos: formVideos,
       pdfs: formPdfs
@@ -7763,8 +7760,11 @@ export default function App() {
                     <div className="relative aspect-video overflow-hidden bg-black">
                       <img 
                         src={course.image} 
-                        alt={`${course.title} – Online Course on Hamro LMS Nepal`}
+                        alt={`${course.title} – Online Course on HamroLms`}
+                        width={1280}
+                        height={720}
                         loading={index > 1 ? 'lazy' : 'eager'}
+                        fetchPriority={index === 0 ? 'high' : 'auto'}
                         decoding="async"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -7780,9 +7780,9 @@ export default function App() {
                     {/* Course Info */}
                     <div className="p-4 sm:p-5 md:p-6 flex flex-col grow justify-between">
                       <div className="text-left font-sans">
-                        <h3 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
+                        <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
                           {course.title}
-                        </h3>
+                        </h2>
                         
                         {/* Prices or Active status badge */}
                         <div className="mt-3 sm:mt-4 flex items-center justify-between">
@@ -7821,9 +7821,6 @@ export default function App() {
                               </span>
                             );
                           })()}
-                          <span className="bg-zinc-800 text-zinc-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-zinc-700">
-                            🌐 {course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English'}
-                          </span>
                           {course.includeLive ? (
                             <span className="bg-rose-950/60 text-rose-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/40">
                               🎥 Live Class
@@ -8029,10 +8026,33 @@ export default function App() {
           )}
         </section>
 
-            {/* Compact Footer */}
+            {/* Compact Footer with Crawlable Internal Links */}
             {(currentView === 'home' || currentView === 'courses') && (
               <footer className="mt-auto pt-4">
-                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left">
+                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left space-y-2">
+                  <nav aria-label="Footer Navigation" className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-[11px] text-zinc-400">
+                    {[
+                      { label: 'Courses', path: '/courses' },
+                      { label: 'Instructors', path: '/instructors' },
+                      { label: 'Learning Blog', path: '/blog' },
+                      { label: 'About Us', path: '/about-us' },
+                      { label: 'Learn. Apply. Grow.', path: '/learn' },
+                      { label: 'Privacy Policy', path: '/privacy-policy' },
+                      { label: 'Terms of Use', path: '/terms' },
+                    ].map((linkItem) => (
+                      <a
+                        key={linkItem.path}
+                        href={buildLocalizedPath(linkItem.path, activeLocale)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigateToPath(linkItem.path);
+                        }}
+                        className="hover:text-blue-400 transition-colors"
+                      >
+                        {linkItem.label}
+                      </a>
+                    ))}
+                  </nav>
                   <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <span>© {new Date().getFullYear()} HamroLms. All rights reserved.</span>
                     <span>Learn. Apply. Grow. — Structured Online Courses &amp; Certificates</span>
@@ -8502,20 +8522,19 @@ export default function App() {
                   {selectedCourse.title}
                 </h3>
                 
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-zinc-900 text-zinc-300 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-zinc-750 flex items-center gap-1">
-                    🌐 Language: {selectedCourse.language && !/nepali|hindi/i.test(selectedCourse.language) ? selectedCourse.language : 'English'}
-                  </span>
-                  {selectedCourse.includeLive ? (
-                    <span className="bg-zinc-900 text-rose-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-rose-500/30">
-                      🎥 Live Class
-                    </span>
-                  ) : selectedCourse.includeCertificate !== false ? (
-                    <span className="bg-zinc-900 text-emerald-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-emerald-500/30">
-                      📜 Certificate
-                    </span>
-                  ) : null}
-                </div>
+                {(selectedCourse.includeLive || selectedCourse.includeCertificate !== false) && (
+                  <div className="flex items-center gap-2 mt-2">
+                    {selectedCourse.includeLive ? (
+                      <span className="bg-zinc-900 text-rose-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-rose-500/30">
+                        🎥 Live Class
+                      </span>
+                    ) : selectedCourse.includeCertificate !== false ? (
+                      <span className="bg-zinc-900 text-emerald-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-emerald-500/30">
+                        📜 Certificate
+                      </span>
+                    ) : null}
+                  </div>
+                )}
                 
                 <p className="text-3xl font-black text-emerald-400 mt-3 text-left">
                   {isCourseFree(selectedCourse) ? 'FREE' : selectedCourse.price}
@@ -9445,35 +9464,6 @@ export default function App() {
                     placeholder="e.g. I want to enroll in the YouTube Blueprint course"
                     className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-medium text-zinc-200 transition outline-hidden placeholder-zinc-600"
                   />
-                </div>
-
-                {/* Course Language / Medium */}
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Course Language / Medium *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={formLanguage}
-                    onChange={(e) => setFormLanguage(e.target.value)}
-                    placeholder="e.g. English"
-                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600"
-                  />
-                  <div className="mt-1.5 flex gap-1.5 flex-wrap">
-                    {['English'].map((langOption) => (
-                      <button
-                        key={langOption}
-                        type="button"
-                        onClick={() => setFormLanguage(langOption)}
-                        className={`text-[9px] font-bold px-2.5 py-1 rounded-md transition cursor-pointer ${
-                          formLanguage === langOption
-                            ? 'bg-blue-600 text-white font-bold shadow-xs'
-                            : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-                        }`}
-                      >
-                        {langOption}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Course Thumbnail Direct Image Upload */}

@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import {
+  generateLlmsDocument as sharedGenerateLlmsDocument,
   generateRobotsTxt as sharedGenerateRobotsTxt,
   generateSitemapXml as sharedGenerateSitemapXml,
   injectRouteSeoMeta as sharedInjectRouteSeoMeta,
@@ -47,5 +48,14 @@ export function mountSeoRoutes(app: Express): void {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.status(200).send(generateRobotsTxt(origin));
+  });
+
+  app.get(['/llms.txt', '/llms-full.txt'], async (req: Request, res: Response) => {
+    const origin = resolvePublicOrigin(req);
+    const isFull = req.path.includes('llms-full.txt');
+    const txt = await sharedGenerateLlmsDocument(origin, isFull);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400');
+    res.status(200).send(txt);
   });
 }

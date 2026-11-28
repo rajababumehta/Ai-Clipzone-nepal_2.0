@@ -15,7 +15,9 @@ import {
   buildCourseSchema,
   buildOrganizationSchema,
   buildPersonSchema,
+  buildPlatformFaqSchema,
   buildSiteNavigationSchema,
+  buildWebApplicationSchema,
   buildWebsiteSchema,
 } from './seoSchema.ts';
 
@@ -482,8 +484,10 @@ export function generateDynamicPageMetadata(
       buildOrganizationSchema(origin, brand, supportEmail),
       ...(input.currentView === 'home'
         ? [
+            buildWebApplicationSchema(origin, brand),
             buildWebsiteSchema(origin, brand, input.activeLocale),
             buildSiteNavigationSchema(origin, input.activeLocale),
+            buildPlatformFaqSchema(origin, brand, input.publicCatalogCourses),
           ]
         : []),
       buildBreadcrumbSchema(breadcrumbItems),
@@ -593,6 +597,27 @@ export function injectDynamicPageMetadata(meta: GeneratedPageSeoMetadata): void 
     link.href = item.href;
     document.head.appendChild(link);
   });
+
+  const originForLinks = typeof window !== 'undefined' ? window.location.origin : 'https://hamrolms.vercel.app';
+  let sitemapLink = document.querySelector('link[rel="sitemap"]') as HTMLLinkElement | null;
+  if (!sitemapLink) {
+    sitemapLink = document.createElement('link');
+    sitemapLink.rel = 'sitemap';
+    sitemapLink.type = 'application/xml';
+    sitemapLink.title = 'Sitemap';
+    document.head.appendChild(sitemapLink);
+  }
+  sitemapLink.href = `${originForLinks}/sitemap.xml`;
+
+  let llmsLink = document.querySelector('link[rel="alternate"][type="text/plain"]') as HTMLLinkElement | null;
+  if (!llmsLink) {
+    llmsLink = document.createElement('link');
+    llmsLink.rel = 'alternate';
+    llmsLink.type = 'text/plain';
+    llmsLink.title = 'LLMs Context';
+    document.head.appendChild(llmsLink);
+  }
+  llmsLink.href = `${originForLinks}/llms.txt`;
 
   let ldScript = document.getElementById('dynamic-hamrolms-jsonld') as HTMLScriptElement | null;
   if (!ldScript) {

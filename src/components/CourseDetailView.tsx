@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  Globe,
   Layers,
   Lock,
   Sparkles,
@@ -134,10 +133,6 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 font-bold">
                 {course.category || 'Digital Skills'}
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 font-semibold flex items-center gap-1">
-                <Globe className="w-3.5 h-3.5 text-zinc-400" />
-                {course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English'}
               </span>
               {course.level && (
                 <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 font-semibold">

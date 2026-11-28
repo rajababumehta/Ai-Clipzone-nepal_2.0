@@ -736,6 +736,17 @@ export function buildSitemapXmlFromCatalog(origin, courses, instructors) {
       )}" />`,
     ].join('\n');
 
+    const matchedCourse =
+      spec.cleanPath.startsWith('/courses/')
+        ? (courses || []).find((c) => `/courses/${getCourseSlug(c)}` === spec.cleanPath)
+        : null;
+    const imageXml =
+      matchedCourse?.image
+        ? `\n    <image:image>\n      <image:loc>${escapeXml(resolveAbsImg(matchedCourse.image, origin))}</image:loc>\n      <image:title>${escapeXml(matchedCourse.title)}</image:title>\n    </image:image>`
+        : spec.cleanPath === '/'
+        ? `\n    <image:image>\n      <image:loc>${escapeXml(`${origin}/institute-logo.png`)}</image:loc>\n      <image:title>HamroLms – Online Learning &amp; Digital Skill Courses</image:title>\n    </image:image>`
+        : '';
+
     for (const loc of SUPPORTED_LOCALES) {
       const fullLoc = `${origin}${buildLocalizedPath(spec.cleanPath, loc)}`;
       urlNodes.push(
@@ -744,7 +755,7 @@ export function buildSitemapXmlFromCatalog(origin, courses, instructors) {
           `    <lastmod>${escapeXml(spec.lastmod)}</lastmod>\n` +
           `    <changefreq>${spec.changefreq}</changefreq>\n` +
           `    <priority>${loc === 'en' ? spec.priority : (Number(spec.priority) * 0.9).toFixed(2)}</priority>\n` +
-          `${alternatesXml}\n` +
+          `${alternatesXml}${imageXml}\n` +
           `  </url>`
       );
     }
@@ -753,7 +764,8 @@ export function buildSitemapXmlFromCatalog(origin, courses, instructors) {
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n` +
-    `        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n` +
+    `        xmlns:xhtml="http://www.w3.org/1999/xhtml"\n` +
+    `        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
     `${urlNodes.join('\n')}\n` +
     `</urlset>\n`
   );
@@ -770,9 +782,7 @@ export async function generateSitemapXml(origin = DEFAULT_PUBLIC_ORIGIN) {
 
 export function generateRobotsTxt(origin = DEFAULT_PUBLIC_ORIGIN) {
   const safeOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, '');
-  return [
-    'User-agent: *',
-    'Allow: /',
+  const privateDisallows = [
     'Disallow: /api/',
     'Disallow: /admin',
     'Disallow: /classroom',
@@ -781,10 +791,117 @@ export function generateRobotsTxt(origin = DEFAULT_PUBLIC_ORIGIN) {
     'Disallow: /live',
     'Disallow: /ask',
     'Disallow: /delete-account',
+  ];
+
+  const aiCrawlers = [
+    'GPTBot',
+    'OAI-SearchBot',
+    'ChatGPT-User',
+    'PerplexityBot',
+    'ClaudeBot',
+    'anthropic-ai',
+    'Google-Extended',
+    'Applebot-Extended',
+  ];
+
+  return [
+    'User-agent: *',
+    'Allow: /',
+    ...privateDisallows,
     '',
+    ...aiCrawlers.flatMap((bot) => [
+      `User-agent: ${bot}`,
+      'Allow: /',
+      'Allow: /llms.txt',
+      'Allow: /llms-full.txt',
+      ...privateDisallows,
+      '',
+    ]),
     `Sitemap: ${safeOrigin}/sitemap.xml`,
+    `# LLMs Context: ${safeOrigin}/llms.txt`,
+    `# Full LLMs Context: ${safeOrigin}/llms-full.txt`,
     '',
   ].join('\n');
+}
+
+export function buildLlmsTxtFromCatalog(origin, courses, instructors, isFull = false) {
+  const safeOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, '');
+  const safeCourses = Array.isArray(courses) && courses.length > 0 ? courses : SEED_COURSES;
+  const safeInstructors =
+    Array.isArray(instructors) && instructors.length > 0 ? instructors : CORE_INSTRUCTORS;
+
+  const lines = [
+    '# HamroLms',
+    '',
+    '> HamroLms (also known as Hamro LMS) is an online learning management system in Nepal offering practical digital skill courses in AI tools, prompt engineering, video editing, graphic design, YouTube growth, and web development, taught in English by verified instructors with structured video modules, downloadable PDF notes, and certificates.',
+    '',
+    '## Platform Facts',
+    `- Official Website: ${safeOrigin}/`,
+    `- Course Catalog: ${safeOrigin}/courses`,
+    `- Instructors Directory: ${safeOrigin}/instructors`,
+    `- Learning Blog & Tutorials: ${safeOrigin}/blog`,
+    `- About Us: ${safeOrigin}/about-us`,
+    `- Learning Pathway: ${safeOrigin}/learn`,
+    `- Privacy Policy: ${safeOrigin}/privacy-policy`,
+    `- Terms of Use: ${safeOrigin}/terms`,
+    '- Primary Language: English',
+    '- Support Email: support.hamrolms@gmail.com',
+    '- Region Served: Nepal and global online learners',
+    '- Format: Self-paced HD video chapters, downloadable PDF notes, live workshops (course-dependent), and digital certificates of completion',
+    '',
+    '## Online Courses',
+  ];
+
+  for (const c of safeCourses) {
+    const cUrl = `${safeOrigin}/courses/${getCourseSlug(c)}`;
+    const priceLabel = c.isFree || c.amount === 0 ? 'Free' : c.price || 'Paid';
+    const instLabel = c.instructorName ? ` | Instructor: ${c.instructorName}` : '';
+    const desc = c.overview || c.seoDescription || `Structured online course covering ${c.category || 'digital skills'}.`;
+    lines.push(`- [${c.title}](${cUrl}) (${priceLabel}${instLabel}): ${desc}`);
+    if (isFull && Array.isArray(c.learn) && c.learn.length > 0) {
+      lines.push(`  - Key Skills Covered: ${c.learn.join('; ')}`);
+    }
+  }
+
+  lines.push('', '## Verified Instructors');
+  for (const inst of safeInstructors) {
+    const instUrl = `${safeOrigin}/instructors/${inst.slug}`;
+    lines.push(`- [${inst.name}](${instUrl}) – ${inst.role}: ${inst.bio}`);
+    if (isFull && Array.isArray(inst.expertise) && inst.expertise.length > 0) {
+      lines.push(`  - Expertise: ${inst.expertise.join(', ')}`);
+    }
+  }
+
+  lines.push('', '## Learning Guides & Blog Articles');
+  for (const post of SEED_BLOG_POSTS) {
+    const postUrl = `${safeOrigin}/blog/${post.slug}`;
+    lines.push(`- [${post.title}](${postUrl}) (${post.category}): ${post.excerpt}`);
+    if (isFull && post.seoDescription) {
+      lines.push(`  - Summary: ${post.seoDescription}`);
+    }
+  }
+
+  if (isFull) {
+    lines.push(
+      '',
+      '## Frequently Asked Questions',
+      '- What is HamroLms? HamroLms is an online learning platform in Nepal designed for students, creators, and professionals seeking practical digital skills in AI tools, video production, and web development.',
+      '- How do students enroll in HamroLms courses? Students choose a course from the catalog, complete enrollment (free or via QR/eSewa payment), and activate their access key in the student portal to unlock HD video lessons and study notes.',
+      '- Do HamroLms courses include certificates? Eligible self-paced courses include a verifiable Certificate of Completion once enrolled.'
+    );
+  }
+
+  lines.push('', `Sitemap: ${safeOrigin}/sitemap.xml`, '');
+  return lines.join('\n');
+}
+
+export async function generateLlmsDocument(origin = DEFAULT_PUBLIC_ORIGIN, isFull = false) {
+  try {
+    const { courses, instructors } = await fetchPublicCatalogSnapshot();
+    return buildLlmsTxtFromCatalog(origin, courses, instructors, isFull);
+  } catch {
+    return buildLlmsTxtFromCatalog(origin, SEED_COURSES, CORE_INSTRUCTORS, isFull);
+  }
 }
 
 function clampSeoText(text, maxLen) {
@@ -1017,6 +1134,36 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       name: 'Course',
       url: `${origin}${buildLocalizedPath('/courses', parsed.locale)}`,
     });
+    const buildRichCourseItem = (c) => {
+      const cUrl = `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale)}`;
+      const isFree = c.isFree === true || c.amount === 0 || /^free$/i.test(String(c.price || '').trim());
+      const priceVal = isFree ? 0 : Number(c.amount ?? String(c.price || '').replace(/[^\d.]/g, '')) || 0;
+      return {
+        '@type': 'Course',
+        '@id': `${cUrl}#course`,
+        name: c.title,
+        description: c.seoDescription || c.overview || `${c.title} online course on HamroLms.`,
+        url: cUrl,
+        image: resolveAbsImg(c.image, origin),
+        inLanguage: 'en',
+        educationalLevel: c.level || 'All Levels',
+        teaches: Array.isArray(c.learn) ? c.learn.slice(0, 6) : [],
+        provider: { '@id': `${origin}/#organization` },
+        offers: {
+          '@type': 'Offer',
+          category: isFree ? 'Free' : 'Paid',
+          priceCurrency: 'NPR',
+          price: priceVal,
+          availability: 'https://schema.org/InStock',
+          url: cUrl,
+        },
+        hasCourseInstance: {
+          '@type': 'CourseInstance',
+          courseMode: c.includeLive ? 'Blended' : 'Online',
+        },
+      };
+    };
+
     extraSchemas.push({
       '@type': 'ItemList',
       '@id': `${origin}/courses#course-catalog`,
@@ -1026,7 +1173,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
         '@type': 'ListItem',
         position: idx + 1,
         url: `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale)}`,
-        name: c.title,
+        item: buildRichCourseItem(c),
       })),
     });
   } else if (parsed.view === 'about-us') {
@@ -1069,6 +1216,36 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
   } else if (!parsed.isPublicIndexable) {
     robots = 'noindex, nofollow';
   } else {
+    const buildRichCourseItem = (c) => {
+      const cUrl = `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale)}`;
+      const isFree = c.isFree === true || c.amount === 0 || /^free$/i.test(String(c.price || '').trim());
+      const priceVal = isFree ? 0 : Number(c.amount ?? String(c.price || '').replace(/[^\d.]/g, '')) || 0;
+      return {
+        '@type': 'Course',
+        '@id': `${cUrl}#course`,
+        name: c.title,
+        description: c.seoDescription || c.overview || `${c.title} online course on HamroLms.`,
+        url: cUrl,
+        image: resolveAbsImg(c.image, origin),
+        inLanguage: 'en',
+        educationalLevel: c.level || 'All Levels',
+        teaches: Array.isArray(c.learn) ? c.learn.slice(0, 6) : [],
+        provider: { '@id': `${origin}/#organization` },
+        offers: {
+          '@type': 'Offer',
+          category: isFree ? 'Free' : 'Paid',
+          priceCurrency: 'NPR',
+          price: priceVal,
+          availability: 'https://schema.org/InStock',
+          url: cUrl,
+        },
+        hasCourseInstance: {
+          '@type': 'CourseInstance',
+          courseMode: c.includeLive ? 'Blended' : 'Online',
+        },
+      };
+    };
+
     extraSchemas.push({
       '@type': 'ItemList',
       '@id': `${origin}/#course-catalog`,
@@ -1078,7 +1255,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
         '@type': 'ListItem',
         position: idx + 1,
         url: `${origin}${buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale)}`,
-        name: c.title,
+        item: buildRichCourseItem(c),
       })),
     });
   }
@@ -1152,10 +1329,60 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
           width: 1600,
           height: 1600,
         },
+        image: `${origin}/institute-logo.png`,
+        description:
+          'HamroLms is an online learning platform in Nepal offering practical courses in AI tools, prompt engineering, video editing, graphic design, YouTube growth, and web development taught by verified instructors.',
         email: 'support.hamrolms@gmail.com',
+        areaServed: {
+          '@type': 'Country',
+          name: 'Nepal',
+        },
+        contactPoint: [
+          {
+            '@type': 'ContactPoint',
+            email: 'support.hamrolms@gmail.com',
+            contactType: 'customer support',
+            availableLanguage: ['English'],
+          },
+        ],
+        founder: {
+          '@type': 'Person',
+          '@id': `${origin}/instructors/rajababu-mehta#person`,
+          name: 'Rajababu Mehta',
+          jobTitle: 'Founder & Lead AI Instructor',
+          url: `${origin}/instructors/rajababu-mehta`,
+        },
+        knowsAbout: [
+          'Artificial Intelligence Tools',
+          'Prompt Engineering',
+          'Video Editing',
+          'Graphic Design',
+          'YouTube Content Creation',
+          'Web Development',
+        ],
+        sameAs: [
+          `${origin}/`,
+          'https://rajababumehta.com.np',
+          'https://www.facebook.com/profile.php?id=61583901232576',
+        ],
       },
       ...(isHomeRoute
         ? [
+            {
+              '@type': 'WebApplication',
+              '@id': `${origin}/#webapp`,
+              name: 'HamroLms',
+              url: `${origin}/`,
+              applicationCategory: 'EducationalApplication',
+              operatingSystem: 'All',
+              browserRequirements: 'Requires JavaScript. Requires HTML5.',
+              description: dict.homeDescription,
+              offers: {
+                '@type': 'Offer',
+                price: '0',
+                priceCurrency: 'NPR',
+              },
+            },
             {
               '@type': 'WebSite',
               '@id': `${origin}/#website`,
@@ -1163,6 +1390,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
               name: 'HamroLms',
               alternateName: ['Hamro LMS', 'HamroLms Nepal'],
               inLanguage: 'en',
+              description: dict.homeDescription,
               publisher: { '@id': `${origin}/#organization` },
               potentialAction: {
                 '@type': 'SearchAction',
@@ -1184,6 +1412,47 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
                 url: item.url,
               })),
             },
+            {
+              '@type': 'FAQPage',
+              '@id': `${origin}/#platform-faq`,
+              mainEntity: [
+                {
+                  '@type': 'Question',
+                  name: 'What is HamroLms?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'HamroLms is an online learning platform and learning management system in Nepal offering practical digital skill courses in AI tools, prompt engineering, video editing, graphic design, and web development taught in English by verified instructors.',
+                  },
+                },
+                {
+                  '@type': 'Question',
+                  name: 'What courses are available on HamroLms?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: `HamroLms offers structured courses including ${courses
+                      .slice(0, 5)
+                      .map((c) => c.title)
+                      .join(', ')} with step-by-step video chapters and downloadable study notes.`,
+                  },
+                },
+                {
+                  '@type': 'Question',
+                  name: 'Do HamroLms courses include certificates?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'Yes. Eligible self-paced courses on HamroLms provide a verifiable digital Certificate of Completion in the student dashboard.',
+                  },
+                },
+                {
+                  '@type': 'Question',
+                  name: 'How do students enroll and access lessons on HamroLms?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'Students select a course from the HamroLms catalog, complete enrollment (free or paid), and enter their activation code inside the student profile to unlock all HD video lectures and PDF study guides.',
+                  },
+                },
+              ],
+            },
           ]
         : []),
       {
@@ -1199,27 +1468,110 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     ],
   }).replace(/<\/script/gi, '<\\/script')}</script>`;
 
-  // Semantic SSR shell inside #root (cleanly replaced by React createRoot on mount) for Googlebot / crawlers
-  const ssrNavHtml = siteNavItems
+  // Rich, semantic, citation-ready SSR shell inside #root for search crawlers & GEO AI engines
+  // (Cleanly replaced by React createRoot on client mount)
+  const ssrNavHtml = [
+    ...siteNavItems,
+    { name: 'Instructors', url: `${origin}${buildLocalizedPath('/instructors', parsed.locale)}` },
+    { name: 'Blog', url: `${origin}${buildLocalizedPath('/blog', parsed.locale)}` },
+    { name: 'Terms of Use', url: `${origin}${buildLocalizedPath('/terms', parsed.locale)}` },
+  ]
     .map(
       (item) =>
         `<a href="${escapeHtmlAttr(item.url.replace(origin, '') || '/')}" style="color:#60a5fa;margin-right:16px;text-decoration:none;font-weight:600;">${escapeHtmlAttr(item.name)}</a>`
     )
     .join('');
 
-  const ssrCourseLinksHtml =
-    parsed.view === 'home' || parsed.view === 'courses'
-      ? `<ul>${courses
-          .slice(0, 10)
-          .map((c) => {
-            const cHref = buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale);
-            return `<li><a href="${escapeHtmlAttr(cHref)}" style="color:#93c5fd;">${escapeHtmlAttr(c.title)}</a></li>`;
-          })
-          .join('')}</ul>`
-      : '';
+  const ssrCourseCardsHtml = courses
+    .slice(0, 12)
+    .map((c) => {
+      const cHref = buildLocalizedPath(`/courses/${getCourseSlug(c)}`, parsed.locale);
+      const priceText = c.isFree || c.amount === 0 ? 'Free' : c.price || 'Enroll Now';
+      const cImg = resolveAbsImg(c.image, origin);
+      const cOverview = c.overview || c.seoDescription || `Structured online training in ${c.category || 'digital skills'} on HamroLms.`;
+      const learnList = Array.isArray(c.learn) && c.learn.length > 0
+        ? `<ul>${c.learn.slice(0, 6).map((item) => `<li>${escapeHtmlAttr(item)}</li>`).join('')}</ul>`
+        : '';
+      return `<article style="margin-bottom:24px;padding:16px;border:1px solid #27272a;border-radius:12px;"><img src="${escapeHtmlAttr(cImg)}" alt="${escapeHtmlAttr(c.title)} – Online Course on HamroLms" width="640" height="360" style="max-width:100%;height:auto;border-radius:8px;" /><h3><a href="${escapeHtmlAttr(cHref)}" style="color:#93c5fd;">${escapeHtmlAttr(c.title)}</a></h3><p><strong>Category:</strong> ${escapeHtmlAttr(c.category || 'Digital Skills')} | <strong>Level:</strong> ${escapeHtmlAttr(c.level || 'All Levels')} | <strong>Price:</strong> ${escapeHtmlAttr(priceText)}${c.instructorName ? ` | <strong>Instructor:</strong> ${escapeHtmlAttr(c.instructorName)}` : ''}</p><p>${escapeHtmlAttr(cOverview)}</p>${learnList}</article>`;
+    })
+    .join('');
+
+  const ssrInstructorsHtml = instructors
+    .slice(0, 8)
+    .map(
+      (inst) =>
+        `<article style="margin-bottom:16px;"><h3><a href="${escapeHtmlAttr(buildLocalizedPath(`/instructors/${inst.slug}`, parsed.locale))}" style="color:#93c5fd;">${escapeHtmlAttr(inst.name)}</a></h3><p><strong>Role:</strong> ${escapeHtmlAttr(inst.role)}</p><p>${escapeHtmlAttr(inst.bio)}</p></article>`
+    )
+    .join('');
+
+  const ssrBlogHtml = SEED_BLOG_POSTS.map(
+    (post) =>
+      `<article style="margin-bottom:14px;"><h3><a href="${escapeHtmlAttr(buildLocalizedPath(`/blog/${post.slug}`, parsed.locale))}" style="color:#93c5fd;">${escapeHtmlAttr(post.title)}</a></h3><p>${escapeHtmlAttr(post.excerpt)}</p></article>`
+  ).join('');
+
+  let ssrBodyHtml = `<section style="margin-top:20px;"><h1>${escapeHtmlAttr(title)}</h1><p style="color:#d4d4d8;">${escapeHtmlAttr(description)}</p></section>`;
+
+  if (parsed.view === 'home' || parsed.view === 'courses') {
+    ssrBodyHtml = `
+      <section style="margin-top:20px;">
+        <h1>${escapeHtmlAttr(parsed.view === 'courses' ? 'Course Catalog – HamroLms Online Courses' : 'HamroLms – Online Learning & Digital Skill Courses')}</h1>
+        <p style="color:#d4d4d8;">${escapeHtmlAttr(description)}</p>
+        <p style="color:#a1a1aa;">HamroLms (Hamro LMS) is a practical online learning platform in Nepal built for students, creators, and professionals who want hands-on training in generative AI tools, prompt engineering, video editing, graphic design, YouTube growth, and modern web development.</p>
+      </section>
+      <section style="margin-top:24px;">
+        <h2>Featured Online Courses</h2>
+        ${ssrCourseCardsHtml}
+      </section>
+      <section style="margin-top:24px;">
+        <h2>Key Facts About HamroLms</h2>
+        <dl>
+          <dt><strong>Platform Type</strong></dt><dd>Multi-instructor Online Learning Management System (LMS) in Nepal</dd>
+          <dt><strong>Course Language</strong></dt><dd>English</dd>
+          <dt><strong>Learning Materials</strong></dt><dd>Chapter-wise HD video lectures, downloadable PDF notes, and live mentor sessions</dd>
+          <dt><strong>Certification</strong></dt><dd>Verifiable digital Certificate of Completion on eligible courses</dd>
+          <dt><strong>Support Contact</strong></dt><dd>support.hamrolms@gmail.com</dd>
+        </dl>
+      </section>
+      <section style="margin-top:24px;">
+        <h2>Verified Instructors &amp; Mentors</h2>
+        ${ssrInstructorsHtml}
+      </section>
+      <section style="margin-top:24px;">
+        <h2>Practical Learning Guides</h2>
+        ${ssrBlogHtml}
+      </section>`;
+  } else if (parsed.view === 'course-detail') {
+    const targetCourse = findCourseBySlug(courses, parsed.slug);
+    if (targetCourse) {
+      const priceText = targetCourse.isFree || targetCourse.amount === 0 ? 'Free' : targetCourse.price || 'Available';
+      const learnItems = Array.isArray(targetCourse.learn)
+        ? `<ul>${targetCourse.learn.map((item) => `<li>${escapeHtmlAttr(item)}</li>`).join('')}</ul>`
+        : '';
+      ssrBodyHtml = `
+        <article style="margin-top:20px;">
+          <img src="${escapeHtmlAttr(resolveAbsImg(targetCourse.image, origin))}" alt="${escapeHtmlAttr(targetCourse.title)}" width="640" height="360" style="max-width:100%;height:auto;border-radius:12px;" />
+          <h1>${escapeHtmlAttr(targetCourse.title)}</h1>
+          <p>${escapeHtmlAttr(targetCourse.overview || description)}</p>
+          <h2>Course Details</h2>
+          <p><strong>Category:</strong> ${escapeHtmlAttr(targetCourse.category || 'Digital Skills')} | <strong>Level:</strong> ${escapeHtmlAttr(targetCourse.level || 'All Levels')} | <strong>Price:</strong> ${escapeHtmlAttr(priceText)}${targetCourse.instructorName ? ` | <strong>Instructor:</strong> ${escapeHtmlAttr(targetCourse.instructorName)}` : ''}</p>
+          <h2>What You Will Learn</h2>
+          ${learnItems}
+        </article>`;
+    }
+  } else if (parsed.view === 'instructors') {
+    ssrBodyHtml = `<section style="margin-top:20px;"><h1>Instructors &amp; Teachers Directory | HamroLms</h1><p>${escapeHtmlAttr(description)}</p><h2>Meet Our Educators</h2>${ssrInstructorsHtml}</section>`;
+  } else if (parsed.view === 'blog') {
+    ssrBodyHtml = `<section style="margin-top:20px;"><h1>HamroLms Learning Blog &amp; Guides</h1><p>${escapeHtmlAttr(description)}</p><h2>Latest Tutorials</h2>${ssrBlogHtml}</section>`;
+  } else if (parsed.view === 'about-us') {
+    ssrBodyHtml = `<section style="margin-top:20px;"><h1>About Us – HamroLms Online Learning Platform</h1><p>${escapeHtmlAttr(description)}</p><h2>Learn Practically</h2><p>Every HamroLms program focuses on step-by-step workflows in AI tools, video production, graphic design, and web development.</p><h2>Verified Instructors &amp; Certificates</h2><p>Courses are taught by experienced educators and include downloadable study handbooks and digital certificates.</p></section>`;
+  } else if (parsed.view === 'learn') {
+    ssrBodyHtml = `<section style="margin-top:20px;"><h1>Learn. Apply. Grow. – HamroLms</h1><p>${escapeHtmlAttr(description)}</p><h2>Structured Learning Pathway</h2><p>Master practical AI workflows, build creative media projects, and earn verified digital skill credentials.</p></section>`;
+  }
+
+  const ssrFooterHtml = `<footer style="margin-top:32px;padding-top:16px;border-top:1px solid #27272a;color:#a1a1aa;font-size:13px;"><p>&copy; ${new Date().getFullYear()} HamroLms. Support: <a href="mailto:support.hamrolms@gmail.com" style="color:#60a5fa;">support.hamrolms@gmail.com</a></p><nav aria-label="Footer Navigation">${ssrNavHtml} <a href="/sitemap.xml" style="color:#60a5fa;margin-right:16px;">Sitemap</a> <a href="/llms.txt" style="color:#60a5fa;">LLMs.txt</a></nav></footer>`;
 
   const ssrShellHtml = parsed.isPublicIndexable
-    ? `<div id="root"><main style="max-width:900px;margin:32px auto;padding:20px;font-family:Inter,system-ui,sans-serif;color:#f4f4f5;background:#000;"><header><nav aria-label="Primary Site Navigation">${ssrNavHtml}</nav></header><section style="margin-top:20px;"><h1>${escapeHtmlAttr(title)}</h1><p style="color:#d4d4d8;">${escapeHtmlAttr(description)}</p>${ssrCourseLinksHtml}</section></main></div>`
+    ? `<div id="root"><main style="max-width:960px;margin:32px auto;padding:20px;font-family:Inter,system-ui,sans-serif;color:#f4f4f5;background:#000;"><header><nav aria-label="Primary Site Navigation">${ssrNavHtml}</nav></header>${ssrBodyHtml}${ssrFooterHtml}</main></div>`
     : '<div id="root"></div>';
 
   let updated = html;
@@ -1305,6 +1657,9 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
 
   const extraHeadParts = [
     `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
+    `<meta name="publisher" content="HamroLms" />`,
+    `<link rel="sitemap" type="application/xml" title="Sitemap" href="${escapeHtmlAttr(`${origin}/sitemap.xml`)}" />`,
+    `<link rel="alternate" type="text/plain" title="LLMs Context" href="${escapeHtmlAttr(`${origin}/llms.txt`)}" />`,
     hreflangTags,
     articleTags,
     dynamicGraphScript,
