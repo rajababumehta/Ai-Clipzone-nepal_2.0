@@ -4197,6 +4197,7 @@ export default function App() {
   const [isAskChatOpen, setIsAskChatOpen] = useState(false);
   const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
   const [selectedLiveCourseId, setSelectedLiveCourseId] = useState<string | null>(null);
+  const [selectedDetailCourseId, setSelectedDetailCourseId] = useState<string | null>(null);
 
   const navigateToPath = useCallback(
     (cleanPath: string, targetLocale?: SupportedLocale) => {
@@ -4205,6 +4206,9 @@ export default function App() {
       const parsed = parsePathnameToRoute(targetUrl);
       if (typeof window !== 'undefined' && window.location.pathname !== targetUrl) {
         window.history.pushState({}, '', targetUrl);
+      }
+      if (parsed.view !== 'course-detail') {
+        setSelectedDetailCourseId(null);
       }
       setActiveLocale(parsed.locale);
       setRouteSlug(parsed.slug);
@@ -4215,6 +4219,14 @@ export default function App() {
       }
     },
     [activeLocale]
+  );
+
+  const handleOpenCourseDetail = useCallback(
+    (course: Course) => {
+      setSelectedDetailCourseId(course.id);
+      navigateToPath(`/courses/${getCourseSlug(course)}`);
+    },
+    [navigateToPath]
   );
 
   const switchLocale = useCallback(
@@ -4232,6 +4244,9 @@ export default function App() {
     if (typeof window === 'undefined') return;
     const handlePopState = () => {
       const parsed = parsePathnameToRoute(window.location.pathname);
+      if (parsed.view !== 'course-detail') {
+        setSelectedDetailCourseId(null);
+      }
       setActiveLocale(parsed.locale);
       setRouteSlug(parsed.slug);
       setRouteCategory(parsed.category);
@@ -6267,7 +6282,14 @@ export default function App() {
           </section>
         ) : currentView === 'course-detail' ? (
           (() => {
-            const targetCourse = findCourseBySlug(publicCatalogCourses, routeSlug);
+            const selectedMatch = selectedDetailCourseId
+              ? publicCatalogCourses.find(
+                  (c) =>
+                    c.id === selectedDetailCourseId &&
+                    getCourseSlug(c) === slugifyText(routeSlug || '')
+                )
+              : undefined;
+            const targetCourse = selectedMatch || findCourseBySlug(publicCatalogCourses, routeSlug);
             if (!targetCourse) {
               return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
             }
@@ -7785,7 +7807,15 @@ export default function App() {
                     )}
 
                     {/* Course Thumbnail Image */}
-                    <div className="relative aspect-video overflow-hidden bg-black">
+                    <a
+                      href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenCourseDetail(course);
+                      }}
+                      aria-label={`View details for ${course.title}`}
+                      className="block relative aspect-video overflow-hidden bg-black cursor-pointer"
+                    >
                       <img 
                         src={course.image} 
                         alt={`${course.title} – Online Course on HamroLms`}
@@ -7798,16 +7828,18 @@ export default function App() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4">
-                        <span className="bg-blue-600 text-white text-[11px] sm:text-xs font-extrabold px-2.5 sm:px-3 py-1 rounded-lg shadow-md">
-                          Instant Delivery
-                        </span>
-                      </div>
-                    </div>
+                    </a>
 
                     {/* Course Info */}
                     <div className="p-4 sm:p-5 md:p-6 flex flex-col grow justify-between">
-                      <div className="text-left font-sans">
+                      <a
+                        href={buildLocalizedPath(`/courses/${getCourseSlug(course)}`, activeLocale)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleOpenCourseDetail(course);
+                        }}
+                        className="block text-left font-sans cursor-pointer focus:outline-none"
+                      >
                         <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
                           {course.title}
                         </h2>
@@ -7869,7 +7901,7 @@ export default function App() {
                             </li>
                           ))}
                         </ul>
-                      </div>
+                      </a>
 
                       {/* Enrolment / Classroom Access Button */}
                       <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-zinc-800/80 flex items-center gap-2 sm:gap-3">
