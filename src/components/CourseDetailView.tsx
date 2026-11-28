@@ -21,7 +21,7 @@ import { buildLocalizedPath, getCourseSlug } from '../utils/seoRouting';
 interface CourseDetailViewProps {
   course: Course;
   allCourses: Course[];
-  instructor: PublicInstructorProfile;
+  instructor: PublicInstructorProfile | null;
   relatedPosts: BlogPost[];
   locale: SupportedLocale;
   isEnrolled: boolean;
@@ -158,20 +158,24 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
             <p className="text-sm text-zinc-300 leading-relaxed">{overviewText}</p>
 
             <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-zinc-400">
-              <span>
-                Instructor:{' '}
-                <a
-                  href={buildLocalizedPath(`/instructors/${instructor.slug}`, locale)}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onNavigatePath(`/instructors/${instructor.slug}`);
-                  }}
-                  className="text-blue-400 hover:underline font-bold"
-                >
-                  {instructor.name}
-                </a>
-              </span>
-              <span>•</span>
+              {instructor && (
+                <>
+                  <span>
+                    Instructor:{' '}
+                    <a
+                      href={buildLocalizedPath(`/instructors/${instructor.slug}`, locale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onNavigatePath(`/instructors/${instructor.slug}`);
+                      }}
+                      className="text-blue-400 hover:underline font-bold"
+                    >
+                      {instructor.name}
+                    </a>
+                  </span>
+                  <span>•</span>
+                </>
+              )}
               <span>{videos.length} Video Lessons</span>
               {pdfs.length > 0 && (
                 <>
@@ -341,37 +345,39 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
             </ul>
           </section>
 
-          <section className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-4">
-            <h2 className="text-base font-black text-white flex items-center gap-2">
-              <UserCheck className="w-4 h-4 text-blue-400" />
-              <span>{t.instructorTitle}</span>
-            </h2>
-            <div className="flex items-center gap-3">
-              <img
-                src={instructor.avatarUrl || '/institute-logo.png'}
-                alt={`${instructor.name} – ${instructor.role}`}
-                loading="lazy"
-                decoding="async"
-                className="w-12 h-12 rounded-2xl object-cover border border-zinc-800 bg-black shrink-0"
-              />
-              <div className="min-w-0">
-                <h3 className="text-sm font-extrabold text-white truncate">{instructor.name}</h3>
-                <p className="text-xs text-blue-400 font-semibold truncate">{instructor.role}</p>
+          {instructor && (
+            <section className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-4">
+              <h2 className="text-base font-black text-white flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-blue-400" />
+                <span>{t.instructorTitle}</span>
+              </h2>
+              <div className="flex items-center gap-3">
+                <img
+                  src={instructor.avatarUrl || '/institute-logo.png'}
+                  alt={`${instructor.name} – ${instructor.role}`}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-12 h-12 rounded-2xl object-cover border border-zinc-800 bg-black shrink-0"
+                />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-extrabold text-white truncate">{instructor.name}</h3>
+                  <p className="text-xs text-blue-400 font-semibold truncate">{instructor.role}</p>
+                </div>
               </div>
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">{instructor.bio}</p>
-            <a
-              href={buildLocalizedPath(`/instructors/${instructor.slug}`, locale)}
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigatePath(`/instructors/${instructor.slug}`);
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition"
-            >
-              <span>View Full Instructor Profile</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </a>
-          </section>
+              <p className="text-xs text-zinc-400 leading-relaxed">{instructor.bio}</p>
+              <a
+                href={buildLocalizedPath(`/instructors/${instructor.slug}`, locale)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigatePath(`/instructors/${instructor.slug}`);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition"
+              >
+                <span>View Full Instructor Profile</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </section>
+          )}
         </aside>
       </div>
 

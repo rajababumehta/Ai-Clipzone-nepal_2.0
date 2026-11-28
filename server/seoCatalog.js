@@ -691,11 +691,23 @@ export async function fetchPublicCatalogSnapshot() {
   let paymentQr = null;
   let liveFetched = false;
 
+  let coursesFetched = false;
+  let subAdminsFetched = false;
+
   try {
     const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
     const [configJson, coursesJson, subAdminsJson, siteSettingsJson, paymentQrJson] = await Promise.all([
       fetchJsonWithTimeout(`${baseUrl}/system/config`),
-      fetchJsonWithTimeout(`${baseUrl}/courses?pageSize=100`),
+      fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: 'courses' }],
+            limit: 100,
+          },
+        }),
+      }),
       fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -717,7 +729,6 @@ export async function fetchPublicCatalogSnapshot() {
     ]);
 
     if (configJson?.fields) {
-      liveFetched = true;
       const cfg = fromFirestoreDoc(configJson);
       coursesSeeded = Boolean(cfg.courses_seeded === true);
       if (Array.isArray(cfg.deletedCourseIds)) {
@@ -733,9 +744,11 @@ export async function fetchPublicCatalogSnapshot() {
       paymentQr = fromFirestoreDoc(paymentQrJson);
     }
 
-    if (coursesJson && typeof coursesJson === 'object') {
-      liveFetched = true;
-      const docList = Array.isArray(coursesJson.documents) ? coursesJson.documents : [];
+    if (Array.isArray(coursesJson)) {
+      coursesFetched = true;
+      const docList = coursesJson
+        .map((row) => row?.document)
+        .filter((docItem) => Boolean(docItem?.fields));
       if (docList.length > 0) {
         const liveCourses = [];
         for (const docItem of docList) {
@@ -785,6 +798,7 @@ export async function fetchPublicCatalogSnapshot() {
     }
 
     if (Array.isArray(subAdminsJson)) {
+      subAdminsFetched = true;
       for (const row of subAdminsJson) {
         if (!row?.document?.fields) continue;
         const d = fromFirestoreDoc(row.document);
@@ -802,6 +816,7 @@ export async function fetchPublicCatalogSnapshot() {
         });
       }
     }
+    liveFetched = coursesFetched && subAdminsFetched;
   } catch {
     // Silent fallback to SEED_COURSES + CORE_INSTRUCTORS
   }

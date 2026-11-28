@@ -3103,11 +3103,22 @@ async function fetchPublicCatalogSnapshot() {
   let siteSettings = null;
   let paymentQr = null;
   let liveFetched = false;
+  let coursesFetched = false;
+  let subAdminsFetched = false;
   try {
     const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
     const [configJson, coursesJson, subAdminsJson, siteSettingsJson, paymentQrJson] = await Promise.all([
       fetchJsonWithTimeout(`${baseUrl}/system/config`),
-      fetchJsonWithTimeout(`${baseUrl}/courses?pageSize=100`),
+      fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: "courses" }],
+            limit: 100
+          }
+        })
+      }),
       fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3128,7 +3139,6 @@ async function fetchPublicCatalogSnapshot() {
       fetchJsonWithTimeout(`${baseUrl}/system/payment_qr`)
     ]);
     if (configJson?.fields) {
-      liveFetched = true;
       const cfg = fromFirestoreDoc2(configJson);
       coursesSeeded = Boolean(cfg.courses_seeded === true);
       if (Array.isArray(cfg.deletedCourseIds)) {
@@ -3141,9 +3151,9 @@ async function fetchPublicCatalogSnapshot() {
     if (paymentQrJson?.fields) {
       paymentQr = fromFirestoreDoc2(paymentQrJson);
     }
-    if (coursesJson && typeof coursesJson === "object") {
-      liveFetched = true;
-      const docList = Array.isArray(coursesJson.documents) ? coursesJson.documents : [];
+    if (Array.isArray(coursesJson)) {
+      coursesFetched = true;
+      const docList = coursesJson.map((row) => row?.document).filter((docItem) => Boolean(docItem?.fields));
       if (docList.length > 0) {
         const liveCourses = [];
         for (const docItem of docList) {
@@ -3187,6 +3197,7 @@ async function fetchPublicCatalogSnapshot() {
       courses = courses.filter((c) => !deletedIds.includes(c.id));
     }
     if (Array.isArray(subAdminsJson)) {
+      subAdminsFetched = true;
       for (const row of subAdminsJson) {
         if (!row?.document?.fields) continue;
         const d = fromFirestoreDoc2(row.document);
@@ -3203,6 +3214,7 @@ async function fetchPublicCatalogSnapshot() {
         });
       }
     }
+    liveFetched = coursesFetched && subAdminsFetched;
   } catch {
   }
   const instructors = mergePublicInstructors(courses, subAdmins);

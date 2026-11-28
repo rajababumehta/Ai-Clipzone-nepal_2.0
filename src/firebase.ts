@@ -112,14 +112,27 @@ async function fetchRestCollectionSafe(
   signal: AbortSignal
 ): Promise<any[] | null> {
   try {
-    const res = await fetch(`${baseUrl}/${colPath}?pageSize=${pageSize}`, {
+    const res = await fetch(`${baseUrl}:runQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       signal,
       cache: 'no-store',
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: colPath }],
+          limit: pageSize,
+        },
+      }),
     });
     if (!res.ok) return null;
-    const json = await res.json();
-    const docs = Array.isArray(json?.documents) ? json.documents : [];
-    return docs.map(decodeFirestoreDocItem);
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    const items: any[] = [];
+    for (const row of rows) {
+      if (!row?.document?.fields) continue;
+      items.push(decodeFirestoreDocItem(row.document));
+    }
+    return items;
   } catch {
     return null;
   }

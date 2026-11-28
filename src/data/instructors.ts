@@ -218,10 +218,10 @@ export function buildPublicInstructors(
   return Array.from(bySlug.values());
 }
 
-export function resolveCourseInstructor(
+export function findCourseInstructor(
   course: Course,
   instructors: PublicInstructorProfile[]
-): PublicInstructorProfile {
+): PublicInstructorProfile | null {
   const courseAliases = expandCourseIdAliases(course.id);
   const hasCourse = (inst: PublicInstructorProfile) =>
     courseAliases.some((id) => inst.courseIds.includes(id));
@@ -240,5 +240,12 @@ export function resolveCourseInstructor(
   const byCourseId = instructors.find(hasCourse);
   if (byCourseId) return byCourseId;
 
-  return instructors[0] || CORE_INSTRUCTORS[0];
+  return null;
+}
+
+export function resolveCourseInstructor(
+  course: Course,
+  instructors: PublicInstructorProfile[]
+): PublicInstructorProfile {
+  return findCourseInstructor(course, instructors) || instructors[0] || CORE_INSTRUCTORS[0];
 }

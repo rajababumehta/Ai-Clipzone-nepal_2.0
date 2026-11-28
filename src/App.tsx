@@ -90,7 +90,7 @@ import { CourseDetailView } from './components/CourseDetailView';
 import { InstructorsView } from './components/InstructorsView';
 import { BlogView } from './components/BlogView';
 import { AboutUsView, LearnApplyGrowView, PrivacyPolicyView, TermsOfUseView, NotFoundView, ProfileDetailsFaqSection } from './components/PublicPagesView';
-import { buildPublicInstructors, resolveCourseInstructor } from './data/instructors';
+import { buildPublicInstructors, findCourseInstructor, resolveCourseInstructor } from './data/instructors';
 import { BLOG_POSTS, findBlogPostBySlug } from './data/blogArticles';
 import { getLocaleDict } from './utils/i18n';
 import { AppView, parsePathnameToRoute, buildLocalizedPath, getCourseSlug, findCourseBySlug, slugifyText } from './utils/seoRouting';
@@ -542,8 +542,21 @@ export default function App() {
     try {
       const saved = localStorage.getItem('clipzone_public_sub_admins_cache');
       if (saved) return toPublicSubAdmins(JSON.parse(saved));
+      const adminSaved = localStorage.getItem('clipzone_sub_admins_cache');
+      if (adminSaved) return toPublicSubAdmins(JSON.parse(adminSaved));
     } catch {}
     return [];
+  });
+  const [isSubAdminsResolved, setIsSubAdminsResolved] = useState<boolean>(() => {
+    const boot = getSsrBootstrap();
+    if (Array.isArray(boot?.subAdmins)) return true;
+    try {
+      const pubSaved = localStorage.getItem('clipzone_public_sub_admins_cache');
+      if (pubSaved && toPublicSubAdmins(JSON.parse(pubSaved)).length > 0) return true;
+      const adminSaved = localStorage.getItem('clipzone_sub_admins_cache');
+      if (adminSaved && toPublicSubAdmins(JSON.parse(adminSaved)).length > 0) return true;
+    } catch {}
+    return typeof navigator !== 'undefined' && !navigator.onLine;
   });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask'>('keys');
@@ -1094,21 +1107,19 @@ export default function App() {
           try {
             localStorage.setItem('clipzone_public_sub_admins_cache', JSON.stringify(publicSubs));
           } catch {}
-          const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-          if (!mainAdminActive) {
-            setActiveSubAdmins((prev) => {
-              const prevById = new Map(prev.map((p) => [p.id, p]));
-              const merged = publicSubs.map((sub) => {
-                const existing = prevById.get(sub.id);
-                return {
-                  ...sub,
-                  code: existing?.code || sub.code || '',
-                  createdAt: existing?.createdAt || sub.createdAt || 0,
-                } as SubAdminAccount;
-              });
-              return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+          setActiveSubAdmins((prev) => {
+            const prevById = new Map(prev.map((p) => [p.id, p]));
+            const merged = publicSubs.map((sub) => {
+              const existing = prevById.get(sub.id);
+              return {
+                ...sub,
+                code: existing?.code || sub.code || '',
+                createdAt: existing?.createdAt || sub.createdAt || 0,
+              } as SubAdminAccount;
             });
-          }
+            return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+          });
+          setIsSubAdminsResolved(true);
         }
 
         if (Array.isArray(core.courses)) {
@@ -2592,6 +2603,7 @@ export default function App() {
           });
           list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
           setSubAdminList(list);
+          setIsSubAdminsResolved(true);
           try {
             localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(list));
           } catch {}
@@ -2606,6 +2618,7 @@ export default function App() {
         });
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setSubAdminList(list);
+        setIsSubAdminsResolved(true);
         localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(list));
       }, (err) => {
         console.warn('Realtime sub_admins listener error:', err);
@@ -2675,6 +2688,7 @@ export default function App() {
           localStorage.setItem('clipzone_public_sub_admins_cache', JSON.stringify(toPublicSubAdmins(list)));
         } catch {}
         setActiveSubAdmins((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
+        setIsSubAdminsResolved(true);
       }, (err) => {
         console.warn('Active sub_admins listener error:', err);
       });
@@ -4580,7 +4594,9 @@ export default function App() {
 
   const effectiveSubAdminsForInstructors = useMemo(() => {
     const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-    const base = mainAdminActive ? subAdminList : activeSubAdmins;
+    const base = mainAdminActive
+      ? (subAdminList.length > 0 ? subAdminList : activeSubAdmins)
+      : activeSubAdmins;
     const active = base.filter((s) => s && s.status === 'active');
     if (
       subAdminSession &&
@@ -6644,7 +6660,8 @@ export default function App() {
               }
               return <NotFoundView locale={activeLocale} onNavigatePath={navigateToPath} />;
             }
-            const instructor = resolveCourseInstructor(targetCourse, publicInstructors);
+            const matchedInstructor = findCourseInstructor(targetCourse, publicInstructors);
+            const instructor = matchedInstructor || (isSubAdminsResolved ? resolveCourseInstructor(targetCourse, publicInstructors) : null);
             const relatedPosts = BLOG_POSTS.filter((p) => p.relatedCourseIds.includes(targetCourse.id));
             return (
               <CourseDetailView
@@ -6676,7 +6693,7 @@ export default function App() {
           (() => {
             const inst = publicInstructors.find((i) => i.slug === slugifyText(routeSlug || ''));
             if (!inst) {
-              if (isCoursesLoading) {
+              if (isCoursesLoading || !isSubAdminsResolved) {
                 return (
                   <div className="max-w-4xl mx-auto py-8 px-4 animate-pulse space-y-6">
                     <div className="h-6 bg-zinc-900 rounded-lg w-40" />
@@ -8203,7 +8220,9 @@ export default function App() {
                           {course.title}
                         </h2>
                         {(() => {
-                          const courseInst = resolveCourseInstructor(course, publicInstructors);
+                          const matchedInst = findCourseInstructor(course, publicInstructors);
+                          const courseInst = matchedInst || (isSubAdminsResolved ? resolveCourseInstructor(course, publicInstructors) : null);
+                          if (!courseInst) return null;
                           return (
                             <div className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
                               <img
@@ -8933,7 +8952,9 @@ export default function App() {
                   {selectedCourse.title}
                 </h3>
                 {(() => {
-                  const modalInst = resolveCourseInstructor(selectedCourse, publicInstructors);
+                  const matchedModalInst = findCourseInstructor(selectedCourse, publicInstructors);
+                  const modalInst = matchedModalInst || (isSubAdminsResolved ? resolveCourseInstructor(selectedCourse, publicInstructors) : null);
+                  if (!modalInst) return null;
                   return (
                     <div className="mt-2 flex items-center gap-2 text-xs text-zinc-400 text-left">
                       <img
