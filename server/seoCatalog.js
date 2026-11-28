@@ -105,6 +105,7 @@ export const CORE_INSTRUCTORS = [
       'Ai master class course by Ai clipzone',
       'youtube-blueprint-course-by-al-clipzone',
     ],
+    isFounder: true,
     socialLinks: {
       website: 'https://rajababumehta.com.np',
       facebook: 'https://www.facebook.com/profile.php?id=61583901232576',
@@ -481,55 +482,167 @@ function fromFirestoreDoc(docJson) {
   return out;
 }
 
+function expandServerCourseIdAliases(cid) {
+  if (cid === 'al-master-class-course-by-al-clipzone') {
+    return [cid, 'Ai master class course by Ai clipzone'];
+  }
+  if (cid === 'Ai master class course by Ai clipzone') {
+    return [cid, 'al-master-class-course-by-al-clipzone'];
+  }
+  return [cid];
+}
+
+function normServerTitle(val) {
+  return String(val || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function resolveServerCourseInstructor(course, instructors) {
+  const safeList = Array.isArray(instructors) && instructors.length > 0 ? instructors : CORE_INSTRUCTORS;
+  const aliases = expandServerCourseIdAliases(course.id);
+  const hasCourse = (inst) =>
+    Array.isArray(inst?.courseIds) && aliases.some((id) => inst.courseIds.includes(id));
+
+  const byAssignedSubAdmin = safeList.find((i) => !i.isFounder && hasCourse(i));
+  if (byAssignedSubAdmin) return byAssignedSubAdmin;
+
+  const byExplicitSlug = course.instructorSlug
+    ? safeList.find((i) => i.slug === slugifyText(course.instructorSlug))
+    : undefined;
+  if (byExplicitSlug) return byExplicitSlug;
+
+  const byCourseId = safeList.find(hasCourse);
+  if (byCourseId) return byCourseId;
+
+  return safeList[0] || CORE_INSTRUCTORS[0];
+}
+
 function mergePublicInstructors(courses, subAdmins) {
   const bySlug = new Map();
-  for (const inst of CORE_INSTRUCTORS) {
-    const matchedIds = courses
-      .filter((c) => c.instructorSlug === inst.slug || inst.courseIds.includes(c.id))
-      .map((c) => c.id);
-    bySlug.set(inst.slug, {
-      ...inst,
-      courseIds: Array.from(new Set([...inst.courseIds, ...matchedIds])),
-    });
-  }
-  const BRAND_ALIAS_SLUGS = new Set(['ai-clipzone', 'ai-clipzone-nepal', 'al-clipzone', 'hamro-lms', 'hamrolms', 'hamro-lms-nepal']);
+  const BRAND_ALIAS_SLUGS = new Set([
+    'ai-clipzone',
+    'ai-clipzone-nepal',
+    'al-clipzone',
+    'hamro-lms',
+    'hamrolms',
+    'hamro-lms-nepal',
+  ]);
+  const subAdminOwnedCourseIds = new Set();
+  const resolvedSubEntries = [];
+
   for (const sub of subAdmins) {
     if (!sub || sub.status !== 'active' || !sub.name) continue;
-    const rawSlug = slugifyText(sub.name);
+    const cleanName = String(sub.name).trim();
+    const rawSlug = slugifyText(cleanName);
     if (!rawSlug || rawSlug === 'item') continue;
-    const slug = BRAND_ALIAS_SLUGS.has(rawSlug) ? 'rajababu-mehta' : rawSlug;
-    const subIds = Array.from(
+
+    const isBrandAlias = BRAND_ALIAS_SLUGS.has(rawSlug) || rawSlug === 'rajababu-mehta';
+    const slug = isBrandAlias ? 'rajababu-mehta' : rawSlug;
+
+    const rawIds = Array.from(
       new Set([
         ...(Array.isArray(sub.courseIds) ? sub.courseIds.map(String).filter(Boolean) : []),
         ...(sub.courseId ? [String(sub.courseId)] : []),
       ])
     );
+    const expandedIds = new Set(rawIds.flatMap(expandServerCourseIdAliases));
+    const rawTitles = new Set(
+      [
+        ...(Array.isArray(sub.courseTitles) ? sub.courseTitles : []),
+        ...(sub.courseTitle ? [sub.courseTitle] : []),
+      ]
+        .map(normServerTitle)
+        .filter(Boolean)
+    );
+    const assignedCourses = courses.filter(
+      (c) => expandedIds.has(c.id) || (rawTitles.size > 0 && rawTitles.has(normServerTitle(c.title)))
+    );
+    const resolvedIds = Array.from(
+      new Set(courses.length > 0 ? assignedCourses.map((c) => c.id) : rawIds)
+    );
+
+    if (!isBrandAlias) {
+      for (const cid of resolvedIds) {
+        for (const aliasId of expandServerCourseIdAliases(cid)) {
+          subAdminOwnedCourseIds.add(aliasId);
+        }
+      }
+    }
+
+    resolvedSubEntries.push({
+      sub,
+      slug,
+      cleanName,
+      assignedCourses,
+      courseIds: resolvedIds,
+    });
+  }
+
+  for (const inst of CORE_INSTRUCTORS) {
+    const matchedIds =
+      courses.length > 0
+        ? courses
+            .filter(
+              (c) =>
+                !subAdminOwnedCourseIds.has(c.id) &&
+                (c.instructorSlug === inst.slug ||
+                  inst.courseIds.some((id) => expandServerCourseIdAliases(id).includes(c.id)))
+            )
+            .map((c) => c.id)
+        : inst.courseIds.filter((id) => !subAdminOwnedCourseIds.has(id));
+    bySlug.set(inst.slug, {
+      ...inst,
+      courseIds: Array.from(new Set(matchedIds)),
+    });
+  }
+
+  for (const { sub, slug, cleanName, assignedCourses, courseIds } of resolvedSubEntries) {
     const existing = bySlug.get(slug);
     if (existing) {
-      for (const cid of subIds) {
+      for (const cid of courseIds) {
         if (!existing.courseIds.includes(cid)) {
           existing.courseIds.push(cid);
         }
       }
       continue;
     }
+    const primaryCourse = assignedCourses[0];
+    const combinedLearn = Array.from(
+      new Set(
+        assignedCourses
+          .flatMap((c) => (Array.isArray(c.learn) ? c.learn : []))
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 6);
+
     bySlug.set(slug, {
       slug,
-      name: String(sub.name).trim(),
+      name: cleanName,
       role: 'Course Instructor & Mentor',
-      headline: subIds.length > 1
-        ? `Instructor for ${subIds.length} Courses on Hamro LMS Nepal`
-        : sub.courseTitle
-        ? `Instructor for ${sub.courseTitle}`
-        : 'Instructor on Hamro LMS Nepal',
-      bio: `${String(sub.name).trim()} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
+      headline:
+        assignedCourses.length > 1
+          ? `Course Instructor for ${assignedCourses.length} Courses on Hamro LMS Nepal`
+          : primaryCourse
+          ? `Course Instructor for ${primaryCourse.title}`
+          : sub.courseTitle
+          ? `Course Instructor for ${sub.courseTitle}`
+          : 'Verified Course Instructor on Hamro LMS Nepal',
+      bio:
+        assignedCourses.length > 1
+          ? `${cleanName} is the Course Instructor for ${assignedCourses.length} courses on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.`
+          : primaryCourse
+          ? `${cleanName} is the Course Instructor for ${primaryCourse.title} on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.`
+          : `${cleanName} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
       avatarUrl: sub.avatarUrl || '/institute-logo.png',
       languages: ['English'],
-      courseIds: subIds,
-      expertise: ['Online Education', 'Digital Skills'],
+      courseIds,
+      expertise: combinedLearn.length > 0 ? combinedLearn : ['Online Education', 'Digital Skills'],
+      isFounder: false,
     });
   }
+
   for (const c of courses) {
+    if (subAdminOwnedCourseIds.has(c.id)) continue;
     if (c.instructorName && c.instructorSlug) {
       const slug = slugifyText(c.instructorSlug);
       const existing = bySlug.get(slug);
@@ -547,6 +660,7 @@ function mergePublicInstructors(courses, subAdmins) {
             c.language && !/nepali|hindi/i.test(c.language) ? [c.language] : ['English'],
           courseIds: [c.id],
           expertise: Array.isArray(c.learn) ? c.learn.slice(0, 4) : ['Online Education'],
+          isFounder: false,
         });
       }
     }
@@ -656,6 +770,7 @@ export async function fetchPublicCatalogSnapshot() {
           courseId: String(d.courseId || ''),
           courseTitle: String(d.courseTitle || ''),
           courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
+          courseTitles: Array.isArray(d.courseTitles) ? d.courseTitles.map(String).filter(Boolean) : [],
           avatarUrl: d.avatarUrl ? String(d.avatarUrl) : undefined,
           status: 'active',
         });
@@ -868,7 +983,9 @@ export function buildLlmsTxtFromCatalog(origin, courses, instructors, isFull = f
   for (const c of safeCourses) {
     const cUrl = `${safeOrigin}/courses/${getCourseSlug(c)}`;
     const priceLabel = c.isFree || c.amount === 0 ? 'Free' : c.price || 'Paid';
-    const instLabel = c.instructorName ? ` | Instructor: ${c.instructorName}` : '';
+    const resolvedInst = resolveServerCourseInstructor(c, safeInstructors);
+    const instName = resolvedInst?.name || c.instructorName;
+    const instLabel = instName ? ` | Instructor: ${instName}` : '';
     const desc = c.overview || c.seoDescription || `Structured online course covering ${c.category || 'digital skills'}.`;
     lines.push(`- [${c.title}](${cUrl}) (${priceLabel}${instLabel}): ${desc}`);
     if (isFull && Array.isArray(c.learn) && c.learn.length > 0) {
@@ -965,12 +1082,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     } else {
       const cSlug = getCourseSlug(course);
       const courseUrl = `${origin}${buildLocalizedPath(`/courses/${cSlug}`, parsed.locale)}`;
-      const inst =
-        instructors.find(
-          (i) =>
-            (course.instructorSlug && i.slug === slugifyText(course.instructorSlug)) ||
-            i.courseIds.includes(course.id)
-        ) || instructors[0];
+      const inst = resolveServerCourseInstructor(course, instructors);
       title =
         (course.seoTitle && course.seoTitle.trim()) ||
         clampSeoText(`${course.title}${course.category ? ` – ${course.category}` : ''} | Hamro LMS`, 64);
@@ -1505,7 +1617,9 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       const learnList = Array.isArray(c.learn) && c.learn.length > 0
         ? `<ul>${c.learn.slice(0, 6).map((item) => `<li>${escapeHtmlAttr(item)}</li>`).join('')}</ul>`
         : '';
-      return `<article style="margin-bottom:24px;padding:16px;border:1px solid #27272a;border-radius:12px;"><img src="${escapeHtmlAttr(cImg)}" alt="${escapeHtmlAttr(c.title)} – Online Course on HamroLms" width="640" height="360" style="max-width:100%;height:auto;border-radius:8px;" /><h3><a href="${escapeHtmlAttr(cHref)}" style="color:#93c5fd;">${escapeHtmlAttr(c.title)}</a></h3><p><strong>Category:</strong> ${escapeHtmlAttr(c.category || 'Digital Skills')} | <strong>Level:</strong> ${escapeHtmlAttr(c.level || 'All Levels')} | <strong>Price:</strong> ${escapeHtmlAttr(priceText)}${c.instructorName ? ` | <strong>Instructor:</strong> ${escapeHtmlAttr(c.instructorName)}` : ''}</p><p>${escapeHtmlAttr(cOverview)}</p>${learnList}</article>`;
+      const resolvedCourseInst = resolveServerCourseInstructor(c, instructors);
+      const displayInstructorName = resolvedCourseInst?.name || c.instructorName;
+      return `<article style="margin-bottom:24px;padding:16px;border:1px solid #27272a;border-radius:12px;"><img src="${escapeHtmlAttr(cImg)}" alt="${escapeHtmlAttr(c.title)} – Online Course on HamroLms" width="640" height="360" style="max-width:100%;height:auto;border-radius:8px;" /><h3><a href="${escapeHtmlAttr(cHref)}" style="color:#93c5fd;">${escapeHtmlAttr(c.title)}</a></h3><p><strong>Category:</strong> ${escapeHtmlAttr(c.category || 'Digital Skills')} | <strong>Level:</strong> ${escapeHtmlAttr(c.level || 'All Levels')} | <strong>Price:</strong> ${escapeHtmlAttr(priceText)}${displayInstructorName ? ` | <strong>Instructor:</strong> ${escapeHtmlAttr(displayInstructorName)}` : ''}</p><p>${escapeHtmlAttr(cOverview)}</p>${learnList}</article>`;
     })
     .join('');
 
@@ -1560,13 +1674,15 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
       const learnItems = Array.isArray(targetCourse.learn)
         ? `<ul>${targetCourse.learn.map((item) => `<li>${escapeHtmlAttr(item)}</li>`).join('')}</ul>`
         : '';
+      const resolvedTargetInst = resolveServerCourseInstructor(targetCourse, instructors);
+      const displayTargetInstName = resolvedTargetInst?.name || targetCourse.instructorName;
       ssrBodyHtml = `
         <article style="margin-top:20px;">
           <img src="${escapeHtmlAttr(resolveAbsImg(targetCourse.image, origin))}" alt="${escapeHtmlAttr(targetCourse.title)}" width="640" height="360" style="max-width:100%;height:auto;border-radius:12px;" />
           <h1>${escapeHtmlAttr(targetCourse.title)}</h1>
           <p>${escapeHtmlAttr(targetCourse.overview || description)}</p>
           <h2>Course Details</h2>
-          <p><strong>Category:</strong> ${escapeHtmlAttr(targetCourse.category || 'Digital Skills')} | <strong>Level:</strong> ${escapeHtmlAttr(targetCourse.level || 'All Levels')} | <strong>Price:</strong> ${escapeHtmlAttr(priceText)}${targetCourse.instructorName ? ` | <strong>Instructor:</strong> ${escapeHtmlAttr(targetCourse.instructorName)}` : ''}</p>
+          <p><strong>Category:</strong> ${escapeHtmlAttr(targetCourse.category || 'Digital Skills')} | <strong>Level:</strong> ${escapeHtmlAttr(targetCourse.level || 'All Levels')} | <strong>Price:</strong> ${escapeHtmlAttr(priceText)}${displayTargetInstName ? ` | <strong>Instructor:</strong> ${escapeHtmlAttr(displayTargetInstName)}` : ''}</p>
           <h2>What You Will Learn</h2>
           ${learnItems}
         </article>`;

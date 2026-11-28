@@ -4332,9 +4332,23 @@ export default function App() {
     return COURSES.filter((c) => !deletedCourseIds.includes(c.id) && c.isHidden !== true);
   }, [courses, deletedCourseIds, isCoursesLoading]);
 
+  const effectiveSubAdminsForInstructors = useMemo(() => {
+    const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
+    const base = mainAdminActive ? subAdminList : activeSubAdmins;
+    const active = base.filter((s) => s && s.status === 'active');
+    if (
+      subAdminSession &&
+      subAdminSession.status === 'active' &&
+      !active.some((s) => s.id === subAdminSession.id || s.name === subAdminSession.name)
+    ) {
+      return [...active, subAdminSession];
+    }
+    return active;
+  }, [isAdminActivated, currentUser?.email, subAdminList, activeSubAdmins, subAdminSession]);
+
   const publicInstructors = useMemo(
-    () => buildPublicInstructors(publicCatalogCourses, activeSubAdmins),
-    [publicCatalogCourses, activeSubAdmins]
+    () => buildPublicInstructors(publicCatalogCourses, effectiveSubAdminsForInstructors),
+    [publicCatalogCourses, effectiveSubAdminsForInstructors]
   );
 
   useEffect(() => {
@@ -7922,6 +7936,23 @@ export default function App() {
                         <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
                           {course.title}
                         </h2>
+                        {(() => {
+                          const courseInst = resolveCourseInstructor(course, publicInstructors);
+                          return (
+                            <div className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
+                              <img
+                                src={courseInst.avatarUrl || '/institute-logo.png'}
+                                alt={courseInst.name}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-5 h-5 rounded-full object-cover border border-zinc-700 bg-black shrink-0"
+                              />
+                              <span className="truncate">
+                                Instructor: <strong className="text-zinc-200 font-semibold">{courseInst.name}</strong>
+                              </span>
+                            </div>
+                          );
+                        })()}
                         
                         {/* Prices or Active status badge */}
                         <div className="mt-3 sm:mt-4 flex items-center justify-between">
@@ -8635,6 +8666,23 @@ export default function App() {
                 <h3 className="text-xl md:text-2xl font-extrabold text-white leading-tight text-left">
                   {selectedCourse.title}
                 </h3>
+                {(() => {
+                  const modalInst = resolveCourseInstructor(selectedCourse, publicInstructors);
+                  return (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-zinc-400 text-left">
+                      <img
+                        src={modalInst.avatarUrl || '/institute-logo.png'}
+                        alt={modalInst.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-5 h-5 rounded-full object-cover border border-zinc-700 bg-black shrink-0"
+                      />
+                      <span>
+                        Instructor: <strong className="text-blue-300 font-bold">{modalInst.name}</strong>
+                      </span>
+                    </div>
+                  );
+                })()}
                 
                 {(selectedCourse.includeLive || selectedCourse.includeCertificate !== false) && (
                   <div className="flex items-center gap-2 mt-2">

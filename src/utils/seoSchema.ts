@@ -1,5 +1,6 @@
 import { BlogPost, Course, PublicInstructorProfile, SupportedLocale } from '../types';
 import { getCourseSlug, buildLocalizedPath } from './seoRouting';
+import { resolveCourseInstructor } from '../data/instructors';
 
 export interface BreadcrumbItem {
   name: string;
@@ -253,8 +254,7 @@ export function buildCourseItemListSchema(
 ) {
   const listItems = (courses || []).slice(0, 20).map((course, idx) => {
     const inst =
-      instructors.find((i) => i.slug === course.instructorSlug || i.courseIds.includes(course.id)) ||
-      instructors[0];
+      instructors.length > 0 ? resolveCourseInstructor(course, instructors) : undefined;
     const courseObj = inst
       ? buildCourseSchema(origin, brand, course, inst, locale)
       : {

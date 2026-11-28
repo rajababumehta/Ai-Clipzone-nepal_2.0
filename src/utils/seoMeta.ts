@@ -20,6 +20,7 @@ import {
   buildWebApplicationSchema,
   buildWebsiteSchema,
 } from './seoSchema.ts';
+import { resolveCourseInstructor } from '../data/instructors.ts';
 
 export interface ArticleOpenGraphMeta {
   publishedTime?: string;
@@ -250,12 +251,7 @@ export function generateDynamicPageMetadata(
         robotsDirective = 'noindex, nofollow';
       }
     } else {
-      const instructor =
-        input.publicInstructors.find(
-          (i) =>
-            (targetCourse.instructorSlug && i.slug === slugifyText(targetCourse.instructorSlug)) ||
-            i.courseIds.includes(targetCourse.id)
-        ) || input.publicInstructors[0];
+      const instructor = resolveCourseInstructor(targetCourse, input.publicInstructors);
       const courseMeta = buildCourseSeoMetadata(
         targetCourse,
         instructor,
