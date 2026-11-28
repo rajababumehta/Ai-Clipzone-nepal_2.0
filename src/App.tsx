@@ -5070,8 +5070,8 @@ export default function App() {
     prevAppInstalledRef.current = isAppInstalled;
   }, [isAppInstalled, isRunningInAppMode, siteSettings.instituteName]);
 
-  // Show PWA Download Advertisement 5 seconds after opening website ONLY when app is NOT installed
-  // Automatically hides in App mode & when installed on website; re-appears on website if user deletes the app
+  // Show PWA Download Advertisement 3 seconds after opening website ONLY when app is NOT installed
+  // Shows once per page load until website refresh; hides in App mode & when installed; re-appears after refresh if deleted
   useEffect(() => {
     if (
       isRunningInAppMode ||
@@ -5088,9 +5088,10 @@ export default function App() {
     }
 
     const elapsedMs = Date.now() - pageOpenedAtRef.current;
-    const delayMs = Math.max(1000, 5000 - elapsedMs);
+    const delayMs = Math.max(500, 3000 - elapsedMs);
     const timer = window.setTimeout(() => {
       if (!checkIsAppMode() && !isAppInstalled) {
+        setPwaAdDismissedThisVisit(true);
         setShowPwaAdModal(true);
       }
     }, delayMs);

@@ -22,21 +22,18 @@ export const PwaDownloadAdModal: React.FC<PwaDownloadAdModalProps> = ({
       {isOpen && (
         <div
           id="pwa-download-advertisement-modal"
-          className="fixed inset-0 z-[4500] flex items-end sm:items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm"
+          className="fixed inset-0 z-[4500] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pwa-ad-title"
         >
           <motion.div
-            initial={{ opacity: 0, y: 28, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            initial={{ opacity: 0, scale: 0.94, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ type: 'spring', damping: 26, stiffness: 320 }}
             className="relative w-full max-w-sm rounded-3xl bg-zinc-950 border border-zinc-800/90 shadow-2xl shadow-blue-950/30 overflow-hidden"
           >
-            {/* Subtle top accent bar */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-500" />
-
             {/* Close Button */}
             <button
               type="button"
@@ -96,25 +93,15 @@ export const PwaDownloadAdModal: React.FC<PwaDownloadAdModalProps> = ({
               </div>
 
               {/* Primary CTA: Download App */}
-              <div className="space-y-2">
-                <button
-                  id="pwa-ad-download-app-btn"
-                  type="button"
-                  onClick={onDownloadClick}
-                  className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.98]"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download App</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full py-2.5 px-4 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 text-xs font-semibold transition cursor-pointer"
-                >
-                  Continue on Website
-                </button>
-              </div>
+              <button
+                id="pwa-ad-download-app-btn"
+                type="button"
+                onClick={onDownloadClick}
+                className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.98]"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download App</span>
+              </button>
             </div>
           </motion.div>
         </div>
