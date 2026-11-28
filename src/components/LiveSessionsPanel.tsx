@@ -19,6 +19,7 @@ import {
 import { doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { auth, db, reportFirestoreNonFatal, OperationType } from '../firebase';
 import { Course, LiveSession, SubAdminAccount } from '../types';
+import { getSubAdminCourseIds } from '../utils/subAdminCourses';
 
 function toBase64Utf8(str: string): string {
   try {
@@ -285,28 +286,32 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
   // MANAGER MODE STATE (SUB-ADMIN / MAIN ADMIN)
   // =========================
   const isMainAdmin = adminRole === 'main_admin';
+  const subAdminCourseIds = useMemo(
+    () => getSubAdminCourseIds(subAdminSession),
+    [subAdminSession]
+  );
   const liveEnabledCourses = useMemo(() => {
     if (isMainAdmin) {
       return courses.filter((c) => c.includeLive === true);
     }
-    if (subAdminSession?.courseId) {
-      return courses.filter((c) => c.id === subAdminSession.courseId && c.includeLive === true);
+    if (subAdminCourseIds.length > 0) {
+      return courses.filter((c) => subAdminCourseIds.includes(c.id) && c.includeLive === true);
     }
     return [];
-  }, [courses, isMainAdmin, subAdminSession?.courseId]);
+  }, [courses, isMainAdmin, subAdminCourseIds]);
 
   const managerSessions = useMemo(() => {
     if (mode !== 'manager') return [];
     const scoped = isMainAdmin
       ? sessions
-      : sessions.filter((s) => s.courseId === subAdminSession?.courseId);
+      : sessions.filter((s) => subAdminCourseIds.includes(s.courseId));
     const statusRank: Record<string, number> = { live: 0, scheduled: 1, ended: 2 };
     return scoped.slice().sort((a, b) => {
       const rankDiff = (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3);
       if (rankDiff !== 0) return rankDiff;
       return (b.createdAt || 0) - (a.createdAt || 0);
     });
-  }, [mode, sessions, isMainAdmin, subAdminSession?.courseId]);
+  }, [mode, sessions, isMainAdmin, subAdminCourseIds]);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
@@ -659,7 +664,15 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             </span>
             {!isMainAdmin && subAdminSession && (
               <span className="text-[11px] font-bold text-zinc-400">
-                Course: <strong className="text-white">{subAdminSession.courseTitle}</strong>
+                {liveEnabledCourses.length > 1 ? (
+                  <>
+                    Live Courses: <strong className="text-white">{liveEnabledCourses.length}</strong>
+                  </>
+                ) : (
+                  <>
+                    Course: <strong className="text-white">{liveEnabledCourses[0]?.title || subAdminSession.courseTitle}</strong>
+                  </>
+                )}
               </span>
             )}
           </div>
@@ -797,8 +810,8 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
               />
             </div>
 
-            <div className={`grid grid-cols-1 ${isMainAdmin ? 'sm:grid-cols-2' : ''} gap-3`}>
-              {isMainAdmin && (
+            <div className={`grid grid-cols-1 ${(isMainAdmin || liveEnabledCourses.length > 1) ? 'sm:grid-cols-2' : ''} gap-3`}>
+              {(isMainAdmin || liveEnabledCourses.length > 1) && (
                 <div>
                   <label className="block text-[10px] font-black uppercase text-blue-400 mb-1">
                     Course *

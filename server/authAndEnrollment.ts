@@ -22,6 +22,7 @@ export interface VerifiedAdminContext {
   email?: string;
   subAdminCode?: string;
   assignedCourseId?: string;
+  assignedCourseIds?: string[];
 }
 
 export interface VerifiedStudentContext {
@@ -191,13 +192,25 @@ export async function verifyAdminIdentity(
           subData?.status === 'active' &&
           (!subData.activeDeviceId || (deviceId && subData.activeDeviceId === deviceId))
         ) {
+          const courseIds: string[] = [];
+          if (Array.isArray(subData.courseIds)) {
+            subData.courseIds.forEach((cid: unknown) => {
+              const s = String(cid || '').trim();
+              if (s && !courseIds.includes(s)) courseIds.push(s);
+            });
+          }
+          if (subData.courseId) {
+            const s = String(subData.courseId).trim();
+            if (s && !courseIds.includes(s)) courseIds.push(s);
+          }
           return {
             isAdmin: true,
             role: 'sub_admin',
             uid: subAdminCode,
             name: subData.name || 'Sub-Admin',
             subAdminCode,
-            assignedCourseId: subData.courseId,
+            assignedCourseId: courseIds[0] || subData.courseId,
+            assignedCourseIds: courseIds,
           };
         }
       }
@@ -218,16 +231,18 @@ export async function verifyStudentEnrollment(
   // Check if requester is a verified Admin first (Admins may inspect or host)
   const adminCtx = await verifyAdminIdentity(req, db, adminAuth);
   if (adminCtx) {
-    const adminAllowedCourseIds =
-      adminCtx.role === 'main_admin'
-        ? ['course-all']
+    const subCourseIds =
+      adminCtx.assignedCourseIds && adminCtx.assignedCourseIds.length > 0
+        ? adminCtx.assignedCourseIds
         : adminCtx.assignedCourseId
         ? [adminCtx.assignedCourseId]
         : [];
+    const adminAllowedCourseIds =
+      adminCtx.role === 'main_admin' ? ['course-all'] : subCourseIds;
     const authorized =
       !requiredCourseId ||
       adminCtx.role === 'main_admin' ||
-      adminCtx.assignedCourseId === requiredCourseId;
+      subCourseIds.includes(requiredCourseId);
     return {
       authorized,
       userId: adminCtx.uid,

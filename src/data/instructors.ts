@@ -1,5 +1,6 @@
 import type { Course, PublicInstructorProfile, SubAdminAccount } from '../types.ts';
 import { slugifyText } from '../utils/seoRouting.ts';
+import { getSubAdminCourseIds } from '../utils/subAdminCourses.ts';
 
 export const CORE_INSTRUCTORS: PublicInstructorProfile[] = [
   {
@@ -66,27 +67,34 @@ export function buildPublicInstructors(
     if (!rawSlug || rawSlug === 'item') return;
     const slug = BRAND_ALIAS_INSTRUCTOR_SLUGS.has(rawSlug) ? 'rajababu-mehta' : rawSlug;
 
+    const subCourseIds = getSubAdminCourseIds(sub);
     const existing = bySlug.get(slug);
     if (existing) {
-      if (sub.courseId && !existing.courseIds.includes(sub.courseId)) {
-        existing.courseIds.push(sub.courseId);
-      }
+      subCourseIds.forEach((cid) => {
+        if (!existing.courseIds.includes(cid)) {
+          existing.courseIds.push(cid);
+        }
+      });
       return;
     }
 
-    const assignedCourse = courses.find((c) => c.id === sub.courseId);
+    const assignedCourses = courses.filter((c) => subCourseIds.includes(c.id));
+    const primaryCourse = assignedCourses[0];
     bySlug.set(slug, {
       slug,
       name: cleanName,
       role: 'Course Instructor & Mentor',
-      headline: assignedCourse
-        ? `Instructor for ${assignedCourse.title}`
-        : `Verified Mentor on Hamro LMS Nepal`,
+      headline:
+        assignedCourses.length > 1
+          ? `Instructor for ${assignedCourses.length} Courses on Hamro LMS Nepal`
+          : primaryCourse
+          ? `Instructor for ${primaryCourse.title}`
+          : `Verified Mentor on Hamro LMS Nepal`,
       bio: `${cleanName} teaches and mentors learners on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.`,
-      expertise: assignedCourse?.learn?.slice(0, 4) || ['Digital Skills', 'Mentorship'],
+      expertise: primaryCourse?.learn?.slice(0, 4) || ['Digital Skills', 'Mentorship'],
       avatarUrl: sub.avatarUrl || '/institute-logo.png',
-      languages: assignedCourse?.language ? [assignedCourse.language] : ['English'],
-      courseIds: sub.courseId ? [sub.courseId] : [],
+      languages: primaryCourse?.language ? [primaryCourse.language] : ['English'],
+      courseIds: subCourseIds,
       isFounder: false,
     });
   });

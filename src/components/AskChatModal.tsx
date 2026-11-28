@@ -52,6 +52,7 @@ import { db } from '../firebase';
 import { VerifiedBadge } from './VerifiedBadge';
 import { cleanLegacyLogoUrl } from '../data';
 import { Course, SubAdminAccount, SupportMessage, SupportConversation, SiteSettingsConfig } from '../types';
+import { getSubAdminCourseIds, getSubAdminCourseTitles } from '../utils/subAdminCourses';
 
 interface AskChatModalProps {
   isOpen: boolean;
@@ -306,7 +307,43 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     });
 
     const targets: { courseId: string; courseTitle: string; courseWhatsapp?: string; subAdmin: SubAdminAccount }[] = [];
-    const seenSubCodes = new Set<string>();
+    const targetBySubCode = new Map<string, { courseId: string; courseTitle: string; courseWhatsapp?: string; subAdmin: SubAdminAccount }>();
+
+    const upsertTarget = (matchedSub: SubAdminAccount, courseId: string, courseTitle: string, courseWhatsapp?: string) => {
+      const existing = targetBySubCode.get(matchedSub.code);
+      if (!existing) {
+        const entry = {
+          courseId,
+          courseTitle,
+          courseWhatsapp,
+          subAdmin: matchedSub
+        };
+        targetBySubCode.set(matchedSub.code, entry);
+        targets.push(entry);
+      } else {
+        const existingTitles = existing.courseTitle
+          .split(' • ')
+          .map((t) => t.trim())
+          .filter(Boolean);
+        if (courseTitle && !existingTitles.some((t) => normText(t) === normText(courseTitle))) {
+          existingTitles.push(courseTitle);
+          existing.courseTitle = existingTitles.join(' • ');
+        }
+        if (!existing.courseWhatsapp && courseWhatsapp) {
+          existing.courseWhatsapp = courseWhatsapp;
+        }
+      }
+    };
+
+    const subMatchesCourse = (s: SubAdminAccount, aliases: string[], titleNorm: string) => {
+      const sIds = getSubAdminCourseIds(s);
+      if (sIds.some((id) => aliases.includes(id))) return true;
+      if (titleNorm) {
+        const sTitles = getSubAdminCourseTitles(s, courses);
+        if (sTitles.some((t) => normText(t) === titleNorm)) return true;
+      }
+      return false;
+    };
 
     const checkCourseList = expandedCourseIds.has('course-all')
       ? courses
@@ -315,48 +352,34 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     checkCourseList.forEach((crs) => {
       const crsAliases = resolveCourseAliases(crs.id);
       const crsTitleNorm = normText(crs.title);
-      const matchedSubs = activeSubs.filter(
-        s => crsAliases.includes(s.courseId) || (crsTitleNorm && normText(s.courseTitle) === crsTitleNorm)
-      );
+      const matchedSubs = activeSubs.filter((s) => subMatchesCourse(s, crsAliases, crsTitleNorm));
       matchedSubs.forEach((matchedSub) => {
-        if (!seenSubCodes.has(matchedSub.code)) {
-          seenSubCodes.add(matchedSub.code);
-          targets.push({
-            courseId: crs.id,
-            courseTitle: crs.title,
-            courseWhatsapp: crs.paymentConfig?.whatsappNumber,
-            subAdmin: matchedSub
-          });
-        }
+        upsertTarget(matchedSub, crs.id, crs.title, crs.paymentConfig?.whatsappNumber);
       });
     });
 
     if (expandedCourseIds.has('course-all')) {
       activeSubs.forEach((matchedSub) => {
-        if (!seenSubCodes.has(matchedSub.code)) {
-          seenSubCodes.add(matchedSub.code);
-          targets.push({
-            courseId: matchedSub.courseId,
-            courseTitle: matchedSub.courseTitle,
-            subAdmin: matchedSub
-          });
-        }
+        const subIds = getSubAdminCourseIds(matchedSub);
+        const subTitles = getSubAdminCourseTitles(matchedSub, courses);
+        upsertTarget(
+          matchedSub,
+          subIds[0] || matchedSub.courseId,
+          subTitles.join(' • ') || matchedSub.courseTitle
+        );
       });
     }
 
     // Fallback check against activeCourseIds directly if course object wasn't in prop
     expandedCourseIds.forEach((cid) => {
       if (cid === 'course-all') return;
-      const matchedSubs = activeSubs.filter(s => s.courseId === cid);
+      const matchedSubs = activeSubs.filter((s) => getSubAdminCourseIds(s).includes(cid));
       matchedSubs.forEach((matchedSub) => {
-        if (!seenSubCodes.has(matchedSub.code)) {
-          seenSubCodes.add(matchedSub.code);
-          targets.push({
-            courseId: cid,
-            courseTitle: matchedSub.courseTitle,
-            subAdmin: matchedSub
-          });
-        }
+        const matchedTitle =
+          courses.find((c) => c.id === cid)?.title ||
+          getSubAdminCourseTitles(matchedSub, courses)[0] ||
+          matchedSub.courseTitle;
+        upsertTarget(matchedSub, cid, matchedTitle);
       });
     });
 
@@ -366,18 +389,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         if (!k || k.status === 'expired' || k.status === 'deleted') return;
         const kAliases = k.courseId ? resolveCourseAliases(k.courseId) : [];
         const kTitleNorm = normText(k.courseTitle);
-        const matchedSubs = activeSubs.filter(
-          s => kAliases.includes(s.courseId) || (kTitleNorm && normText(s.courseTitle) === kTitleNorm)
-        );
+        const matchedSubs = activeSubs.filter((s) => subMatchesCourse(s, kAliases, kTitleNorm));
         matchedSubs.forEach((matchedSub) => {
-          if (!seenSubCodes.has(matchedSub.code)) {
-            seenSubCodes.add(matchedSub.code);
-            targets.push({
-              courseId: k.courseId || matchedSub.courseId,
-              courseTitle: k.courseTitle || matchedSub.courseTitle,
-              subAdmin: matchedSub
-            });
-          }
+          upsertTarget(
+            matchedSub,
+            k.courseId || matchedSub.courseId,
+            k.courseTitle || getSubAdminCourseTitles(matchedSub, courses)[0] || matchedSub.courseTitle
+          );
         });
       });
     }
@@ -660,8 +678,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             if (!sub.code) return;
             seen.add(sub.code);
             const remote = subDocMap.get(sub.code);
-            const courseObj = courses.find((c) => c.id === sub.courseId);
-            const courseName = courseObj?.title || sub.courseTitle || '';
+            const subCourseIds = getSubAdminCourseIds(sub);
+            const courseNames = getSubAdminCourseTitles(sub, courses);
+            const courseNameDisplay = courseNames.join(', ');
             const avatar = sub.avatarUrl || remote?.userAvatar || '';
             list.push({
               id: `subadmin_main__${sub.code}`,
@@ -672,9 +691,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               channelType: 'subadmin_mainadmin',
               subAdminCode: sub.code,
               subAdminName: sub.name,
-              courseId: sub.courseId,
-              activeCourse: courseName,
-              purchasedCourses: courseName ? [courseName] : [],
+              courseId: subCourseIds[0] || sub.courseId,
+              activeCourse: courseNameDisplay,
+              purchasedCourses: courseNames,
               lastMessage: remote?.lastMessage || 'No messages yet',
               lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
               lastSender: remote?.lastSender || 'system',
@@ -729,13 +748,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
           let officialRemote: any = null;
           const studentContactMap = new Map<string, SupportConversation>();
 
-          const assignedCourseObj = courses.find(c => c.id === subAdminSession.courseId);
-          const assignedTitleNorm = normTitle(subAdminSession.courseTitle || assignedCourseObj?.title);
+          const subCourseIds = getSubAdminCourseIds(subAdminSession);
+          const subCourseTitles = getSubAdminCourseTitles(subAdminSession, courses);
+          const subTitleNorms = subCourseTitles.map(normTitle).filter(Boolean);
 
           const isKeyForThisSubCourse = (k: any) => {
             if (!k) return false;
-            if (k.courseId && k.courseId === subAdminSession.courseId) return true;
-            if (assignedTitleNorm && normTitle(k.courseTitle) === assignedTitleNorm) return true;
+            if (k.courseId && subCourseIds.includes(k.courseId)) return true;
+            if (k.courseTitle && subTitleNorms.includes(normTitle(k.courseTitle))) return true;
             return false;
           };
 
@@ -760,8 +780,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               !belongsToDifferentSub &&
               ((d.channelType === 'student_subadmin' &&
                 (convSubCode === subAdminSession.code ||
-                  d.courseId === subAdminSession.courseId ||
-                  (assignedTitleNorm && normTitle(d.activeCourse) === assignedTitleNorm))) ||
+                  (d.courseId && subCourseIds.includes(d.courseId)) ||
+                  (d.activeCourse && subTitleNorms.includes(normTitle(d.activeCourse))))) ||
                 docSnap.id.startsWith(`substudent__${subAdminSession.code}__`));
 
             if (!belongsToSub) return;
@@ -790,7 +810,19 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             }
             if (!resolvedName) resolvedName = 'Student';
 
-            const courseTitle = subAdminSession.courseTitle || d.activeCourse || matchedKey?.courseTitle || 'Course';
+            const matchedCourseObj = courses.find((c) => c.id === (d.courseId || matchedKey?.courseId));
+            const courseTitle =
+              matchedCourseObj?.title ||
+              d.activeCourse ||
+              matchedKey?.courseTitle ||
+              subCourseTitles[0] ||
+              'Course';
+            const mergedCourseList = Array.from(
+              new Set([
+                ...(Array.isArray(d.purchasedCourses) ? d.purchasedCourses.filter(Boolean) : []),
+                ...(courseTitle ? [courseTitle] : [])
+              ])
+            );
 
             // Resolve newest saved student avatar between Firestore conversation doc and activation key
             const keyAvatar = matchedKey?.studentAvatar || '';
@@ -810,9 +842,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               channelType: 'student_subadmin',
               subAdminCode: subAdminSession.code,
               subAdminName: subAdminSession.name,
-              courseId: subAdminSession.courseId,
-              activeCourse: courseTitle,
-              purchasedCourses: [courseTitle],
+              courseId: d.courseId || matchedKey?.courseId || subCourseIds[0] || subAdminSession.courseId,
+              activeCourse: mergedCourseList.join(', ') || courseTitle,
+              purchasedCourses: mergedCourseList.length > 0 ? mergedCourseList : [courseTitle],
               lastMessage: d.lastMessage || '',
               lastMessageAt: d.lastMessageAt || Date.now(),
               lastSender: d.lastSender || 'user',
@@ -833,12 +865,15 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               const bestAvatar = newerIsCurrent
                 ? convObj.userAvatar || existing.userAvatar || ''
                 : existing.userAvatar || convObj.userAvatar || '';
-              studentContactMap.set(
-                dedupKey,
-                newerIsCurrent
-                  ? { ...existing, ...convObj, userAvatar: bestAvatar }
-                  : { ...convObj, ...existing, userAvatar: bestAvatar }
+              const combinedCourses = Array.from(
+                new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])].filter(Boolean))
               );
+              const merged = newerIsCurrent
+                ? { ...existing, ...convObj, userAvatar: bestAvatar }
+                : { ...convObj, ...existing, userAvatar: bestAvatar };
+              merged.purchasedCourses = combinedCourses;
+              merged.activeCourse = combinedCourses.join(', ') || merged.activeCourse;
+              studentContactMap.set(dedupKey, merged);
             }
           });
 
@@ -851,7 +886,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
               const keyRealName = cleanRealName(key.claimedByName) || cleanRealName(key.studentName) || 'Student';
               const dedupKey = getStudentKey(keyRealName, key.claimedByEmail || '', buyerId, key.code || key.id);
-              const courseTitle = subAdminSession.courseTitle || key.courseTitle || 'Course';
+              const matchedKeyCourse = courses.find((c) => c.id === key.courseId);
+              const courseTitle = matchedKeyCourse?.title || key.courseTitle || subCourseTitles[0] || 'Course';
               const canonicalConvId = `substudent__${subAdminSession.code}__${buyerId}`;
 
               const existing = studentContactMap.get(dedupKey);
@@ -866,7 +902,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   channelType: 'student_subadmin',
                   subAdminCode: subAdminSession.code,
                   subAdminName: subAdminSession.name,
-                  courseId: subAdminSession.courseId,
+                  courseId: key.courseId || subCourseIds[0] || subAdminSession.courseId,
                   activeCourse: courseTitle,
                   purchasedCourses: [courseTitle],
                   lastMessage: `Activated: ${key.code || key.id}`,
@@ -886,6 +922,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 if (key.studentAvatar && (!existing.userAvatar || (key.studentAvatarUpdatedAt || 0) >= (existing.updatedAt || 0))) {
                   existing.userAvatar = key.studentAvatar;
                 }
+                if (courseTitle) {
+                  const combined = Array.from(new Set([...(existing.purchasedCourses || []), courseTitle]));
+                  existing.purchasedCourses = combined;
+                  existing.activeCourse = combined.join(', ');
+                }
               }
             });
           }
@@ -899,7 +940,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             channelType: 'subadmin_mainadmin',
             subAdminCode: subAdminSession.code,
             subAdminName: subAdminSession.name,
-            courseId: subAdminSession.courseId,
+            courseId: subCourseIds[0] || subAdminSession.courseId,
             activeCourse: '',
             purchasedCourses: [],
             lastMessage: officialRemote?.lastMessage || `Chat with ${brandName}`,
@@ -932,7 +973,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, courses, allActivationKeys, brandName, officialLogoUrl]);
+  }, [isOpen, isAdmin, isMainAdminMode, isSubAdminMode, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdminSession?.courseIds?.join(','), subAdmins, courses, allActivationKeys, brandName, officialLogoUrl]);
 
   // ==========================================================================
   // 3. ADMIN / SUB-ADMIN MODE: Listener for messages in selected conversation
@@ -1358,11 +1399,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       };
 
       if (isSubViewingMainAdmin && subAdminSession) {
+        const subCourseIds = getSubAdminCourseIds(subAdminSession);
+        const subCourseTitles = getSubAdminCourseTitles(subAdminSession, courses);
         convPayload.channelType = 'subadmin_mainadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId || '';
-        convPayload.activeCourse = subAdminSession.courseTitle || '';
+        convPayload.courseId = subCourseIds[0] || subAdminSession.courseId || '';
+        convPayload.activeCourse = subCourseTitles.join(', ');
         convPayload.userId = subAdminSession.code;
         convPayload.userName = subAdminSession.name;
         if (subAdminSession.avatarUrl && subAdminSession.avatarUrl.length <= 200000) {
@@ -1382,11 +1425,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);
       } else if (isSubAdminMode && subAdminSession) {
+        const subCourseIds = getSubAdminCourseIds(subAdminSession);
+        const subCourseTitles = getSubAdminCourseTitles(subAdminSession, courses);
         convPayload.channelType = 'student_subadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId || '';
-        convPayload.activeCourse = subAdminSession.courseTitle || '';
+        convPayload.courseId = targetConv?.courseId || subCourseIds[0] || subAdminSession.courseId || '';
+        convPayload.activeCourse = targetConv?.activeCourse || subCourseTitles[0] || '';
         convPayload.userId = targetConv?.userId || selectedAdminConvId.replace(`substudent__${subAdminSession.code}__`, '');
         convPayload.userName = realUserName;
         convPayload.userEmail = targetConv?.userEmail || '';
@@ -1395,7 +1440,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         }
         const safeCourses = (targetConv?.purchasedCourses && targetConv.purchasedCourses.length > 0)
           ? targetConv.purchasedCourses.filter(Boolean)
-          : (subAdminSession.courseTitle ? [subAdminSession.courseTitle] : []);
+          : (subCourseTitles.length > 0 ? [subCourseTitles[0]] : []);
         convPayload.purchasedCourses = safeCourses;
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);

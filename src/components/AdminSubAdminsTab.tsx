@@ -15,9 +15,12 @@ import {
   Upload,
   Camera,
   X,
+  Check,
+  Edit3,
 } from 'lucide-react';
 import { Course, SubAdminAccount } from '../types';
 import { compressImageFile } from '../utils/chatMedia';
+import { getSubAdminCourseIds, getSubAdminCourseTitles } from '../utils/subAdminCourses';
 
 interface AdminSubAdminsTabProps {
   courses: Course[];
@@ -25,12 +28,12 @@ interface AdminSubAdminsTabProps {
   allActivationKeys: any[];
   onCreateSubAdmin: (
     name: string,
-    courseId: string,
+    courseIds: string[],
     customCode?: string,
     avatarUrl?: string
   ) => Promise<SubAdminAccount | null>;
   onToggleStatus: (subAdmin: SubAdminAccount) => Promise<void>;
-  onUpdateCourse: (subAdmin: SubAdminAccount, courseId: string) => Promise<void>;
+  onUpdateCourse: (subAdmin: SubAdminAccount, courseIds: string[]) => Promise<void>;
   onUpdateAvatar?: (subAdmin: SubAdminAccount, avatarUrl: string) => Promise<void>;
   onDeleteSubAdmin: (code: string) => Promise<void>;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -48,17 +51,34 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
   showToast,
 }) => {
   const [nameInput, setNameInput] = useState('');
-  const [selectedCourseId, setSelectedCourseId] = useState(() => courses[0]?.id || '');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>(() =>
+    courses[0]?.id ? [courses[0].id] : []
+  );
   const [customCodeInput, setCustomCodeInput] = useState('');
   const [avatarInput, setAvatarInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [uploadingForCode, setUploadingForCode] = useState<string | null>(null);
+  const [editingCoursesForCode, setEditingCoursesForCode] = useState<string | null>(null);
+  const [draftCourseIds, setDraftCourseIds] = useState<string[]>([]);
+  const [savingCoursesForCode, setSavingCoursesForCode] = useState<string | null>(null);
   const [subAdminToDelete, setSubAdminToDelete] = useState<SubAdminAccount | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [subAdminToDisable, setSubAdminToDisable] = useState<SubAdminAccount | null>(null);
   const [disableConfirmInput, setDisableConfirmInput] = useState('');
   const [isDisabling, setIsDisabling] = useState(false);
+
+  const toggleCreateCourseId = (courseId: string) => {
+    setSelectedCourseIds((prev) =>
+      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
+    );
+  };
+
+  const toggleDraftCourseId = (courseId: string) => {
+    setDraftCourseIds((prev) =>
+      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
+    );
+  };
 
   const handleNewAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -94,13 +114,13 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
 
   const handleGenerate = async (autoCopy: boolean) => {
     const cleanName = nameInput.trim();
-    const targetCourseId = selectedCourseId || courses[0]?.id || '';
+    const validCourseIds = selectedCourseIds.filter((id) => courses.some((c) => c.id === id));
     if (!cleanName) {
       showToast('Please enter Sub-Admin name', 'error');
       return;
     }
-    if (!targetCourseId) {
-      showToast('Please select a course', 'error');
+    if (validCourseIds.length === 0) {
+      showToast('Please select at least one course', 'error');
       return;
     }
 
@@ -108,7 +128,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
     try {
       const created = await onCreateSubAdmin(
         cleanName,
-        targetCourseId,
+        validCourseIds,
         customCodeInput.trim(),
         avatarInput.trim()
       );
@@ -117,7 +137,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
           try {
             await navigator.clipboard.writeText(created.code);
             showToast(
-              `Sub-Admin Code "${created.code}" created and copied! 🛡️`,
+              `Sub-Admin Code "${created.code}" created (${validCourseIds.length} ${validCourseIds.length === 1 ? 'course' : 'courses'}) and copied! 🛡️`,
               'success'
             );
           } catch {
@@ -138,10 +158,12 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
   const filteredSubAdmins = subAdmins.filter((sa) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
+    const saTitles = getSubAdminCourseTitles(sa, courses).join(' ').toLowerCase();
     return (
       sa.code.toLowerCase().includes(q) ||
       sa.name.toLowerCase().includes(q) ||
-      sa.courseTitle.toLowerCase().includes(q)
+      sa.courseTitle.toLowerCase().includes(q) ||
+      saTitles.includes(q)
     );
   });
 
@@ -154,7 +176,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
             Course-Scoped Sub-Admin Manager (Main Admin Only)
           </strong>
           <p className="mt-1 text-purple-200/80">
-            Create separate Sub-Admin login codes for each course. A Sub-Admin can only view and manage their assigned course details, payment/QR info, WhatsApp message, and student activation codes. Other courses and main site settings stay hidden.
+            Create Sub-Admin login codes and assign one or multiple courses to each Sub-Admin. A Sub-Admin can view and manage all of their assigned courses (details, payment/QR info, WhatsApp message, live sessions, and student activation codes). Unassigned courses and main site settings stay hidden.
           </p>
         </div>
       </div>
@@ -175,32 +197,71 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder="e.g. Ramesh (YouTube Course Admin)"
+              placeholder="e.g. Ramesh (Course Instructor)"
               className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-              Assign Course *
-            </label>
-            <select
-              value={selectedCourseId || courses[0]?.id || ''}
-              onChange={(e) => setSelectedCourseId(e.target.value)}
-              className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
-            >
-              {courses.length === 0 ? (
-                <option value="">No courses available</option>
-              ) : (
-                courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.title} ({course.price})
-                  </option>
-                ))
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <label className="block text-[10px] font-black uppercase text-slate-500">
+                Assign Courses * ({selectedCourseIds.filter((id) => courses.some((c) => c.id === id)).length} Selected)
+              </label>
+              {courses.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allIds = courses.map((c) => c.id);
+                    const allSelected = allIds.every((id) => selectedCourseIds.includes(id));
+                    setSelectedCourseIds(allSelected ? (courses[0]?.id ? [courses[0].id] : []) : allIds);
+                  }}
+                  className="text-[10px] font-black text-purple-700 hover:text-purple-900 cursor-pointer"
+                >
+                  {courses.every((c) => selectedCourseIds.includes(c.id)) ? 'Reset to 1' : 'Select All'}
+                </button>
               )}
-            </select>
+            </div>
+            {courses.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-400">
+                No courses available
+              </div>
+            ) : (
+              <div className="max-h-44 overflow-y-auto space-y-1.5 bg-white border border-slate-200 rounded-xl p-2">
+                {courses.map((course) => {
+                  const checked = selectedCourseIds.includes(course.id);
+                  return (
+                    <button
+                      key={course.id}
+                      type="button"
+                      onClick={() => toggleCreateCourseId(course.id)}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg border text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer ${
+                        checked
+                          ? 'bg-purple-50 border-purple-400 text-purple-900'
+                          : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                            checked
+                              ? 'bg-purple-600 border-purple-600 text-white'
+                              : 'bg-white border-slate-300'
+                          }`}
+                        >
+                          {checked && <Check className="w-3 h-3" />}
+                        </span>
+                        <span className="truncate">{course.title}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 shrink-0 font-semibold">
+                        {course.price}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-[10px] text-slate-500 mt-1 font-medium">
-              This Sub-Admin can only edit and generate codes for this selected course.
+              Select 1 or multiple courses for this Sub-Admin to manage.
             </p>
           </div>
 
@@ -266,10 +327,10 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
               <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Sub-Admin Permissions:
             </p>
             <ul className="list-disc pl-4 space-y-0.5 text-[10.5px]">
-              <li>Can only edit assigned course details (title, price, videos, PDFs)</li>
-              <li>Can only update assigned course payment (eSewa/Bank/QR) and WhatsApp message</li>
-              <li>Can only generate and manage student codes for their assigned course</li>
-              <li>Cannot view or modify other courses, site settings, or notifications</li>
+              <li>Can edit all assigned course details (title, price, videos, PDFs)</li>
+              <li>Can update payment QR and WhatsApp settings for each assigned course</li>
+              <li>Can generate and manage student codes for their assigned courses</li>
+              <li>Cannot view or modify unassigned courses, site settings, or notifications</li>
             </ul>
           </div>
 
@@ -329,6 +390,10 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
             ) : (
               filteredSubAdmins.map((sa) => {
                 const isDisabled = sa.status === 'disabled';
+                const saCourseIds = getSubAdminCourseIds(sa);
+                const saCourseTitles = getSubAdminCourseTitles(sa, courses);
+                const isEditingCourses = editingCoursesForCode === sa.code;
+                const isSavingCourses = savingCoursesForCode === sa.code;
                 const generatedCount = allActivationKeys.filter(
                   (k) => k.createdBySubAdminCode === sa.code
                 ).length;
@@ -396,7 +461,8 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                             <button
                               type="button"
                               onClick={async () => {
-                                const guide = `🛡️ Sub-Admin Access\nName: ${sa.name}\nAssigned Course: ${sa.courseTitle}\nLogin Code: ${sa.code}\n\nHow to open:\n1) Go to Profile / Course on the website, enter "${sa.code}" in the Secret Code box, and click Activate.\n2) Once logged in, click the Logo at the top to open your course dashboard directly.`;
+                                const coursesLabel = saCourseTitles.join(', ') || sa.courseTitle;
+                                const guide = `🛡️ Sub-Admin Access\nName: ${sa.name}\nAssigned Courses (${saCourseIds.length}): ${coursesLabel}\nLogin Code: ${sa.code}\n\nHow to open:\n1) Go to Profile / Course on the website, enter "${sa.code}" in the Secret Code box, and click Activate.\n2) Once logged in, click the Logo at the top to open your courses dashboard directly.`;
                                 await navigator.clipboard.writeText(guide);
                                 showToast(`Sub-Admin login instructions copied! 📋`, 'success');
                               }}
@@ -467,28 +533,118 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                       </div>
                     </div>
 
-                    {/* Assigned Course Reassign Selector */}
+                    {/* Assigned Courses Multi-Selector */}
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-2">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1 shrink-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1">
                           <BookOpen className="w-3.5 h-3.5 text-purple-600" />
-                          Assigned Course:
-                        </label>
-                        <select
-                          value={sa.courseId}
-                          onChange={(e) => onUpdateCourse(sa, e.target.value)}
-                          className="bg-white border border-slate-300 focus:border-purple-500 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-800 outline-hidden max-w-full sm:max-w-xs"
+                          Assigned Courses ({saCourseIds.length}):
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isEditingCourses) {
+                              setEditingCoursesForCode(null);
+                              setDraftCourseIds([]);
+                            } else {
+                              setEditingCoursesForCode(sa.code);
+                              setDraftCourseIds(saCourseIds);
+                            }
+                          }}
+                          className="text-[10px] font-black text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
                         >
-                          {courses.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.title}
-                            </option>
-                          ))}
-                          {!courses.some((c) => c.id === sa.courseId) && (
-                            <option value={sa.courseId}>{sa.courseTitle} (Not Found)</option>
-                          )}
-                        </select>
+                          <Edit3 className="w-3 h-3" />
+                          <span>{isEditingCourses ? 'Close' : 'Edit Courses'}</span>
+                        </button>
                       </div>
+
+                      {!isEditingCourses ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {saCourseTitles.length > 0 ? (
+                            saCourseTitles.map((title, idx) => (
+                              <span
+                                key={`${sa.code}-${idx}`}
+                                className="inline-flex items-center gap-1 bg-white border border-purple-200 text-purple-900 text-[11px] font-bold px-2.5 py-1 rounded-lg"
+                              >
+                                {title}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[11px] text-rose-600 font-bold">
+                              No course assigned
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2 bg-white border border-purple-200 rounded-xl p-2.5">
+                          <div className="max-h-40 overflow-y-auto space-y-1">
+                            {courses.map((c) => {
+                              const checked = draftCourseIds.includes(c.id);
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => toggleDraftCourseId(c.id)}
+                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition flex items-center justify-between gap-2 cursor-pointer ${
+                                    checked
+                                      ? 'bg-purple-50 border-purple-400 text-purple-900'
+                                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span
+                                      className={`w-3.5 h-3.5 rounded flex items-center justify-center shrink-0 border ${
+                                        checked
+                                          ? 'bg-purple-600 border-purple-600 text-white'
+                                          : 'bg-white border-slate-300'
+                                      }`}
+                                    >
+                                      {checked && <Check className="w-2.5 h-2.5" />}
+                                    </span>
+                                    <span className="truncate">{c.title}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 shrink-0">{c.price}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {draftCourseIds.length} selected
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isSavingCourses}
+                                onClick={() => {
+                                  setEditingCoursesForCode(null);
+                                  setDraftCourseIds([]);
+                                }}
+                                className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-bold hover:bg-slate-100 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSavingCourses || draftCourseIds.length === 0}
+                                onClick={async () => {
+                                  setSavingCoursesForCode(sa.code);
+                                  try {
+                                    await onUpdateCourse(sa, draftCourseIds);
+                                    setEditingCoursesForCode(null);
+                                  } finally {
+                                    setSavingCoursesForCode(null);
+                                  }
+                                }}
+                                className="px-3 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-[10px] font-black cursor-pointer flex items-center gap-1"
+                              >
+                                {isSavingCourses && <RefreshCw className="w-3 h-3 animate-spin" />}
+                                Save Courses ({draftCourseIds.length})
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-slate-500 font-bold pt-1 border-t border-slate-200/70">
                         <span className="flex items-center gap-1">
@@ -550,7 +706,10 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                   </span>
                 </p>
                 <p className="font-bold text-slate-700">
-                  Course: <span className="text-slate-900">{subAdminToDelete.courseTitle}</span>
+                  Courses:{' '}
+                  <span className="text-slate-900">
+                    {getSubAdminCourseTitles(subAdminToDelete, courses).join(', ') || subAdminToDelete.courseTitle}
+                  </span>
                 </p>
               </div>
 

@@ -611,13 +611,25 @@ async function verifyAdminIdentity(req, db, adminAuth) {
       if (subSnap.exists) {
         const subData = subSnap.data();
         if (subData?.status === "active" && (!subData.activeDeviceId || deviceId && subData.activeDeviceId === deviceId)) {
+          const courseIds = [];
+          if (Array.isArray(subData.courseIds)) {
+            subData.courseIds.forEach((cid) => {
+              const s = String(cid || "").trim();
+              if (s && !courseIds.includes(s)) courseIds.push(s);
+            });
+          }
+          if (subData.courseId) {
+            const s = String(subData.courseId).trim();
+            if (s && !courseIds.includes(s)) courseIds.push(s);
+          }
           return {
             isAdmin: true,
             role: "sub_admin",
             uid: subAdminCode,
             name: subData.name || "Sub-Admin",
             subAdminCode,
-            assignedCourseId: subData.courseId
+            assignedCourseId: courseIds[0] || subData.courseId,
+            assignedCourseIds: courseIds
           };
         }
       }
@@ -630,8 +642,9 @@ async function verifyAdminIdentity(req, db, adminAuth) {
 async function verifyStudentEnrollment(req, db, adminAuth, requiredCourseId) {
   const adminCtx = await verifyAdminIdentity(req, db, adminAuth);
   if (adminCtx) {
-    const adminAllowedCourseIds = adminCtx.role === "main_admin" ? ["course-all"] : adminCtx.assignedCourseId ? [adminCtx.assignedCourseId] : [];
-    const authorized = !requiredCourseId || adminCtx.role === "main_admin" || adminCtx.assignedCourseId === requiredCourseId;
+    const subCourseIds = adminCtx.assignedCourseIds && adminCtx.assignedCourseIds.length > 0 ? adminCtx.assignedCourseIds : adminCtx.assignedCourseId ? [adminCtx.assignedCourseId] : [];
+    const adminAllowedCourseIds = adminCtx.role === "main_admin" ? ["course-all"] : subCourseIds;
+    const authorized = !requiredCourseId || adminCtx.role === "main_admin" || subCourseIds.includes(requiredCourseId);
     return {
       authorized,
       userId: adminCtx.uid,
@@ -639,7 +652,7 @@ async function verifyStudentEnrollment(req, db, adminAuth, requiredCourseId) {
       studentEmail: adminCtx.email,
       enrolledCourseIds: adminAllowedCourseIds,
       isAdminBypass: true,
-      reason: authorized ? void 0 : "Sub-Admin is only authorized for their assigned course."
+      reason: authorized ? void 0 : "Sub-Admin is only authorized for their assigned courses."
     };
   }
   let verifiedUid = "";
@@ -2943,10 +2956,18 @@ function mergePublicInstructors(courses, subAdmins) {
     const rawSlug = slugifyText(sub.name);
     if (!rawSlug || rawSlug === "item") continue;
     const slug = BRAND_ALIAS_SLUGS.has(rawSlug) ? "rajababu-mehta" : rawSlug;
+    const subIds = Array.from(
+      new Set([
+        ...Array.isArray(sub.courseIds) ? sub.courseIds.map(String).filter(Boolean) : [],
+        ...sub.courseId ? [String(sub.courseId)] : []
+      ])
+    );
     const existing = bySlug.get(slug);
     if (existing) {
-      if (sub.courseId && !existing.courseIds.includes(sub.courseId)) {
-        existing.courseIds.push(sub.courseId);
+      for (const cid of subIds) {
+        if (!existing.courseIds.includes(cid)) {
+          existing.courseIds.push(cid);
+        }
       }
       continue;
     }
@@ -2954,11 +2975,11 @@ function mergePublicInstructors(courses, subAdmins) {
       slug,
       name: String(sub.name).trim(),
       role: "Course Instructor & Mentor",
-      headline: sub.courseTitle ? `Instructor for ${sub.courseTitle}` : "Instructor on Hamro LMS Nepal",
+      headline: subIds.length > 1 ? `Instructor for ${subIds.length} Courses on Hamro LMS Nepal` : sub.courseTitle ? `Instructor for ${sub.courseTitle}` : "Instructor on Hamro LMS Nepal",
       bio: `${String(sub.name).trim()} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
       avatarUrl: sub.avatarUrl || "/institute-logo.png",
-      languages: ["English", "Nepali"],
-      courseIds: sub.courseId ? [sub.courseId] : [],
+      languages: ["English"],
+      courseIds: subIds,
       expertise: ["Online Education", "Digital Skills"]
     });
   }
@@ -3077,6 +3098,7 @@ async function fetchPublicCatalogSnapshot() {
           name: String(d.name),
           courseId: String(d.courseId || ""),
           courseTitle: String(d.courseTitle || ""),
+          courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
           avatarUrl: d.avatarUrl ? String(d.avatarUrl) : void 0,
           status: "active"
         });

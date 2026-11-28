@@ -498,10 +498,18 @@ function mergePublicInstructors(courses, subAdmins) {
     const rawSlug = slugifyText(sub.name);
     if (!rawSlug || rawSlug === 'item') continue;
     const slug = BRAND_ALIAS_SLUGS.has(rawSlug) ? 'rajababu-mehta' : rawSlug;
+    const subIds = Array.from(
+      new Set([
+        ...(Array.isArray(sub.courseIds) ? sub.courseIds.map(String).filter(Boolean) : []),
+        ...(sub.courseId ? [String(sub.courseId)] : []),
+      ])
+    );
     const existing = bySlug.get(slug);
     if (existing) {
-      if (sub.courseId && !existing.courseIds.includes(sub.courseId)) {
-        existing.courseIds.push(sub.courseId);
+      for (const cid of subIds) {
+        if (!existing.courseIds.includes(cid)) {
+          existing.courseIds.push(cid);
+        }
       }
       continue;
     }
@@ -509,11 +517,15 @@ function mergePublicInstructors(courses, subAdmins) {
       slug,
       name: String(sub.name).trim(),
       role: 'Course Instructor & Mentor',
-      headline: sub.courseTitle ? `Instructor for ${sub.courseTitle}` : 'Instructor on Hamro LMS Nepal',
+      headline: subIds.length > 1
+        ? `Instructor for ${subIds.length} Courses on Hamro LMS Nepal`
+        : sub.courseTitle
+        ? `Instructor for ${sub.courseTitle}`
+        : 'Instructor on Hamro LMS Nepal',
       bio: `${String(sub.name).trim()} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
       avatarUrl: sub.avatarUrl || '/institute-logo.png',
       languages: ['English'],
-      courseIds: sub.courseId ? [sub.courseId] : [],
+      courseIds: subIds,
       expertise: ['Online Education', 'Digital Skills'],
     });
   }
@@ -643,6 +655,7 @@ export async function fetchPublicCatalogSnapshot() {
           name: String(d.name),
           courseId: String(d.courseId || ''),
           courseTitle: String(d.courseTitle || ''),
+          courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
           avatarUrl: d.avatarUrl ? String(d.avatarUrl) : undefined,
           status: 'active',
         });

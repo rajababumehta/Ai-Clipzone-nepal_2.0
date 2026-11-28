@@ -100,6 +100,7 @@ import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 import { compressImageFile, estimateJsonByteSize } from './utils/chatMedia';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { PwaDownloadAdModal } from './components/PwaDownloadAdModal';
+import { getSubAdminCourseIds, getSubAdminCourseTitles, subAdminHasCourse } from './utils/subAdminCourses';
 
 const courseGridContainerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -633,15 +634,18 @@ export default function App() {
     }
 
     const targetSubs = poolSubs.filter((s) => {
-      if (enrolledCourseIds.includes('course-all') || enrolledCourseIds.includes(s.courseId)) {
+      if (enrolledCourseIds.includes('course-all')) {
         return true;
       }
-      const subTitleNorm = normText(s.courseTitle);
+      const sIds = getSubAdminCourseIds(s);
+      if (sIds.some((id) => enrolledCourseIds.includes(id))) {
+        return true;
+      }
+      const sTitlesNorm = getSubAdminCourseTitles(s, courses).map(normText).filter(Boolean);
       return userActivationKeys.some(
         (k: any) =>
-          k?.courseTitle &&
-          subTitleNorm &&
-          normText(k.courseTitle) === subTitleNorm
+          (k?.courseId && sIds.includes(k.courseId)) ||
+          (k?.courseTitle && sTitlesNorm.includes(normText(k.courseTitle)))
       );
     });
 
@@ -2249,12 +2253,14 @@ export default function App() {
     return lower === 'ai.clipzone.edu@gmail.com' || lower === 'rajababum426@gmail.com' || lower.startsWith('admin');
   };
 
-  // Fetch keys for Admin (all keys) or Sub-Admin (strictly scoped to assigned courseId)
+  // Fetch keys for Admin (all keys) or Sub-Admin (strictly scoped to assigned courseIds)
   const fetchAdminKeys = async () => {
     const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-    const subCourseId = !mainAdminActive && subAdminSession?.status === 'active' ? subAdminSession.courseId : '';
+    const subCourseIds = !mainAdminActive && subAdminSession?.status === 'active'
+      ? getSubAdminCourseIds(subAdminSession)
+      : [];
 
-    if (!mainAdminActive && !subCourseId) {
+    if (!mainAdminActive && subCourseIds.length === 0) {
       return;
     }
 
@@ -2275,15 +2281,21 @@ export default function App() {
     setIsAdminLoadingKeys(true);
 
     try {
-      const keysRef = mainAdminActive
+      const keysRef = mainAdminActive || subCourseIds.length > 30
         ? collection(db, 'activation_keys')
-        : query(collection(db, 'activation_keys'), where('courseId', '==', subCourseId));
+        : subCourseIds.length === 1
+        ? query(collection(db, 'activation_keys'), where('courseId', '==', subCourseIds[0]))
+        : query(collection(db, 'activation_keys'), where('courseId', 'in', subCourseIds));
 
       const querySnapshot = await getDocs(keysRef);
 
       const firestoreKeys: any[] = [];
       querySnapshot.forEach((docSnap: any) => {
-        firestoreKeys.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        if (!mainAdminActive && subCourseIds.length > 30 && !subCourseIds.includes(data?.courseId)) {
+          return;
+        }
+        firestoreKeys.push({ id: docSnap.id, ...data });
       });
 
       firestoreKeys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -2307,22 +2319,30 @@ export default function App() {
   // Realtime listeners for activation_keys & sub_admins based on active role (Main Admin vs Course Sub-Admin)
   useEffect(() => {
     const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
-    const subCourseId = !mainAdminActive && subAdminSession?.status === 'active' ? subAdminSession.courseId : '';
+    const subCourseIds = !mainAdminActive && subAdminSession?.status === 'active'
+      ? getSubAdminCourseIds(subAdminSession)
+      : [];
 
-    if (!mainAdminActive && !subCourseId) {
+    if (!mainAdminActive && subCourseIds.length === 0) {
       return;
     }
 
     fetchAdminKeys();
 
-    const keysQuery = mainAdminActive
+    const keysQuery = mainAdminActive || subCourseIds.length > 30
       ? collection(db, 'activation_keys')
-      : query(collection(db, 'activation_keys'), where('courseId', '==', subCourseId));
+      : subCourseIds.length === 1
+      ? query(collection(db, 'activation_keys'), where('courseId', '==', subCourseIds[0]))
+      : query(collection(db, 'activation_keys'), where('courseId', 'in', subCourseIds));
 
     const unsubKeys = onSnapshot(keysQuery, (snapshot) => {
       const keys: any[] = [];
       snapshot.forEach((docSnap) => {
-        keys.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        if (!mainAdminActive && subCourseIds.length > 30 && !subCourseIds.includes(data?.courseId)) {
+          return;
+        }
+        keys.push({ id: docSnap.id, ...data });
       });
       keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setAllActivationKeys(keys);
@@ -2390,7 +2410,7 @@ export default function App() {
       unsubKeys();
       if (unsubSubAdmins) unsubSubAdmins();
     };
-  }, [isAdminActivated, currentUser?.email, subAdminSession?.code, subAdminSession?.courseId]);
+  }, [isAdminActivated, currentUser?.email, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseIds?.join(',')]);
 
   // Public active Sub-Admins listener for Student -> Course Sub-Admin Ask routing (never caches codes in localStorage)
   useEffect(() => {
@@ -2920,8 +2940,8 @@ export default function App() {
         let matchedSub = [...activeSubAdmins, ...subAdminList].find(
           s =>
             s.status === 'active' &&
-            (unlockedAliases.includes(s.courseId) ||
-              (normTitle(unlockedCourseTitle) !== '' && normTitle(s.courseTitle) === normTitle(unlockedCourseTitle)))
+            (unlockedAliases.some(alias => getSubAdminCourseIds(s).includes(alias)) ||
+              subAdminHasCourse(s, undefined, unlockedCourseTitle, courses))
         );
         if (!matchedSub && unlockedCourseId && unlockedCourseId !== 'course-all') {
           try {
@@ -2930,8 +2950,8 @@ export default function App() {
               if (matchedSub) return;
               const sData = { id: d.id, ...(d.data() as Omit<SubAdminAccount, 'id'>) };
               if (
-                unlockedAliases.includes(sData.courseId) ||
-                (normTitle(unlockedCourseTitle) !== '' && normTitle(sData.courseTitle) === normTitle(unlockedCourseTitle))
+                unlockedAliases.some(alias => getSubAdminCourseIds(sData).includes(alias)) ||
+                subAdminHasCourse(sData, undefined, unlockedCourseTitle, courses)
               ) {
                 matchedSub = sData;
               }
@@ -3079,16 +3099,27 @@ export default function App() {
       return;
     }
 
-    // Course Sub-Admins are strictly locked to their assigned courseId
-    let targetCourseId = isSubAdmin && subAdminSession ? subAdminSession.courseId : courseId;
+    // Course Sub-Admins are strictly scoped to their assigned courses
+    const allowedSubCourseIds = isSubAdmin && subAdminSession ? getSubAdminCourseIds(subAdminSession) : [];
+    let targetCourseId = courseId;
+    if (isSubAdmin && subAdminSession) {
+      if (courseId && allowedSubCourseIds.includes(courseId)) {
+        targetCourseId = courseId;
+      } else if (!courseId) {
+        targetCourseId = allowedSubCourseIds[0] || subAdminSession.courseId;
+      } else {
+        showToast('You can only generate codes for your assigned courses.', 'error');
+        return;
+      }
+    }
     if (!targetCourseId && courses && courses.length > 0) {
       targetCourseId = courses[0].id;
     }
-    
+
     const selectedCourseData = courses.find(c => c.id === targetCourseId);
     const courseTitle = selectedCourseData
       ? selectedCourseData.title
-      : (isSubAdmin && subAdminSession?.courseTitle) || courses[0]?.title || 'All Courses Access';
+      : (isSubAdmin && getSubAdminCourseTitles(subAdminSession, courses)[0]) || courses[0]?.title || 'All Courses Access';
     const finalCourseId = selectedCourseData ? selectedCourseData.id : targetCourseId || (courses[0]?.id || 'course-all');
 
     const studentName = (studentNameArg !== undefined ? studentNameArg : genStudentName).trim();
@@ -3151,7 +3182,7 @@ export default function App() {
   // MAIN ADMIN ONLY: SUB-ADMIN CRUD HANDLERS
   const handleCreateSubAdmin = async (
     name: string,
-    courseId: string,
+    courseIdsInput: string | string[],
     customCode?: string,
     avatarUrl?: string
   ): Promise<SubAdminAccount | null> => {
@@ -3161,11 +3192,20 @@ export default function App() {
     }
 
     const cleanName = name.trim();
-    const targetCourse = courses.find(c => c.id === courseId);
-    if (!cleanName || !targetCourse) {
-      showToast('Sub-Admin name and assigned course are required.', 'error');
+    const requestedIds = Array.from(
+      new Set((Array.isArray(courseIdsInput) ? courseIdsInput : [courseIdsInput]).map((id) => String(id || '').trim()).filter(Boolean))
+    );
+    const targetCourses = requestedIds
+      .map((id) => courses.find((c) => c.id === id))
+      .filter((c): c is Course => Boolean(c));
+
+    if (!cleanName || targetCourses.length === 0) {
+      showToast('Sub-Admin name and at least one assigned course are required.', 'error');
       return null;
     }
+    const primaryCourse = targetCourses[0];
+    const assignedCourseIds = targetCourses.map((c) => c.id);
+    const assignedCourseTitles = targetCourses.map((c) => c.title);
 
     let finalCode = (customCode || '')
       .trim()
@@ -3205,8 +3245,10 @@ export default function App() {
       id: finalCode,
       code: finalCode,
       name: cleanName,
-      courseId: targetCourse.id,
-      courseTitle: targetCourse.title,
+      courseId: primaryCourse.id,
+      courseTitle: primaryCourse.title,
+      courseIds: assignedCourseIds,
+      courseTitles: assignedCourseTitles,
       ...(cleanAvatarUrl ? { avatarUrl: cleanAvatarUrl } : {}),
       status: 'active',
       createdAt: Date.now(),
@@ -3228,8 +3270,8 @@ export default function App() {
             userId: finalCode,
             userName: cleanName,
             ...(safeSubAvatar ? { userAvatar: safeSubAvatar } : {}),
-            courseId: targetCourse.id,
-            activeCourse: targetCourse.title,
+            courseId: primaryCourse.id,
+            activeCourse: assignedCourseTitles.join(', '),
             lastMessage: 'No messages yet',
             lastMessageAt: subNow,
             lastSender: 'system',
@@ -3283,8 +3325,8 @@ export default function App() {
           userId: subAdmin.code,
           userName: subAdmin.name,
           userAvatar: safeConvAvatar,
-          courseId: subAdmin.courseId,
-          activeCourse: subAdmin.courseTitle,
+          courseId: getSubAdminCourseIds(subAdmin)[0] || subAdmin.courseId,
+          activeCourse: getSubAdminCourseTitles(subAdmin, courses).join(', '),
           lastMessage: 'No messages yet',
           lastMessageAt: now,
           lastSender: 'system',
@@ -3346,32 +3388,58 @@ export default function App() {
     }
   };
 
-  const handleUpdateSubAdminCourse = async (subAdmin: SubAdminAccount, newCourseId: string) => {
+  const handleUpdateSubAdminCourse = async (subAdmin: SubAdminAccount, newCourseIdsInput: string | string[]) => {
     if (!isMainAdmin) {
-      showToast('Only Main Admin can change the assigned course.', 'error');
+      showToast('Only Main Admin can change assigned courses.', 'error');
       return;
     }
-    const targetCourse = courses.find(c => c.id === newCourseId);
-    if (!targetCourse) return;
+    const requestedIds = Array.from(
+      new Set((Array.isArray(newCourseIdsInput) ? newCourseIdsInput : [newCourseIdsInput]).map((id) => String(id || '').trim()).filter(Boolean))
+    );
+    const targetCourses = requestedIds
+      .map((id) => courses.find((c) => c.id === id))
+      .filter((c): c is Course => Boolean(c));
+    if (targetCourses.length === 0) {
+      showToast('Please select at least one valid course.', 'error');
+      return;
+    }
+    const primaryCourse = targetCourses[0];
+    const nextCourseIds = targetCourses.map((c) => c.id);
+    const nextCourseTitles = targetCourses.map((c) => c.title);
+    const now = Date.now();
     try {
       await updateDoc(doc(db, 'sub_admins', subAdmin.code), {
-        courseId: targetCourse.id,
-        courseTitle: targetCourse.title,
-        updatedAt: Date.now(),
+        courseId: primaryCourse.id,
+        courseTitle: primaryCourse.title,
+        courseIds: nextCourseIds,
+        courseTitles: nextCourseTitles,
+        updatedAt: now,
       });
       setSubAdminList(prev => {
         const updated = prev.map(s =>
           s.code === subAdmin.code
-            ? { ...s, courseId: targetCourse.id, courseTitle: targetCourse.title, updatedAt: Date.now() }
+            ? {
+                ...s,
+                courseId: primaryCourse.id,
+                courseTitle: primaryCourse.title,
+                courseIds: nextCourseIds,
+                courseTitles: nextCourseTitles,
+                updatedAt: now,
+              }
             : s
         );
         localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
         return updated;
       });
-      showToast(`Updated course for "${subAdmin.name}" to "${targetCourse.title}"!`, 'success');
+      showToast(
+        targetCourses.length > 1
+          ? `Updated ${targetCourses.length} assigned courses for "${subAdmin.name}"!`
+          : `Updated course for "${subAdmin.name}" to "${primaryCourse.title}"!`,
+        'success'
+      );
     } catch (err) {
-      console.error('Error updating Sub-Admin course:', err);
-      showToast('Failed to update Sub-Admin course.', 'error');
+      console.error('Error updating Sub-Admin courses:', err);
+      showToast('Failed to update Sub-Admin courses.', 'error');
     }
   };
 
@@ -3676,18 +3744,20 @@ export default function App() {
     }
   };
 
-  // Helper to verify key belongs to Sub-Admin's assigned course before mutation
+  // Helper to verify key belongs to any of Sub-Admin's assigned courses before mutation
   const verifyKeyPermission = async (code: string): Promise<boolean> => {
     if (isMainAdmin) return true;
     if (!isSubAdmin || !subAdminSession) return false;
+    const subCourseIds = getSubAdminCourseIds(subAdminSession);
     const localKey = allActivationKeys.find(k => (k.code || k.id) === code);
     if (localKey) {
-      return localKey.courseId === subAdminSession.courseId;
+      return Boolean(localKey.courseId && subCourseIds.includes(localKey.courseId));
     }
     try {
       const snap = await getDoc(doc(db, 'activation_keys', code));
       if (snap.exists()) {
-        return snap.data()?.courseId === subAdminSession.courseId;
+        const keyCourseId = snap.data()?.courseId;
+        return Boolean(keyCourseId && subCourseIds.includes(keyCourseId));
       }
     } catch {}
     return false;
@@ -4553,14 +4623,19 @@ export default function App() {
   const isMainAdmin = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
   const isSubAdmin = Boolean(!isMainAdmin && subAdminSession && subAdminSession.status === 'active');
   const isUserAdminSession = Boolean(isMainAdmin || isSubAdmin);
-  const subAdminAssignedCourse = useMemo(
-    () => (isSubAdmin && subAdminSession?.courseId ? courses.find(c => c.id === subAdminSession.courseId) : undefined),
-    [isSubAdmin, subAdminSession?.courseId, courses]
+  const subAdminAssignedCourseIds = useMemo(
+    () => (isSubAdmin ? getSubAdminCourseIds(subAdminSession) : []),
+    [isSubAdmin, subAdminSession]
   );
-  const canSubAdminAccessLive = Boolean(isSubAdmin && subAdminAssignedCourse?.includeLive === true);
+  const subAdminAssignedCourses = useMemo(
+    () => (isSubAdmin ? courses.filter(c => subAdminAssignedCourseIds.includes(c.id)) : []),
+    [isSubAdmin, subAdminAssignedCourseIds, courses]
+  );
+  const subAdminAssignedCourse = subAdminAssignedCourses[0];
+  const canSubAdminAccessLive = Boolean(isSubAdmin && subAdminAssignedCourses.some(c => c.includeLive === true));
   const canEditCourse = useCallback(
-    (courseId: string) => isMainAdmin || (isSubAdmin && subAdminSession?.courseId === courseId),
-    [isMainAdmin, isSubAdmin, subAdminSession?.courseId]
+    (courseId: string) => isMainAdmin || (isSubAdmin && subAdminAssignedCourseIds.includes(courseId)),
+    [isMainAdmin, isSubAdmin, subAdminAssignedCourseIds]
   );
   const hasCourseActivated = activeCourseIds.length > 0;
   const isCourseActiveUser = Boolean(hasCourseActivated || isUserAdminSession);
@@ -4585,7 +4660,7 @@ export default function App() {
     return rawNotifications.filter((n) => {
       if (n.target === 'course_students') {
         if (isMainAdmin) return true;
-        if (isSubAdmin && subAdminSession?.courseId && n.courseId === subAdminSession.courseId) return true;
+        if (isSubAdmin && n.courseId && subAdminAssignedCourseIds.includes(n.courseId)) return true;
         if (!isUserAdminSession && n.courseId) {
           return activeCourseIds.includes(n.courseId) || activeCourseIds.includes('course-all');
         }
@@ -4596,7 +4671,7 @@ export default function App() {
       }
       return true;
     });
-  }, [rawNotifications, isMainAdmin, isSubAdmin, subAdminSession?.courseId, isUserAdminSession, activeCourseIds]);
+  }, [rawNotifications, isMainAdmin, isSubAdmin, subAdminAssignedCourseIds, isUserAdminSession, activeCourseIds]);
 
   useEffect(() => {
     try {
@@ -4640,7 +4715,7 @@ export default function App() {
     const targetCourse = courses.find(c => c.id === data.courseId);
     const isAllowed = isMainAdmin || (
       isSubAdmin &&
-      subAdminSession?.courseId === data.courseId &&
+      subAdminAssignedCourseIds.includes(data.courseId) &&
       targetCourse?.includeLive === true
     );
     if (!isAllowed) {
@@ -4708,11 +4783,11 @@ export default function App() {
     } catch (err) {
       handleFirestoreError(err, data.id ? OperationType.UPDATE : OperationType.CREATE, `live_sessions/${sessionId}`);
     }
-  }, [courses, isMainAdmin, isSubAdmin, subAdminSession, liveSessions, showToast]);
+  }, [courses, isMainAdmin, isSubAdmin, subAdminAssignedCourseIds, subAdminSession?.code, liveSessions, showToast]);
 
   const handleDeleteLiveSession = useCallback(async (sessionId: string) => {
     const target = liveSessions.find(s => s.id === sessionId);
-    const isAllowed = isMainAdmin || (isSubAdmin && target && target.courseId === subAdminSession?.courseId);
+    const isAllowed = isMainAdmin || (isSubAdmin && target && subAdminAssignedCourseIds.includes(target.courseId));
     if (!isAllowed) {
       showToast('You do not have permission to delete this Live Session.', 'error');
       return;
@@ -4724,10 +4799,10 @@ export default function App() {
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `live_sessions/${sessionId}`);
     }
-  }, [liveSessions, isMainAdmin, isSubAdmin, subAdminSession?.courseId, showToast]);
+  }, [liveSessions, isMainAdmin, isSubAdmin, subAdminAssignedCourseIds, showToast]);
 
   const handleUpdateLiveSessionStatus = useCallback(async (session: LiveSession, nextStatus: 'live' | 'scheduled' | 'ended') => {
-    const isAllowed = isMainAdmin || (isSubAdmin && session.courseId === subAdminSession?.courseId);
+    const isAllowed = isMainAdmin || (isSubAdmin && subAdminAssignedCourseIds.includes(session.courseId));
     if (!isAllowed) {
       showToast('Permission denied.', 'error');
       return;
@@ -4744,7 +4819,7 @@ export default function App() {
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `live_sessions/${session.id}`);
     }
-  }, [isMainAdmin, isSubAdmin, subAdminSession?.courseId, showToast]);
+  }, [isMainAdmin, isSubAdmin, subAdminAssignedCourseIds, showToast]);
   const askUnreadCount = isMainAdmin ? adminUnreadCount : isSubAdmin ? subAdminUnreadCount : studentUnreadCount;
   const hasAskUnread = askUnreadCount > 0;
   const askBadgeText = askUnreadCount > 99 ? '99+' : String(askUnreadCount);
@@ -4993,13 +5068,17 @@ export default function App() {
       activeSubs
         .filter(s => {
           if (expandedCourseIds.has('course-all')) return true;
-          if (expandedCourseIds.has(s.courseId)) return true;
+          const sIds = getSubAdminCourseIds(s);
+          if (sIds.some(id => expandedCourseIds.has(id))) return true;
+          const sTitlesNorm = getSubAdminCourseTitles(s, courses).map(normTitle).filter(Boolean);
           const matchingCourse = courses.find(
-            c => expandedCourseIds.has(c.id) && normTitle(c.title) !== '' && normTitle(c.title) === normTitle(s.courseTitle)
+            c => expandedCourseIds.has(c.id) && normTitle(c.title) !== '' && sTitlesNorm.includes(normTitle(c.title))
           );
           if (matchingCourse) return true;
           return userActivationKeys.some(
-            (k: any) => k?.courseTitle && normTitle(k.courseTitle) === normTitle(s.courseTitle)
+            (k: any) =>
+              (k?.courseId && sIds.includes(k.courseId)) ||
+              (k?.courseTitle && sTitlesNorm.includes(normTitle(k.courseTitle)))
           );
         })
         .map(s => s.code)
@@ -6885,7 +6964,7 @@ export default function App() {
             (() => {
               const classroomCourses = courses.filter((course) => {
                 if (isMainAdmin) return true;
-                if (isSubAdmin && subAdminSession?.courseId === course.id) return true;
+                if (isSubAdmin && subAdminAssignedCourseIds.includes(course.id)) return true;
                 return activeCourseIds.includes(course.id);
               });
 

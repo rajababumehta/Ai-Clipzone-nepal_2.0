@@ -42,6 +42,7 @@ import { db } from '../firebase';
 import { VerifiedBadge } from './VerifiedBadge';
 import { cleanLegacyLogoUrl } from '../data';
 import { Course, SubAdminAccount, SupportConversation, SupportMessage } from '../types';
+import { getSubAdminCourseIds, getSubAdminCourseTitles } from '../utils/subAdminCourses';
 
 interface AdminAskTabProps {
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
@@ -167,8 +168,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             seenCodes.add(sub.code);
             const convId = `subadmin_main__${sub.code}`;
             const remote = subAdminDocMap.get(sub.code);
-            const courseObj = courses.find((c) => c.id === sub.courseId);
-            const courseName = courseObj?.title || sub.courseTitle || '';
+            const subCourseIds = getSubAdminCourseIds(sub);
+            const courseNames = getSubAdminCourseTitles(sub, courses);
+            const courseNameDisplay = courseNames.join(', ');
             const avatar = sub.avatarUrl || remote?.userAvatar || '';
             mainContacts.push({
               id: convId,
@@ -179,9 +181,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               channelType: 'subadmin_mainadmin',
               subAdminCode: sub.code,
               subAdminName: sub.name,
-              courseId: sub.courseId,
-              activeCourse: courseName,
-              purchasedCourses: courseName ? [courseName] : [],
+              courseId: subCourseIds[0] || sub.courseId,
+              activeCourse: courseNameDisplay,
+              purchasedCourses: courseNames,
               lastMessage: remote?.lastMessage || 'No messages yet',
               lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
               lastSender: remote?.lastSender || 'system',
@@ -238,13 +240,14 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
           let officialRemote: any = null;
           const studentContactMap = new Map<string, SupportConversation>();
 
-          const assignedCourseObj = courses.find((c) => c.id === subAdminSession.courseId);
-          const assignedTitleNorm = normTitle(subAdminSession.courseTitle || assignedCourseObj?.title);
+          const subCourseIds = getSubAdminCourseIds(subAdminSession);
+          const subCourseTitles = getSubAdminCourseTitles(subAdminSession, courses);
+          const subTitleNorms = subCourseTitles.map(normTitle).filter(Boolean);
 
           const isKeyForThisSubCourse = (k: any) => {
             if (!k) return false;
-            if (k.courseId && k.courseId === subAdminSession.courseId) return true;
-            if (assignedTitleNorm && normTitle(k.courseTitle) === assignedTitleNorm) return true;
+            if (k.courseId && subCourseIds.includes(k.courseId)) return true;
+            if (k.courseTitle && subTitleNorms.includes(normTitle(k.courseTitle))) return true;
             return false;
           };
 
@@ -266,12 +269,15 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               return;
             }
 
+            const convSubCode = String(d.subAdminCode || '').trim();
+            const belongsToDifferentSub = Boolean(convSubCode && convSubCode !== subAdminSession.code);
             const belongsToSub =
-              (d.channelType === 'student_subadmin' &&
-                (d.subAdminCode === subAdminSession.code ||
-                  d.courseId === subAdminSession.courseId ||
-                  (assignedTitleNorm && normTitle(d.activeCourse) === assignedTitleNorm))) ||
-              docSnap.id.startsWith(`substudent__${subAdminSession.code}__`);
+              !belongsToDifferentSub &&
+              ((d.channelType === 'student_subadmin' &&
+                (convSubCode === subAdminSession.code ||
+                  (d.courseId && subCourseIds.includes(d.courseId)) ||
+                  (d.activeCourse && subTitleNorms.includes(normTitle(d.activeCourse))))) ||
+                docSnap.id.startsWith(`substudent__${subAdminSession.code}__`));
 
             if (!belongsToSub) return;
 
@@ -299,7 +305,19 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             }
             if (!resolvedName) resolvedName = 'Student';
 
-            const courseTitle = subAdminSession.courseTitle || d.activeCourse || keyMatch?.courseTitle || 'Course';
+            const matchedCourse = courses.find((c) => c.id === (d.courseId || keyMatch?.courseId));
+            const courseTitle =
+              matchedCourse?.title ||
+              d.activeCourse ||
+              keyMatch?.courseTitle ||
+              subCourseTitles[0] ||
+              'Course';
+            const mergedCourseList = Array.from(
+              new Set([
+                ...(Array.isArray(d.purchasedCourses) ? d.purchasedCourses.filter(Boolean) : []),
+                ...(courseTitle ? [courseTitle] : [])
+              ])
+            );
 
             // Pick newest non-empty student avatar between conversation doc and DB activation key
             const keyAvatar = keyMatch?.studentAvatar || '';
@@ -319,9 +337,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               channelType: 'student_subadmin',
               subAdminCode: subAdminSession.code,
               subAdminName: subAdminSession.name,
-              courseId: subAdminSession.courseId,
-              activeCourse: courseTitle,
-              purchasedCourses: [courseTitle],
+              courseId: d.courseId || keyMatch?.courseId || subCourseIds[0] || subAdminSession.courseId,
+              activeCourse: mergedCourseList.join(', ') || courseTitle,
+              purchasedCourses: mergedCourseList.length > 0 ? mergedCourseList : [courseTitle],
               lastMessage: d.lastMessage || '',
               lastMessageAt: d.lastMessageAt || d.updatedAt || Date.now(),
               lastSender: d.lastSender || 'user',
@@ -340,12 +358,15 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               const bestAvatar = newerIsCurrent
                 ? convObj.userAvatar || existing.userAvatar || ''
                 : existing.userAvatar || convObj.userAvatar || '';
-              studentContactMap.set(
-                dedupKey,
-                newerIsCurrent
-                  ? { ...existing, ...convObj, userAvatar: bestAvatar }
-                  : { ...convObj, ...existing, userAvatar: bestAvatar }
+              const combinedCourses = Array.from(
+                new Set([...(existing.purchasedCourses || []), ...(convObj.purchasedCourses || [])].filter(Boolean))
               );
+              const merged = newerIsCurrent
+                ? { ...existing, ...convObj, userAvatar: bestAvatar }
+                : { ...convObj, ...existing, userAvatar: bestAvatar };
+              merged.purchasedCourses = combinedCourses;
+              merged.activeCourse = combinedCourses.join(', ') || merged.activeCourse;
+              studentContactMap.set(dedupKey, merged);
             }
           });
 
@@ -358,7 +379,8 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
 
               const realName = cleanRealName(key.studentName) || cleanRealName(key.claimedByName) || 'Student';
               const dedupKey = getStudentKey(realName, key.claimedByEmail || '', buyerId, key.code || key.id);
-              const courseTitle = subAdminSession.courseTitle || key.courseTitle || 'Course';
+              const matchedKeyCourse = courses.find((c) => c.id === key.courseId);
+              const courseTitle = matchedKeyCourse?.title || key.courseTitle || subCourseTitles[0] || 'Course';
               const canonicalConvId = `substudent__${subAdminSession.code}__${buyerId}`;
 
               const existing = studentContactMap.get(dedupKey);
@@ -373,7 +395,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                   channelType: 'student_subadmin',
                   subAdminCode: subAdminSession.code,
                   subAdminName: subAdminSession.name,
-                  courseId: subAdminSession.courseId,
+                  courseId: key.courseId || subCourseIds[0] || subAdminSession.courseId,
                   activeCourse: courseTitle,
                   purchasedCourses: [courseTitle],
                   lastMessage: `Activated: ${key.code || key.id}`,
@@ -391,6 +413,11 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 if (key.studentAvatar && (!existing.userAvatar || (key.studentAvatarUpdatedAt || 0) >= (existing.updatedAt || 0))) {
                   existing.userAvatar = key.studentAvatar;
                 }
+                if (courseTitle) {
+                  const combined = Array.from(new Set([...(existing.purchasedCourses || []), courseTitle]));
+                  existing.purchasedCourses = combined;
+                  existing.activeCourse = combined.join(', ');
+                }
               }
             });
           }
@@ -404,7 +431,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             channelType: 'subadmin_mainadmin',
             subAdminCode: subAdminSession.code,
             subAdminName: subAdminSession.name,
-            courseId: subAdminSession.courseId,
+            courseId: subCourseIds[0] || subAdminSession.courseId,
             activeCourse: '',
             purchasedCourses: [],
             lastMessage: officialRemote?.lastMessage || `Chat with ${brandName}`,
@@ -439,7 +466,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     );
 
     return () => unsubscribe();
-  }, [isMainAdmin, isSubAdmin, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdmins, allActivationKeys, courses, brandName, officialLogoUrl]);
+  }, [isMainAdmin, isSubAdmin, subAdminSession?.code, subAdminSession?.courseId, subAdminSession?.courseTitle, subAdminSession?.courseIds?.join(','), subAdmins, allActivationKeys, courses, brandName, officialLogoUrl]);
 
   // 2. Real-time listener for messages in selected conversation
   useEffect(() => {
@@ -641,11 +668,13 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
       };
 
       if (isSubViewingMainAdmin && subAdminSession) {
+        const subCourseIds = getSubAdminCourseIds(subAdminSession);
+        const subCourseTitles = getSubAdminCourseTitles(subAdminSession, courses);
         convPayload.channelType = 'subadmin_mainadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId || '';
-        convPayload.activeCourse = subAdminSession.courseTitle || '';
+        convPayload.courseId = subCourseIds[0] || subAdminSession.courseId || '';
+        convPayload.activeCourse = subCourseTitles.join(', ');
         convPayload.userId = subAdminSession.code;
         convPayload.userName = subAdminSession.name;
         if (subAdminSession.avatarUrl && subAdminSession.avatarUrl.length <= 200000) {
@@ -665,11 +694,13 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         convPayload.unreadAdminCount = 0;
         convPayload.unreadUserCount = increment(1);
       } else if (isSubAdmin && subAdminSession) {
+        const subCourseIds = getSubAdminCourseIds(subAdminSession);
+        const subCourseTitles = getSubAdminCourseTitles(subAdminSession, courses);
         convPayload.channelType = 'student_subadmin';
         convPayload.subAdminCode = subAdminSession.code;
         convPayload.subAdminName = subAdminSession.name;
-        convPayload.courseId = subAdminSession.courseId || '';
-        convPayload.activeCourse = subAdminSession.courseTitle || '';
+        convPayload.courseId = targetConv?.courseId || subCourseIds[0] || subAdminSession.courseId || '';
+        convPayload.activeCourse = targetConv?.activeCourse || subCourseTitles[0] || '';
         convPayload.userId =
           targetConv?.userId || selectedConvId.replace(`substudent__${subAdminSession.code}__`, '');
         convPayload.userName =

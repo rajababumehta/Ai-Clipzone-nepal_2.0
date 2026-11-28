@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -47,6 +47,7 @@ import { AdminAskTab } from './AdminAskTab';
 import { AdminSubAdminsTab } from './AdminSubAdminsTab';
 import { LiveSessionsPanel, SaveLiveSessionInput } from './LiveSessionsPanel';
 import { compressImageFile, compressBrandingImageFile } from '../utils/chatMedia';
+import { getSubAdminCourseIds, getSubAdminCourseTitles } from '../utils/subAdminCourses';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -56,9 +57,9 @@ interface AdminDashboardModalProps {
   subAdminSession?: SubAdminAccount | null;
   onLogoutAdminSession?: () => void | Promise<void>;
   subAdmins?: (SubAdminAccount | SubAdminPublicProfile)[];
-  onCreateSubAdmin?: (name: string, courseId: string, customCode?: string, avatarUrl?: string) => Promise<SubAdminAccount | null>;
+  onCreateSubAdmin?: (name: string, courseIds: string[], customCode?: string, avatarUrl?: string) => Promise<SubAdminAccount | null>;
   onToggleSubAdminStatus?: (subAdmin: SubAdminAccount) => Promise<void>;
-  onUpdateSubAdminCourse?: (subAdmin: SubAdminAccount, courseId: string) => Promise<void>;
+  onUpdateSubAdminCourse?: (subAdmin: SubAdminAccount, courseIds: string[]) => Promise<void>;
   onUpdateSubAdminAvatar?: (subAdmin: SubAdminAccount, avatarUrl: string) => Promise<void>;
   onDeleteSubAdmin?: (code: string) => Promise<void>;
   // Keys management
@@ -170,13 +171,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const isMainAdmin = adminRole !== 'sub_admin';
   const isSubAdmin = adminRole === 'sub_admin' && Boolean(subAdminSession);
-  const assignedCourseId = isSubAdmin ? (subAdminSession?.courseId || '') : '';
-  const visibleCourses = isMainAdmin ? courses : courses.filter(c => c.id === assignedCourseId);
+  const assignedCourseIds = useMemo(
+    () => (isSubAdmin ? getSubAdminCourseIds(subAdminSession) : []),
+    [isSubAdmin, subAdminSession]
+  );
+  const assignedCourses = useMemo(
+    () => (isSubAdmin ? courses.filter((c) => assignedCourseIds.includes(c.id)) : []),
+    [isSubAdmin, courses, assignedCourseIds]
+  );
+  const assignedCourse = assignedCourses[0];
+  const assignedCourseId = assignedCourse?.id || assignedCourseIds[0] || '';
+  const assignedCourseTitles = useMemo(
+    () => (isSubAdmin ? getSubAdminCourseTitles(subAdminSession, courses) : []),
+    [isSubAdmin, subAdminSession, courses]
+  );
+  const assignedCourseIdsKey = assignedCourseIds.join(',');
+  const visibleCourses = isMainAdmin ? courses : assignedCourses;
   const scopedActivationKeys = isMainAdmin
     ? allActivationKeys
-    : allActivationKeys.filter(k => k.courseId === assignedCourseId);
-  const assignedCourse = isSubAdmin ? courses.find(c => c.id === assignedCourseId) : undefined;
-  const subAdminHasLive = Boolean(isSubAdmin && assignedCourse?.includeLive === true);
+    : allActivationKeys.filter((k) => assignedCourseIds.includes(k.courseId));
+  const subAdminHasLive = Boolean(isSubAdmin && assignedCourses.some((c) => c.includeLive === true));
   const canAccessLiveTab = Boolean(isMainAdmin || subAdminHasLive);
 
   const [activeTab, setActiveTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask'>(initialTab);
@@ -273,14 +287,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       } else if (!allowedSubTabs.includes(activeTab)) {
         setActiveTab('keys');
       }
-      if (assignedCourseId) {
-        setGenSelectedCourseId(assignedCourseId);
-        setSelectedPaymentScope(assignedCourseId);
+      if (assignedCourseIds.length > 0) {
+        setGenSelectedCourseId((prev) =>
+          prev && assignedCourseIds.includes(prev) ? prev : assignedCourseIds[0]
+        );
+        setSelectedPaymentScope((prev) =>
+          prev && assignedCourseIds.includes(prev) ? prev : assignedCourseIds[0]
+        );
       }
     } else if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab, isOpen, isSubAdmin, assignedCourseId, subAdminHasLive]);
+  }, [initialTab, isOpen, isSubAdmin, assignedCourseIdsKey, subAdminHasLive]);
 
   // Keys Tab states
   const [genSelectedCourseId, setGenSelectedCourseId] = useState(assignedCourseId || '');
@@ -362,7 +380,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         paymentConfig.paymentInstruction || 'Payment Instruction: Scan the QR code or transfer to the eSewa ID and send the payment screenshot on WhatsApp.'
       );
     } else {
-      const targetId = isSubAdmin ? assignedCourseId : scopeId;
+      const targetId = isSubAdmin
+        ? (assignedCourseIds.includes(scopeId) ? scopeId : (assignedCourseIds[0] || ''))
+        : scopeId;
       const crs = courses.find((c) => c.id === targetId);
       const cp = crs?.paymentConfig;
       if (isSubAdmin) {
@@ -389,13 +409,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         );
       }
     }
-  }, [isMainAdmin, isSubAdmin, assignedCourseId, courses, paymentConfig]);
+  }, [isMainAdmin, isSubAdmin, assignedCourseIds, courses, paymentConfig]);
 
   // Sync payment fields when props or selected scope changes
   useEffect(() => {
-    const effectiveScope = isSubAdmin ? assignedCourseId : selectedPaymentScope;
+    const effectiveScope = isSubAdmin
+      ? (assignedCourseIds.includes(selectedPaymentScope) ? selectedPaymentScope : (assignedCourseIds[0] || ''))
+      : selectedPaymentScope;
     loadPaymentScopeFields(effectiveScope);
-  }, [isSubAdmin, assignedCourseId, selectedPaymentScope, paymentConfig, courses, loadPaymentScopeFields]);
+  }, [isSubAdmin, assignedCourseIds, selectedPaymentScope, paymentConfig, courses, loadPaymentScopeFields]);
 
   useEffect(() => {
     setLocalFaqs(faqs);
@@ -459,7 +481,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Handle Save Payment QR Config (Global for Main Admin, or Per-Course for Main Admin / Sub-Admin)
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveScope = isSubAdmin ? assignedCourseId : selectedPaymentScope;
+    const effectiveScope = isSubAdmin
+      ? (assignedCourseIds.includes(selectedPaymentScope) ? selectedPaymentScope : (assignedCourseIds[0] || ''))
+      : selectedPaymentScope;
 
     if (isSubAdmin) {
       if (!qrImageUrl.trim()) {
@@ -993,6 +1017,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <p className="text-xs text-zinc-400 font-medium mt-0.5">
                 {isMainAdmin
                   ? 'Manage all courses, Sub-Admin codes, student activation keys, payments, FAQs, and global settings.'
+                  : assignedCourses.length > 1
+                  ? `Assigned Courses (${assignedCourses.length}): ${assignedCourseTitles.join(' • ')} — Course Details, Payment/WhatsApp & Student Codes.`
                   : `Assigned Course Only: "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}" — Course Details, Payment/WhatsApp & Student Codes.`}
               </p>
             </div>
@@ -1118,7 +1144,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            {isMainAdmin ? `📚 Course Catalog (${visibleCourses.length})` : '📚 My Course Details'}
+            {isMainAdmin ? `📚 Course Catalog (${visibleCourses.length})` : `📚 My Courses (${visibleCourses.length})`}
           </button>
 
           {canAccessLiveTab && (
@@ -1131,7 +1157,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               }`}
             >
               <Video className="w-3.5 h-3.5 text-rose-400" />
-              🎥 Live Sessions ({(isMainAdmin ? liveSessions : liveSessions.filter(s => s.courseId === assignedCourseId)).length})
+              🎥 Live Sessions ({(isMainAdmin ? liveSessions : liveSessions.filter(s => assignedCourseIds.includes(s.courseId))).length})
             </button>
           )}
 
@@ -1181,12 +1207,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <strong className="font-black text-emerald-900">
                     {isMainAdmin
                       ? 'Admin Mode Activated (offline-first & auto-synced)'
+                      : assignedCourses.length > 1
+                      ? `Sub-Admin Course Codes — ${assignedCourses.length} Assigned Courses`
                       : `Sub-Admin Course Codes — "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}"`}
                   </strong>
                   <p className="mt-0.5">
                     {isMainAdmin
                       ? 'Generate unreleased secret activation codes to unlock dynamic courses. Share generated keys with students to enable high-speed learning.'
-                      : 'You can create and manage Student Course Codes exclusively for this course assigned by the Main Admin.'}
+                      : 'You can create and manage Student Course Codes exclusively for the courses assigned to you by the Main Admin.'}
                   </p>
                 </div>
               </div>
@@ -1213,21 +1241,55 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                      {isMainAdmin ? 'Select Course Catalog *' : 'Assigned Course (Locked) *'}
+                      {isMainAdmin
+                        ? 'Select Course Catalog *'
+                        : assignedCourses.length > 1
+                        ? `Select Assigned Course (${assignedCourses.length}) *`
+                        : 'Assigned Course (Locked) *'}
                     </label>
                     {isSubAdmin ? (
-                      <div className="space-y-1.5">
-                        <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-purple-900 flex items-center justify-between gap-2">
-                          <span className="truncate">🔒 {assignedCourse?.title || subAdminSession?.courseTitle || assignedCourseId}</span>
-                          <span className="text-[9px] bg-purple-200 text-purple-800 px-2 py-0.5 rounded-md uppercase shrink-0">Only This Course</span>
-                        </div>
-                        {assignedCourse?.isHidden && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-amber-800 flex items-center gap-1.5">
-                            <EyeOff className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                            <span>This course is hidden from the Home screen, but you can still create Student Codes to enroll students.</span>
+                      assignedCourses.length > 1 ? (
+                        (() => {
+                          const activeGenId = assignedCourseIds.includes(genSelectedCourseId)
+                            ? genSelectedCourseId
+                            : (assignedCourseIds[0] || '');
+                          const activeGenCourse = assignedCourses.find((c) => c.id === activeGenId) || assignedCourse;
+                          return (
+                            <div className="space-y-1.5">
+                              <select
+                                value={activeGenId}
+                                onChange={(e) => setGenSelectedCourseId(e.target.value)}
+                                className="w-full bg-purple-50 border border-purple-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs font-black text-purple-900 outline-hidden transition"
+                              >
+                                {assignedCourses.map((course) => (
+                                  <option key={course.id} value={course.id}>
+                                    {course.title}{course.isHidden ? ' (Hidden from Home)' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              {activeGenCourse?.isHidden && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-amber-800 flex items-center gap-1.5">
+                                  <EyeOff className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                  <span>This course is hidden from the Home screen, but you can still create Student Codes to enroll students.</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-purple-900 flex items-center justify-between gap-2">
+                            <span className="truncate">🔒 {assignedCourse?.title || subAdminSession?.courseTitle || assignedCourseId}</span>
+                            <span className="text-[9px] bg-purple-200 text-purple-800 px-2 py-0.5 rounded-md uppercase shrink-0">Only This Course</span>
                           </div>
-                        )}
-                      </div>
+                          {assignedCourse?.isHidden && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-amber-800 flex items-center gap-1.5">
+                              <EyeOff className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                              <span>This course is hidden from the Home screen, but you can still create Student Codes to enroll students.</span>
+                            </div>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <select 
                         value={genSelectedCourseId}
@@ -1290,7 +1352,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       disabled={isGeneratingKey}
                       onClick={async () => {
                         setIsGeneratingKey(true);
-                        await onGenerateKey(isSubAdmin ? assignedCourseId : genSelectedCourseId, true, genStudentName, genSelectedDuration);
+                        const targetCourseForKey = isSubAdmin
+                          ? (assignedCourseIds.includes(genSelectedCourseId) ? genSelectedCourseId : assignedCourseId)
+                          : genSelectedCourseId;
+                        await onGenerateKey(targetCourseForKey, true, genStudentName, genSelectedDuration);
                         setGenStudentName('');
                         setIsGeneratingKey(false);
                       }}
@@ -1303,7 +1368,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       disabled={isGeneratingKey}
                       onClick={async () => {
                         setIsGeneratingKey(true);
-                        await onGenerateKey(isSubAdmin ? assignedCourseId : genSelectedCourseId, false, genStudentName, genSelectedDuration);
+                        const targetCourseForKey = isSubAdmin
+                          ? (assignedCourseIds.includes(genSelectedCourseId) ? genSelectedCourseId : assignedCourseId)
+                          : genSelectedCourseId;
+                        await onGenerateKey(targetCourseForKey, false, genStudentName, genSelectedDuration);
                         setGenStudentName('');
                         setIsGeneratingKey(false);
                       }}
@@ -1575,7 +1643,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <strong className="font-black text-indigo-950">
                     {isMainAdmin
                       ? 'Dynamic Payment, QR & Per-Course WhatsApp Configuration'
-                      : `Course Payment & WhatsApp Settings — "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}"`}
+                      : (() => {
+                          const activePayCourseId = assignedCourseIds.includes(selectedPaymentScope)
+                            ? selectedPaymentScope
+                            : (assignedCourseIds[0] || '');
+                          const activePayCourse = assignedCourses.find((c) => c.id === activePayCourseId) || assignedCourse;
+                          return `Course Payment & WhatsApp Settings — "${activePayCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}"`;
+                        })()}
                   </strong>
                   <p className="mt-0.5 text-indigo-800">
                     {isMainAdmin
@@ -1585,7 +1659,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               </div>
 
-              {/* Payment Scope Selector (Main Admin can pick Global or any Course; Sub-Admin locked to Assigned Course) */}
+              {/* Payment Scope Selector (Main Admin can pick Global or any Course; Sub-Admin scoped to Assigned Courses) */}
               {isMainAdmin ? (
                 <div className="bg-zinc-950 text-white p-4 rounded-2xl border border-zinc-800 space-y-2.5 shadow-md">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1638,6 +1712,48 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           {hasCustom && (
                             <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-1.5 py-0.2 rounded border border-emerald-400/40">
                               Custom
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : assignedCourses.length > 1 ? (
+                <div className="bg-purple-950/70 text-purple-100 p-4 rounded-2xl border border-purple-500/40 space-y-2.5 shadow-md">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <label className="text-[11px] font-black uppercase text-purple-200 tracking-wider">
+                      🎯 Select Assigned Course for Payment & WhatsApp ({assignedCourses.length}):
+                    </label>
+                    <span className="text-[10px] bg-purple-600 text-white px-2.5 py-0.5 rounded-full font-black uppercase">
+                      Assigned Courses Only
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {assignedCourses.map((c) => {
+                      const activePayId = assignedCourseIds.includes(selectedPaymentScope)
+                        ? selectedPaymentScope
+                        : assignedCourseIds[0];
+                      const isSelected = activePayId === c.id;
+                      const hasCustom = Boolean(c.paymentConfig?.whatsappNumber || c.paymentConfig?.qrImageUrl);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPaymentScope(c.id);
+                            loadPaymentScopeFields(c.id);
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-purple-600 text-white shadow-md font-black ring-2 ring-purple-300'
+                              : 'bg-purple-900/60 hover:bg-purple-800/80 text-purple-200 border border-purple-700/70'
+                          }`}
+                        >
+                          <span>💳 {c.title.slice(0, 28)}{c.title.length > 28 ? '...' : ''}</span>
+                          {hasCustom && (
+                            <span className="text-[9px] bg-emerald-500/25 text-emerald-200 font-mono px-1.5 py-0.2 rounded border border-emerald-400/40">
+                              Saved
                             </span>
                           )}
                         </button>
@@ -3041,7 +3157,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <span>{isMainAdmin ? '📚 Dynamic Course Catalog' : '🔒 My Assigned Course Only'}</span>
+                    <span>
+                      {isMainAdmin
+                        ? '📚 Dynamic Course Catalog'
+                        : visibleCourses.length > 1
+                        ? '🔒 My Assigned Courses'
+                        : '🔒 My Assigned Course Only'}
+                    </span>
                     <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-bold">
                       {visibleCourses?.length || 0}
                     </span>
@@ -3049,7 +3171,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
                     {isMainAdmin
                       ? 'Add new courses with custom chapters, Drive/YouTube videos, price tags, and thumbnail graphics.'
-                      : 'You can only edit the details, videos, PDFs, and WhatsApp message for this course assigned by the Main Admin.'}
+                      : 'You can edit the details, videos, PDFs, and WhatsApp message for the courses assigned to you by the Main Admin.'}
                   </p>
                 </div>
                 {isMainAdmin && (

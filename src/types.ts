@@ -243,8 +243,10 @@ export interface SubAdminAccount {
   id: string; // same as code e.g. "SUB-XXXXXX"
   code: string;
   name: string;
-  courseId: string;
-  courseTitle: string;
+  courseId: string; // Primary/first assigned courseId (legacy compat)
+  courseTitle: string; // Primary/first assigned courseTitle (legacy compat)
+  courseIds?: string[]; // All assigned course IDs for multi-course Sub-Admins
+  courseTitles?: string[]; // All assigned course titles
   avatarUrl?: string;
   status: 'active' | 'disabled';
   publicProfileId?: string;
@@ -259,6 +261,8 @@ export interface SubAdminPublicProfile {
   id: string; // opaque non-secret profile ID (never contains login code)
   courseId: string;
   courseTitle: string;
+  courseIds?: string[];
+  courseTitles?: string[];
   name: string;
   avatarUrl?: string;
   status: 'active' | 'disabled';
