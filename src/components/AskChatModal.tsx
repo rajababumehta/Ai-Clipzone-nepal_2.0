@@ -78,24 +78,24 @@ interface AskChatModalProps {
 }
 
 const QUICK_QUESTION_CHIPS = [
-  'नमस्ते, मलाई कोर्ष बारे जानकारी चाहियो।',
-  'पेमेन्ट गरिसकेपछि Activation Key कसरी पाउने?',
-  'प्रमाणपत्र (Certificate) कसरी डाउनलोड गर्ने?',
-  'भिडियो लोड हुन समय लागिरहेको छ, के गर्ने?'
+  'Hello, I would like information about the course.',
+  'How do I receive my Activation Key after payment?',
+  'How do I download my Certificate?',
+  'The video is taking a while to load, what should I do?'
 ];
 
 const ADMIN_QUICK_PRESETS = [
-  'नमस्ते! तपाईंलाई के सहयोग चाहिन्छ?',
-  'तपाईंको भुक्तानी भेरिफाई भयो, धन्यवाद!',
-  'तपाईंको Activation Key तयार छ।',
-  'कृपया आफ्नो पेमेन्ट स्क्रिनसट वा ट्रान्ज्याक्सन आईडी पठाउनुहोस्।',
-  'समस्या समाधान भएको छ, कृपया पुनः भिडियो खोलेर हेर्नुहोस्।'
+  'Hello! How can I help you today?',
+  'Your payment has been verified. Thank you!',
+  'Your Activation Key is ready.',
+  'Please send your payment screenshot or transaction ID.',
+  'The issue has been resolved. Please try opening the video again.'
 ];
 
 const SUB_ADMIN_TO_MAIN_PRESETS = [
-  'नमस्ते Main Admin ज्यू! मलाई कोर्ष सम्बन्धी सहयोग चाहिन्छ।',
-  'कोर्ष अपडेट / सेटिङ बारे जानकारी दिनुहोस्।',
-  'धन्यवाद सर!'
+  'Hello Main Admin! I need assistance regarding the course.',
+  'Please share details about the course update or settings.',
+  'Thank you!'
 ];
 
 const WHATSAPP_QUICK_EMOJIS = ['😊', '👍', '🙏', '🚀', '💡', '❤️', '❓', '🔥', '🎓', '👏', '💯', '✅'];
@@ -675,7 +675,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               courseId: sub.courseId,
               activeCourse: courseName,
               purchasedCourses: courseName ? [courseName] : [],
-              lastMessage: remote?.lastMessage || 'कुनै म्यासेज छैन',
+              lastMessage: remote?.lastMessage || 'No messages yet',
               lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
               lastSender: remote?.lastSender || 'system',
               unreadAdminCount: remote?.unreadAdminCount || 0,
@@ -701,7 +701,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               courseId: remote.courseId || '',
               activeCourse: remote.activeCourse || '',
               purchasedCourses: remote.activeCourse ? [remote.activeCourse] : [],
-              lastMessage: remote.lastMessage || 'कुनै म्यासेज छैन',
+              lastMessage: remote.lastMessage || 'No messages yet',
               lastMessageAt: remote.lastMessageAt || remote.updatedAt || Date.now(),
               lastSender: remote.lastSender || 'user',
               unreadAdminCount: remote.unreadAdminCount || 0,
@@ -902,7 +902,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
             courseId: subAdminSession.courseId,
             activeCourse: '',
             purchasedCourses: [],
-            lastMessage: officialRemote?.lastMessage || `${brandName} सँग कुराकानी गर्नुहोस्`,
+            lastMessage: officialRemote?.lastMessage || `Chat with ${brandName}`,
             lastMessageAt: officialRemote?.lastMessageAt || Date.now(),
             lastSender: officialRemote?.lastSender || 'system',
             unreadAdminCount: officialRemote?.unreadAdminCount || 0,
@@ -1027,7 +1027,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         });
       } catch (e) {}
     }
-    showToast?.('तपाईंको डिभाइसबाट च्याट खाली भयो (Chat cleared on your device)', 'info');
+    showToast?.('Chat cleared on your device', 'info');
     setShowStudentClearConfirm(false);
     setStudentMenuOpen(false);
   };
@@ -1043,7 +1043,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         });
       } catch (e) {}
     }
-    showToast?.('सम्पूर्ण च्याट इतिहास पुनः देखाइयो (All messages restored)', 'success');
+    showToast?.('All chat history restored', 'success');
     setStudentMenuOpen(false);
   };
 
@@ -1058,7 +1058,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         clearedByAdminAt: now
       });
     } catch (e) {}
-    showToast?.('एडमिन भ्यूबाट च्याट खाली भयो (Chat cleared for admin only)', 'info');
+    showToast?.('Chat cleared for admin view only', 'info');
     setShowAdminClearConfirm(false);
     setAdminMenuOpen(false);
   };
@@ -1073,7 +1073,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         clearedByAdminAt: 0
       });
     } catch (e) {}
-    showToast?.('एडमिनका लागि सम्पूर्ण च्याट इतिहास पुनः देखाइयो (All history restored)', 'success');
+    showToast?.('All chat history restored for admin', 'success');
     setAdminMenuOpen(false);
   };
 
@@ -1102,10 +1102,10 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       }
       setCopiedMessageId(msg.id);
       setTimeout(() => setCopiedMessageId(null), 2000);
-      showToast?.('म्यासेज कपी भयो (Copied to clipboard)', 'success');
+      showToast?.('Copied to clipboard', 'success');
     } catch (e) {
       console.warn('Copy failed:', e);
-      showToast?.('कपी गर्न सकिएन', 'error');
+      showToast?.('Failed to copy', 'error');
     }
   };
 
@@ -1119,7 +1119,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       setShowStudentAttachMenu(false);
       studentInputRef.current?.focus();
     } catch (err: any) {
-      showToast?.(err.message || 'फोटो प्रोसेस गर्न सकिएन', 'error');
+      showToast?.(err.message || 'Could not process photo', 'error');
     } finally {
       setIsStudentAttaching(false);
       e.target.value = '';
@@ -1136,7 +1136,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       setShowStudentAttachMenu(false);
       studentInputRef.current?.focus();
     } catch (err: any) {
-      showToast?.(err.message || 'कागजात लोड गर्न सकिएन', 'error');
+      showToast?.(err.message || 'Could not load document', 'error');
     } finally {
       setIsStudentAttaching(false);
       e.target.value = '';
@@ -1153,7 +1153,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       setShowAdminAttachMenu(false);
       adminReplyInputRef.current?.focus();
     } catch (err: any) {
-      showToast?.(err.message || 'फोटो प्रोसेस गर्न सकिएन', 'error');
+      showToast?.(err.message || 'Could not process photo', 'error');
     } finally {
       setIsAdminAttaching(false);
       e.target.value = '';
@@ -1170,7 +1170,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       setShowAdminAttachMenu(false);
       adminReplyInputRef.current?.focus();
     } catch (err: any) {
-      showToast?.(err.message || 'कागजात लोड गर्न सकिएन', 'error');
+      showToast?.(err.message || 'Could not load document', 'error');
     } finally {
       setIsAdminAttaching(false);
       e.target.value = '';
@@ -1182,7 +1182,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
   // --------------------------------------------------------------------------
   const handleStudentSendMessage = async (textToSend?: string) => {
     if (!isAdmin && !hasActivatedCourse) {
-      showToast?.('🔒 केवल कोर्ष एक्टिभेट गरेका विद्यार्थीहरूले मात्र म्यासेज पठाउन सक्नुहुन्छ।', 'error');
+      showToast?.('🔒 Only students with an activated course can send messages.', 'error');
       if (onOpenActivationModal) {
         onClose();
         onOpenActivationModal();
@@ -1191,7 +1191,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     }
 
     if (!activeStudentTarget || !studentConvId) {
-      showToast?.('हाल म्यासेज पठाउन सपोर्ट उपलब्ध छैन।', 'error');
+      showToast?.('Support chat is currently unavailable.', 'error');
       return;
     }
 
@@ -1224,7 +1224,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     try {
       assertFirestoreMessageSize(msgPayload);
     } catch (sizeErr: any) {
-      showToast?.(sizeErr?.message || 'फाइल धेरै ठूलो छ। कृपया सानो फाइल पठाउनुहोस्।', 'error');
+      showToast?.(sizeErr?.message || 'File is too large. Please send a smaller file.', 'error');
       return;
     }
 
@@ -1271,7 +1271,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         batch.commit().catch((offlineErr) => {
           console.warn('Queued offline student message sync failed:', offlineErr);
         });
-        showToast?.('अफलाइन मोड: इन्टरनेट जोडिएपछि म्यासेज पठाइनेछ।', 'info');
+        showToast?.('Offline mode: Message will be sent once internet is connected.', 'info');
       } else {
         await batch.commit();
       }
@@ -1279,11 +1279,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       console.error('Failed to send student message:', error);
       const errMsg = String(error?.message || '');
       if (errMsg.includes('exceeds') || error?.code === 'invalid-argument' || error?.code === 'resource-exhausted') {
-        showToast?.('फाइल वा फोटोको साइज धेरै ठूलो छ। कृपया सानो साइज पठाउनुहोस्।', 'error');
+        showToast?.('File or photo size is too large. Please send a smaller file.', 'error');
       } else if (error?.code === 'permission-denied') {
-        showToast?.('डाटाबेस अनुमति समस्या आयो। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+        showToast?.('Database permission error. Please try again.', 'error');
       } else {
-        showToast?.('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+        showToast?.('Failed to send message. Please try again.', 'error');
       }
       setStudentInputText(text);
       setStudentPendingAttachment(attachmentToSend);
@@ -1326,7 +1326,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
     try {
       assertFirestoreMessageSize(msgPayload);
     } catch (sizeErr: any) {
-      showToast?.(sizeErr?.message || 'फाइल धेरै ठूलो छ। कृपया सानो फाइल पठाउनुहोस्।', 'error');
+      showToast?.(sizeErr?.message || 'File is too large. Please send a smaller file.', 'error');
       return;
     }
 
@@ -1409,7 +1409,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
         batch.commit().catch((offlineErr) => {
           console.warn('Queued offline admin reply sync failed:', offlineErr);
         });
-        showToast?.('अफलाइन मोड: इन्टरनेट जोडिएपछि जवाफ पठाइनेछ।', 'info');
+        showToast?.('Offline mode: Reply will be sent once internet is connected.', 'info');
       } else {
         await batch.commit();
       }
@@ -1417,11 +1417,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
       console.error('Failed to send reply:', error);
       const errMsg = String(error?.message || '');
       if (errMsg.includes('exceeds') || error?.code === 'invalid-argument' || error?.code === 'resource-exhausted') {
-        showToast?.('फाइल वा फोटोको साइज धेरै ठूलो छ। कृपया सानो साइज पठाउनुहोस्।', 'error');
+        showToast?.('File or photo size is too large. Please send a smaller file.', 'error');
       } else if (error?.code === 'permission-denied') {
-        showToast?.('डाटाबेस अनुमति समस्या आयो। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+        showToast?.('Database permission error. Please try again.', 'error');
       } else {
-        showToast?.('जवाफ पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+        showToast?.('Failed to send reply. Please try again.', 'error');
       }
       setAdminReplyText(text);
       setAdminPendingAttachment(attachmentToSend);
@@ -1592,12 +1592,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       <div className="py-16 text-center text-[#8696a0] text-xs px-4 space-y-2">
                         <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
                         <p className="font-semibold text-[#e9edef]">
-                          {isMainAdminMode ? 'कुनै Sub-Admin भेटिएन' : 'कुनै च्याट भेटिएन'}
+                          {isMainAdminMode ? 'No Sub-Admin found' : 'No chats found'}
                         </p>
                         <p className="text-[11px] text-[#8696a0]">
                           {isMainAdminMode
-                            ? 'Sub-Admin बनाउँदा वा Sub-Admin ले म्यासेज पठाउँदा यहाँ देखिनेछ।'
-                            : 'तपाईंको कोर्षका विद्यार्थीहरूले म्यासेज पठाउँदा वा कोर्ष एक्टिभेट गर्दा यहाँ देखिनेछ।'}
+                            ? 'Sub-Admins will appear here when created or when they send a message.'
+                            : 'Students in your course will appear here when they activate the course or send a message.'}
                         </p>
                       </div>
                     ) : (
@@ -1652,7 +1652,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         )}
                                       </span>
                                     )}
-                                    <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
+                                    <span className="truncate">{conv.lastMessage || 'No messages yet'}</span>
                                   </p>
                                 </>
                               ) : isMainViewingSub ? (
@@ -1681,7 +1681,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         )}
                                       </span>
                                     )}
-                                    <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
+                                    <span className="truncate">{conv.lastMessage || 'No messages yet'}</span>
                                   </p>
                                 </>
                               ) : (
@@ -1710,7 +1710,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                         )}
                                       </span>
                                     )}
-                                    <span className="truncate">{conv.lastMessage || 'कुनै म्यासेज छैन'}</span>
+                                    <span className="truncate">{conv.lastMessage || 'No messages yet'}</span>
                                   </p>
                                 </>
                               )}
@@ -1804,7 +1804,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                     className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-amber-400 hover:text-amber-300 transition cursor-pointer"
                                   >
                                     <Trash2 className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Clear chat for admin (मेरो भ्यूबाट खाली)</span>
+                                    <span>Clear chat for admin (my view only)</span>
                                   </button>
                                   {adminClearedAt > 0 && adminMessages.length > displayedAdminMessages.length && (
                                     <button
@@ -1813,7 +1813,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                       className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-[#00a884] transition cursor-pointer border-t border-[#222d34]"
                                     >
                                       <RotateCcw className="w-4 h-4 text-[#00a884] shrink-0" />
-                                      <span>Show all history (सबै इतिहास देखाउने)</span>
+                                      <span>Show all history</span>
                                     </button>
                                   )}
                                 </div>
@@ -1827,7 +1827,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 type="button"
                                 onClick={toggleFullScreen}
                                 className="p-1.5 text-[#aebac1] hover:text-white hover:bg-[#111b21] rounded-full transition cursor-pointer"
-                                title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
+                                title={isFullScreen ? "Exit Fullscreen" : "Full Screen"}
                               >
                                 {isFullScreen ? <Minimize2 className="w-4 h-4 text-[#00a884]" /> : <Maximize2 className="w-4 h-4" />}
                               </button>
@@ -1875,14 +1875,14 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <div className="py-12 text-center text-[#8696a0] text-xs space-y-2">
                             <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
                             <p className="font-semibold text-[#e9edef]">
-                              {isSelectedMainAdminChat ? brandName : selectedAdminConv.userName} सँग कुराकानी सुरु गर्नुहोस्
+                              Start chatting with {isSelectedMainAdminChat ? brandName : selectedAdminConv.userName}
                             </p>
                             <p className="text-[11px] text-[#8696a0]">
                               {isSelectedMainAdminChat
-                                ? `तलको बक्सबाट ${brandName} लाई सिधै म्यासेज वा फोटो/कागजात पठाउनुहोस्।`
+                                ? `Send a direct message, photo, or document to ${brandName} using the box below.`
                                 : isMainAdminMode
-                                  ? 'तलको बक्सबाट Sub-Admin लाई सिधै जवाफ वा फोटो/कागजात पठाउनुहोस्।'
-                                  : 'तलको बक्सबाट सिधै विद्यार्थीलाई जवाफ पठाउनुहोस् वा फोटो/कागजात पठाउनुहोस्।'}
+                                  ? 'Send a direct reply, photo, or document to the Sub-Admin using the box below.'
+                                  : 'Send a direct reply, photo, or document to the student using the box below.'}
                             </p>
                           </div>
                         ) : (
@@ -2000,12 +2000,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                       type="button"
                                       onClick={() => handleCopyMessage(msg)}
                                       className="text-[#8696a0] hover:text-white p-0.5 rounded transition cursor-pointer"
-                                      title="Copy message (कपी गर्नुहोस्)"
+                                      title="Copy message"
                                     >
                                       {isCopied ? (
                                         <span className="text-[#00a884] flex items-center gap-0.5 font-bold">
                                           <Check className="w-3 h-3" />
-                                          <span>कपी भयो</span>
+                                          <span>Copied</span>
                                         </span>
                                       ) : (
                                         <Copy className="w-3 h-3 opacity-60 hover:opacity-100" />
@@ -2016,11 +2016,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                                     {isMyMsg && (
                                       isSeen ? (
-                                        <span title="हेरिसकियो (Seen)" className="inline-flex items-center text-[#53bdeb]">
+                                        <span title="Seen" className="inline-flex items-center text-[#53bdeb]">
                                           <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
                                         </span>
                                       ) : (
-                                        <span title="डेलिभर भयो (Delivered)" className="inline-flex items-center text-[#8696a0]">
+                                        <span title="Delivered" className="inline-flex items-center text-[#8696a0]">
                                           <CheckCheck className="w-3.5 h-3.5 stroke-[2]" />
                                         </span>
                                       )
@@ -2037,7 +2037,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
 
                       {/* Admin / Sub-Admin Quick Replies */}
                       <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                        <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">द्रुत जवाफ:</span>
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">Quick Reply:</span>
                         {(isSelectedMainAdminChat ? SUB_ADMIN_TO_MAIN_PRESETS : ADMIN_QUICK_PRESETS).map((preset, idx) => (
                           <button
                             key={idx}
@@ -2142,7 +2142,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                   </div>
                                   <div>
                                     <p className="font-semibold text-white">Photos & Images</p>
-                                    <p className="text-[10px] text-[#8696a0]">फोटो / स्क्रिनसट</p>
+                                    <p className="text-[10px] text-[#8696a0]">Photo / Screenshot</p>
                                   </div>
                                 </button>
                                 <button
@@ -2158,7 +2158,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                   </div>
                                   <div>
                                     <p className="font-semibold text-white">Document / PDF</p>
-                                    <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;620KB)</p>
+                                    <p className="text-[10px] text-[#8696a0]">Document / File (&lt;620KB)</p>
                                   </div>
                                 </button>
                               </div>
@@ -2200,7 +2200,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             type="button"
                             onClick={toggleFullScreen}
                             className="p-2 text-[#aebac1] hover:text-white hover:bg-[#202c33] rounded-full transition cursor-pointer"
-                            title={isFullScreen ? "Exit Fullscreen (सामान्य स्क्रिन)" : "Full Screen (फुलस्क्रिन)"}
+                            title={isFullScreen ? "Exit Fullscreen" : "Full Screen"}
                           >
                             {isFullScreen ? <Minimize2 className="w-4 h-4 text-[#00a884]" /> : <Maximize2 className="w-4 h-4" />}
                           </button>
@@ -2219,12 +2219,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <MessageCircle className="w-8 h-8" />
                         </div>
                         <h4 className="font-bold text-sm text-[#e9edef] mb-1">
-                          {isMainAdminMode ? 'Sub-Admin छनोट गर्नुहोस्' : 'सम्पर्क छनोट गर्नुहोस्'}
+                          {isMainAdminMode ? 'Select a Sub-Admin' : 'Select a contact'}
                         </h4>
                         <p className="text-xs text-[#8696a0] max-w-xs">
                           {isMainAdminMode
-                            ? 'च्याट गर्न बायाँपट्टिको सूचीबाट Sub-Admin छान्नुहोस्।'
-                            : `कुराकानी गर्न बायाँपट्टिको सूचीबाट विद्यार्थी वा ${brandName} छान्नुहोस्।`}
+                            ? 'Choose a Sub-Admin from the left list to start chatting.'
+                            : `Choose a student or ${brandName} from the left list to start a conversation.`}
                         </p>
                       </div>
                     </div>
@@ -2295,9 +2295,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <Lock className="w-7 h-7 text-amber-400" />
                         </div>
                         <div className="space-y-1.5">
-                          <h4 className="font-bold text-base text-[#e9edef]">एक्टिभेसन आवश्यक छ</h4>
+                          <h4 className="font-bold text-base text-[#e9edef]">Activation Required</h4>
                           <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                            एक्टिभेट गरेका प्रयोगकर्ताहरूले मात्र सिधै म्यासेज पठाउन सक्नुहुन्छ।
+                            Only activated students can send direct support messages.
                           </p>
                         </div>
                         {onOpenActivationModal && (
@@ -2317,7 +2317,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   ) : isLoadingSubAdmins && studentSubAdminTargets.length === 0 ? (
                     <div className="py-16 text-center text-[#8696a0] text-xs space-y-2">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#00a884]" />
-                      <p>सपोर्ट प्रतिनिधिहरू लोड हुँदैछ...</p>
+                      <p>Loading support representatives...</p>
                     </div>
                   ) : studentSubAdminTargets.length === 0 ? (
                     <div className="p-4">
@@ -2326,9 +2326,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                           <MessageCircle className="w-7 h-7" />
                         </div>
                         <div className="space-y-1.5">
-                          <h4 className="font-bold text-base text-[#e9edef]">च्याट हाल उपलब्ध छैन</h4>
+                          <h4 className="font-bold text-base text-[#e9edef]">Chat Currently Unavailable</h4>
                           <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                            यस कोर्षको लागि सपोर्ट प्रतिनिधि उपलब्ध भएपछि यहाँ सबै सम्पर्क देखिनेछन्।
+                            Contacts will appear here once a support representative is assigned to this course.
                           </p>
                         </div>
                       </div>
@@ -2357,7 +2357,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         return (
                           <div className="py-16 text-center text-[#8696a0] text-xs px-4 space-y-1.5">
                             <MessageCircle className="w-8 h-8 mx-auto opacity-30 text-[#8696a0]" />
-                            <p className="font-semibold text-[#e9edef]">कुनै सम्पर्क भेटिएन</p>
+                            <p className="font-semibold text-[#e9edef]">No contacts found</p>
                             <p className="text-[11px]">No instructor matched "{studentSearchQuery}".</p>
                           </div>
                         );
@@ -2367,7 +2367,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         const meta = studentConvMetaMap[target.subAdmin.code];
                         const unreadCount = meta?.unreadUserCount || 0;
                         const hasUnread = unreadCount > 0;
-                        const lastMsg = meta?.lastMessage || 'म्यासेज पठाउन ट्याप गर्नुहोस्';
+                        const lastMsg = meta?.lastMessage || 'Tap to send a message';
                         const isLastFromMe = meta?.lastSender === 'user';
                         const isSeenByAdmin = (meta?.unreadAdminCount || 0) === 0;
 
@@ -2524,7 +2524,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-red-400 hover:text-red-300 transition cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4 text-red-400 shrink-0" />
-                            <span>Clear chat (आफ्नो च्याट खाली गर्ने)</span>
+                            <span>Clear chat</span>
                           </button>
                           {studentClearedAt > 0 && studentMessages.length > displayedStudentMessages.length && (
                             <button
@@ -2533,7 +2533,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                               className="w-full px-3.5 py-2.5 text-left hover:bg-[#111b21] flex items-center gap-2.5 text-[#00a884] transition cursor-pointer border-t border-[#222d34]"
                             >
                               <RotateCcw className="w-4 h-4 text-[#00a884] shrink-0" />
-                              <span>Restore messages (पुरानो इतिहास देखाउने)</span>
+                              <span>Restore messages</span>
                             </button>
                           )}
                         </div>
@@ -2555,9 +2555,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                       <Lock className="w-7 h-7 text-amber-400" />
                     </div>
                     <div className="space-y-1.5">
-                      <h4 className="font-bold text-base text-[#e9edef]">एक्टिभेसन आवश्यक छ</h4>
+                      <h4 className="font-bold text-base text-[#e9edef]">Activation Required</h4>
                       <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                        एक्टिभेट गरेका प्रयोगकर्ताहरूले मात्र सिधै म्यासेज पठाउन सक्नुहुन्छ।
+                        Only activated students can send direct support messages.
                       </p>
                     </div>
                     {onOpenActivationModal && (
@@ -2576,7 +2576,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   isLoadingSubAdmins ? (
                     <div className="py-16 text-center text-[#8696a0] text-xs space-y-2">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#00a884]" />
-                      <p>सपोर्ट च्यानल जोडिँदैछ...</p>
+                      <p>Connecting to support channel...</p>
                     </div>
                   ) : (
                     <div className="bg-[#151f26]/95 border border-white/10 rounded-2xl p-6 text-center space-y-3 shadow-xl my-6 max-w-md mx-auto">
@@ -2584,9 +2584,9 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         <MessageCircle className="w-7 h-7" />
                       </div>
                       <div className="space-y-1.5">
-                        <h4 className="font-bold text-base text-[#e9edef]">च्याट हाल उपलब्ध छैन</h4>
+                        <h4 className="font-bold text-base text-[#e9edef]">Chat Currently Unavailable</h4>
                         <p className="text-xs text-[#aebac1] leading-relaxed max-w-sm mx-auto">
-                          यस कोर्षको लागि सपोर्ट प्रतिनिधि उपलब्ध भएपछि यहाँबाट सिधै म्यासेज पठाउन मिल्नेछ।
+                          Direct messaging will be available here once a support representative is assigned to this course.
                         </p>
                       </div>
                     </div>
@@ -2641,7 +2641,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                             />
                           </h4>
                           <p className="text-[#8696a0] text-xs max-w-xs mx-auto leading-relaxed">
-                            आफ्नो प्रश्न लेखेर {activeStudentTarget.subAdmin.name} लाई सिधै पठाउनुहोस्।
+                            Write your question below to send it directly to {activeStudentTarget.subAdmin.name}.
                           </p>
                         </div>
 
@@ -2760,12 +2760,12 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                   type="button"
                                   onClick={() => handleCopyMessage(msg)}
                                   className="text-[#8696a0] hover:text-white p-0.5 rounded transition cursor-pointer"
-                                  title="Copy message (कपी गर्नुहोस्)"
+                                  title="Copy message"
                                 >
                                   {isCopied ? (
                                     <span className="text-[#00a884] flex items-center gap-0.5 font-bold">
                                       <Check className="w-3 h-3" />
-                                      <span>कपी भयो</span>
+                                      <span>Copied</span>
                                     </span>
                                   ) : (
                                     <Copy className="w-3 h-3 opacity-60 hover:opacity-100" />
@@ -2780,11 +2780,11 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 */}
                                 {isMe && (
                                   isSeen ? (
-                                    <span title="एडमिनले हेरिसक्यो (Seen by Admin)" className="inline-flex items-center text-[#53bdeb]">
+                                    <span title="Seen by Admin" className="inline-flex items-center text-[#53bdeb]">
                                       <CheckCheck className="w-3.5 h-3.5 stroke-[2.5]" />
                                     </span>
                                   ) : (
-                                    <span title="डेलिभर भयो (Delivered)" className="inline-flex items-center text-[#8696a0]">
+                                    <span title="Delivered" className="inline-flex items-center text-[#8696a0]">
                                       <CheckCheck className="w-3.5 h-3.5 stroke-[2]" />
                                     </span>
                                   )
@@ -2805,8 +2805,8 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
               {/* Quick Suggestion Strip */}
               {(isAdmin || (hasActivatedCourse && Boolean(activeStudentTarget))) && studentMessages.length > 0 && (
                 <div className="px-3 py-1.5 bg-zinc-950 border-t border-zinc-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                  <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">सुझाव:</span>
-                  {['धन्यवाद!', 'हजुर, बुझेँ।', 'पेमेन्ट स्क्रिनसट पठाएँ', 'प्रमाणपत्र कहाँ हेर्ने?'].map((sug, i) => (
+                  <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">Suggestions:</span>
+                  {['Thank you!', 'Got it, thanks!', 'I sent the payment screenshot', 'Where can I view my certificate?'].map((sug, i) => (
                     <button
                       key={i}
                       onClick={() => handleStudentSendMessage(sug)}
@@ -2897,7 +2897,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   <div className="grow flex items-center justify-between bg-[#111b21] border border-amber-500/30 rounded-full px-4 py-2.5 text-xs text-amber-300">
                     <span className="flex items-center gap-2 font-semibold">
                       <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>कोर्ष एक्टिभेट गरेपछि मात्र म्यासेज पठाउन मिल्छ</span>
+                      <span>Activate a course to send messages</span>
                     </span>
                     {onOpenActivationModal && (
                       <button
@@ -2908,7 +2908,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                         }}
                         className="bg-[#00a884] hover:bg-[#02906f] text-[#111b21] font-bold text-[11px] px-3 py-1 rounded-full cursor-pointer transition shrink-0 ml-2"
                       >
-                        कोड हाल्नुहोस्
+                        Enter Code
                       </button>
                     )}
                   </div>
@@ -2916,7 +2916,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   <div className="grow flex items-center justify-center bg-[#111b21] border border-white/10 rounded-full px-4 py-2.5 text-xs text-[#aebac1]">
                     <span className="flex items-center gap-2 font-semibold">
                       <Lock className="w-3.5 h-3.5 text-[#00a884] shrink-0" />
-                      <span>सपोर्ट उपलब्ध भएपछि मात्र म्यासेज पठाउन मिल्छ</span>
+                      <span>Messaging will be enabled once support is available</span>
                     </span>
                   </div>
                 ) : (
@@ -2965,7 +2965,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 </div>
                                 <div>
                                   <p className="font-semibold text-white">Photos & Images</p>
-                                  <p className="text-[10px] text-[#8696a0]">फोटो / स्क्रिनसट</p>
+                                  <p className="text-[10px] text-[#8696a0]">Photo / Screenshot</p>
                                 </div>
                               </button>
                               <button
@@ -2981,7 +2981,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                                 </div>
                                 <div>
                                   <p className="font-semibold text-white">Document / PDF</p>
-                                  <p className="text-[10px] text-[#8696a0]">कागजात / फाइल (&lt;620KB)</p>
+                                  <p className="text-[10px] text-[#8696a0]">Document / File (&lt;620KB)</p>
                                 </div>
                               </button>
                             </div>
@@ -3033,7 +3033,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-[#e9edef]">Clear this chat?</h4>
-                  <p className="text-[11px] text-[#8696a0]">यो च्याट आफ्नो डिभाइसबाट खाली गर्ने?</p>
+                  <p className="text-[11px] text-[#8696a0]">Clear messages from your device?</p>
                 </div>
               </div>
 
@@ -3041,7 +3041,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 <p className="flex items-start gap-2">
                   <span className="text-[#00a884] font-bold">✓</span>
                   <span>
-                    <strong>Only on this device:</strong> Messages will be cleared from your screen only. (तपाईंको स्क्रिनबाट मात्र च्याट हट्नेछ।)
+                    <strong>Only on this device:</strong> Messages will be cleared from your screen only.
                   </span>
                 </p>
                 <p className="flex items-start gap-2">
@@ -3084,7 +3084,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-[#e9edef]">Clear chat for Admin?</h4>
-                  <p className="text-[11px] text-[#8696a0]">एडमिन भ्यूबाट मात्र च्याट खाली गर्ने?</p>
+                  <p className="text-[11px] text-[#8696a0]">Clear messages from admin view only?</p>
                 </div>
               </div>
 
@@ -3092,13 +3092,13 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                 <p className="flex items-start gap-2">
                   <span className="text-[#00a884] font-bold">✓</span>
                   <span>
-                    <strong>Admin View Only:</strong> Messages will only be hidden on your admin screen. (एडमिनको स्क्रिनबाट मात्र हट्नेछ।)
+                    <strong>Admin View Only:</strong> Messages will only be hidden on your admin screen.
                   </span>
                 </p>
                 <p className="flex items-start gap-2">
                   <span className="text-[#00a884] font-bold">✓</span>
                   <span>
-                    <strong>Student Preserved:</strong> The student will NOT lose any messages and can still view their entire chat history. (विद्यार्थीको च्याट सुरक्षित रहन्छ।)
+                    <strong>Student Preserved:</strong> The student will NOT lose any messages and can still view their entire chat history.
                   </span>
                 </p>
               </div>
@@ -3147,7 +3147,7 @@ export const AskChatModal: React.FC<AskChatModalProps> = ({
                   title="Download photo"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>डाउनलोड (Download)</span>
+                  <span>Download</span>
                 </button>
                 <button
                   type="button"

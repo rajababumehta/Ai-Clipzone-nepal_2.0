@@ -71,7 +71,7 @@ import {
   EyeOff
 } from 'lucide-react';
 
-import { COURSES, TESTIMONIALS, FAQS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl, normalizeLegacyBrandText } from './data';
+import { COURSES, TESTIMONIALS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, cleanLegacyLogoUrl, normalizeLegacyBrandText } from './data';
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey, SupportedLocale } from './types';
 import { collection, getDocs, getDocsFromServer, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
@@ -89,7 +89,7 @@ import { CourseEnrollPage } from './components/CourseEnrollPage';
 import { CourseDetailView } from './components/CourseDetailView';
 import { InstructorsView } from './components/InstructorsView';
 import { BlogView } from './components/BlogView';
-import { AboutUsView, LearnApplyGrowView, PrivacyPolicyView, TermsOfUseView, NotFoundView } from './components/PublicPagesView';
+import { AboutUsView, LearnApplyGrowView, PrivacyPolicyView, TermsOfUseView, NotFoundView, ProfileDetailsFaqSection } from './components/PublicPagesView';
 import { buildPublicInstructors, resolveCourseInstructor } from './data/instructors';
 import { BLOG_POSTS, findBlogPostBySlug } from './data/blogArticles';
 import { getLocaleDict } from './utils/i18n';
@@ -98,6 +98,8 @@ import { generateDynamicPageMetadata, injectDynamicPageMetadata } from './utils/
 import { showNativeNotification, isNotificationSupported } from './utils/notifications';
 import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 import { compressImageFile, estimateJsonByteSize } from './utils/chatMedia';
+import { usePWAInstall } from './hooks/usePWAInstall';
+import { PwaDownloadAdModal } from './components/PwaDownloadAdModal';
 
 enum OperationType {
   CREATE = 'create',
@@ -359,13 +361,12 @@ export default function App() {
     return DEFAULT_PAYMENT_CONFIG;
   });
 
-  // Dynamic FAQs list state
+  // Dynamic FAQs list state (legacy default FAQs removed from website)
   const [faqs, setFaqs] = useState<FAQItem[]>(() => {
     try {
-      const saved = localStorage.getItem('clipzone_faqs_config');
-      if (saved) return JSON.parse(saved);
+      localStorage.removeItem('clipzone_faqs_config');
     } catch {}
-    return FAQS;
+    return [];
   });
 
   // Dynamic Global Site & Branding settings
@@ -499,7 +500,7 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      showToast('⚠️ फोटो १० MB भन्दा सानो हुनुपर्छ (File must be under 10MB)', 'error');
+      showToast('⚠️ Photo must be smaller than 10MB.', 'error');
       return;
     }
     const reader = new FileReader();
@@ -640,13 +641,13 @@ export default function App() {
 
     setShowImageAdjustModal(false);
     setTempImageForAdjust(null);
-    showToast('📸 प्रोफाइल फोटो सफलतापूर्वक डाटाबेसमा सुरक्षित भयो!', 'success');
+    showToast('📸 Profile photo saved successfully!', 'success');
   };
 
   const handleSaveStudentName = () => {
     const trimmed = tempStudentName.trim();
     if (!trimmed) {
-      showToast('कृपया मान्य नाम राख्नुहोस्!', 'error');
+      showToast('Please enter a valid name!', 'error');
       return;
     }
     localStorage.setItem('clipzone_student_name', trimmed);
@@ -655,7 +656,7 @@ export default function App() {
       setCurrentUser({ ...currentUser, displayName: trimmed });
     }
     setIsEditingStudentName(false);
-    showToast('✅ तपाईंको नाम सुरक्षित गरियो! (Name updated)', 'success');
+    showToast('✅ Name updated successfully!', 'success');
   };
 
   // Helper to sanitize cached/remote course to eliminate stale/legacy thumbnails and details
@@ -725,8 +726,16 @@ export default function App() {
     return [];
   });
 
-  // Push Notifications & Live Sessions state
-  const [isRunningInAppMode, setIsRunningInAppMode] = useState<boolean>(() => checkIsAppMode());
+  // Push Notifications, PWA Install & Live Sessions state
+  const {
+    isRunningInAppMode,
+    isAppInstalled,
+    isInstallCheckComplete,
+    isIOS,
+    canPromptNativeInstall,
+    promptNativeInstall,
+    markManualInstallConfirmed,
+  } = usePWAInstall();
   const [rawNotifications, setRawNotifications] = useState<PushNotificationItem[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
   const [unreadNotifIds, setUnreadNotifIds] = useState<string[]>([]);
@@ -820,7 +829,7 @@ export default function App() {
   const [formIncludeLive, setFormIncludeLive] = useState(false);
   const [formIncludeCertificate, setFormIncludeCertificate] = useState(true);
   const [formIsHidden, setFormIsHidden] = useState(false);
-  const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
+  const [formLanguage, setFormLanguage] = useState('English');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string; chapterTitle?: string }[]>([]);
   const [formPdfs, setFormPdfs] = useState<CoursePdf[]>([]);
@@ -974,7 +983,7 @@ export default function App() {
       console.warn('Error fetching courses from Firestore:', err);
       setCourses(prev => {
         if (!prev || prev.length === 0) {
-          setCoursesLoadError('कोर्षहरू लोड हुन सकेनन्। कृपया इन्टरनेट जडान जाँच गरी पुन: प्रयास गर्नुहोस्।');
+          setCoursesLoadError('Unable to load courses. Please check your internet connection and try again.');
         }
         return prev;
       });
@@ -1126,7 +1135,7 @@ export default function App() {
   // Push Notification Handlers (Main Admin Only)
   const handleSendNotification = async (notifData: Omit<PushNotificationItem, 'id' | 'createdAt'>) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Notification पठाउन सक्छ।', 'error');
+      showToast('Only Main Admin can send notifications.', 'error');
       return;
     }
     try {
@@ -1147,7 +1156,7 @@ export default function App() {
 
   const handleDeleteNotification = async (id: string) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Notification हटाउन सक्छ।', 'error');
+      showToast('Only Main Admin can delete notifications.', 'error');
       return;
     }
     try {
@@ -1261,15 +1270,12 @@ export default function App() {
       console.warn('Payment QR config realtime listener error:', err);
     });
 
-    // 2. FAQs listener
+    // 2. FAQs listener (only accept explicit array updates; keep empty when cleared)
     const unsubFaqs = onSnapshot(doc(db, 'system', 'faqs'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (Array.isArray(data?.items) && data.items.length > 0) {
+        if (Array.isArray(data?.items)) {
           setFaqs(data.items);
-          try {
-            localStorage.setItem('clipzone_faqs_config', JSON.stringify(data.items));
-          } catch (e) {}
         }
       }
     }, (err) => {
@@ -1438,7 +1444,7 @@ export default function App() {
     setAllActivationKeys([]);
     setShowAdminMenu(false);
     setShowAdminDashboard(false);
-    showToast('Sub-Admin मोडबाट लगआउट गरियो (Logged out of Sub-Admin mode)', 'info');
+    showToast('Logged out of Sub-Admin mode', 'info');
 
     if (activeCode) {
       try {
@@ -1498,7 +1504,7 @@ export default function App() {
         localStorage.removeItem('clipzone_admin_activated');
         setShowAdminDashboard(false);
         setShowAdminMenu(false);
-        showToast('⚠️ Admin session expired: अर्को डिभाइसमा लगइन भएकोले यो डिभाइस लगआउट भयो (Single Device Limit)', 'error');
+        showToast('⚠️ Admin session expired: Signed out because another device logged in (Single Device Limit).', 'error');
       }
     }, (err) => {
       console.warn('Admin session listener warning:', err);
@@ -1681,11 +1687,11 @@ export default function App() {
         setActiveCourseIds(updatedCourseIds);
 
         if (terminateReason === 'admin_logout') {
-          showToast(`⚠️ तपाईंको सेसन एड्मिनद्वारा लगआउट गरिएको छ (Session logged out by Admin for code ${terminatedCode})`, 'error');
+          showToast(`⚠️ Your session was logged out by Admin for code ${terminatedCode}.`, 'error');
         } else if (terminateReason === 'deleted') {
-          showToast(`❌ यो कोर्स कोड एड्मिनद्वारा मेटाइएको छ (Course code ${terminatedCode} was deleted from database)`, 'error');
+          showToast(`❌ Course code ${terminatedCode} was deleted by Admin.`, 'error');
         } else {
-          showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${terminatedCode} अर्को डिभाइसमा एक्टिभ गरिएको छ। (Session ended! Code ${terminatedCode} active on another device.)`, 'error');
+          showToast(`Session ended! Code ${terminatedCode} is now active on another device.`, 'error');
         }
       }
     } catch (err) {
@@ -1819,7 +1825,7 @@ export default function App() {
               localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
               setActiveCourseIds(updatedActivated);
             }
-            showToast(`❌ यो कोर्स कोड एड्मिनद्वारा हटाइएको छ (Course code ${code} deleted from database)`, 'error');
+            showToast(`❌ Course code ${code} was deleted by Admin.`, 'error');
           } else {
             const keyData = docSnap.data();
             const durationMs = keyData.duration === '1day' 
@@ -1852,7 +1858,7 @@ export default function App() {
 
               setFullscreenVideo(prev => (prev && (!targetCourseId || prev.courseId === targetCourseId)) ? null : prev);
 
-              showToast(`⚠️ तपाईंको कोर्ष "${keyData.courseTitle || 'Course'}" को म्याद समाप्त भएको छ (Course access expired).`, 'error');
+              showToast(`⚠️ Access for "${keyData.courseTitle || 'Course'}" has expired.`, 'error');
             } else if (keyData.forceLogoutAt && userLoginTime > 0 && keyData.forceLogoutAt > userLoginTime) {
               const currentCodes: string[] = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
               const filteredCodes = currentCodes.filter(c => c !== code);
@@ -1864,7 +1870,7 @@ export default function App() {
                 localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
                 setActiveCourseIds(updatedActivated);
               }
-              showToast(`⚠️ तपाईंको सेसन एड्मिनद्वारा लगआउट गरिएको छ (Session logged out by Admin for code ${code})`, 'error');
+              showToast(`⚠️ Your session was logged out by Admin for code ${code}.`, 'error');
             } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId && keyData.activeDeviceId !== '') {
               // Check if another device ACTUALLY claimed it after this device
               const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
@@ -1884,7 +1890,7 @@ export default function App() {
                   localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
                   setActiveCourseIds(updatedActivated);
                 }
-                showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${code} अर्को डिभाइसमा एक्टिभ गरिएको छ।`, 'error');
+                showToast(`Session ended on this device! Code ${code} is active on another device.`, 'error');
               } else {
                 // Same student re-opening or refreshed browser: re-sync deviceId to this active device
                 updateDoc(doc(db, 'activation_keys', code), { activeDeviceId: deviceId }).catch(() => {});
@@ -1963,7 +1969,7 @@ export default function App() {
                 }
               });
 
-              showToast('⚠️ तपाईंको कोर्षको म्याद समाप्त भएको छ (Course access expired).', 'error');
+              showToast('⚠️ Your course access has expired.', 'error');
             } catch (err) {}
           }
         }
@@ -2000,7 +2006,7 @@ export default function App() {
       ) {
         if (!isAdminActivated && !subAdminSession) {
           e.preventDefault();
-          showToast('सुरक्षाको कारणले यो सर्टकट असक्षम गरिएको छ! (Shortcut disabled for protection!)', 'error');
+          showToast('Shortcut disabled for content protection!', 'error');
         }
       }
     };
@@ -2014,7 +2020,7 @@ export default function App() {
     const handleCopy = (e: ClipboardEvent) => {
       if (!isAdminActivated && !subAdminSession) {
         e.preventDefault();
-        showToast('कपी गर्न निषेध गरिएको छ! (Copying is restricted!)', 'error');
+        showToast('Copying is restricted!', 'error');
       }
     };
 
@@ -2326,7 +2332,7 @@ export default function App() {
           setAllActivationKeys([]);
           setShowAdminDashboard(false);
           setShowCourseFormModal(false);
-          showToast('⚠️ तपाईंको Sub-Admin खाता Main Admin द्वारा हटाइएको छ।', 'error');
+          showToast('⚠️ Your Sub-Admin account has been removed by Main Admin.', 'error');
           return;
         }
         const remote = { id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) };
@@ -2336,7 +2342,7 @@ export default function App() {
           setAllActivationKeys([]);
           setShowAdminDashboard(false);
           setShowCourseFormModal(false);
-          showToast('⚠️ तपाईंको Sub-Admin खाता Main Admin द्वारा निष्क्रिय (Disabled) गरिएको छ।', 'error');
+          showToast('⚠️ Your Sub-Admin account has been disabled by Main Admin.', 'error');
           return;
         }
         if (remote.activeDeviceId && remote.activeDeviceId !== myDeviceId) {
@@ -2345,7 +2351,7 @@ export default function App() {
           setAllActivationKeys([]);
           setShowAdminDashboard(false);
           setShowCourseFormModal(false);
-          showToast('⚠️ यो Sub-Admin कोड अर्को डिभाइसमा लगइन भएकोले यो सेसन लगआउट भयो।', 'error');
+          showToast('⚠️ This Sub-Admin code logged in on another device, so this session was signed out.', 'error');
           return;
         }
         setSubAdminSession(remote);
@@ -2392,7 +2398,7 @@ export default function App() {
     setIsAuthSubmitting(true);
     const cleanName = authName.trim();
     if (!cleanName) {
-      setAuthError('कृपया आफ्नो पुरा नाम राख्नुहोस् (Full Name is required).');
+      setAuthError('Full Name is required.');
       setIsAuthSubmitting(false);
       return;
     }
@@ -2510,7 +2516,7 @@ export default function App() {
       console.warn('Sign out from Firebase failed, continuing local logout:', err);
     }
 
-    showToast('Student Portal र सबै कोर्स लगआउट गरियो! (Logged out of all courses successfully!)', 'info');
+    showToast('Logged out of Student Portal and all courses!', 'info');
   };
 
   const handleReleaseCourseCode = async (courseId: string) => {
@@ -2552,7 +2558,7 @@ export default function App() {
         await fetchUserActiveKeys(currentUser);
       }
 
-      showToast('कोर्स डिभाइस लगआउट गरियो! अब यो कोड अरु डिभाइसमा प्रयोग गर्न सकिन्छ। (Course logged out from device successfully! This code is now free.)', 'success');
+      showToast('Course logged out from this device! This code can now be used on another device.', 'success');
     } catch (err) {
       console.error('Error releasing course code:', err);
       showToast('Failed to release course code.', 'error');
@@ -2597,7 +2603,7 @@ export default function App() {
 
     if (!foundSub) return 'not_found';
     if (foundSub.status === 'disabled') {
-      showToast('⚠️ यो Sub-Admin कोड हाल निष्क्रिय (Disabled) गरिएको छ। कृपया Main Admin सँग सम्पर्क गर्नुहोस्।', 'error');
+      showToast('⚠️ This Sub-Admin code is currently disabled. Please contact Main Admin.', 'error');
       return 'disabled';
     }
 
@@ -2628,7 +2634,7 @@ export default function App() {
       setAdminCodeInput('');
       setAdminInitialTab('courses');
       setShowAdminDashboard(true);
-      showToast('🛡️ Sub-Admin Mode activated! तपाईंको कोर्ष ड्यासबोर्ड खुल्यो।', 'success');
+      showToast('🛡️ Sub-Admin Mode activated! Your course dashboard is now open.', 'success');
       return;
     }
     if (subStatus === 'disabled') {
@@ -2673,7 +2679,7 @@ export default function App() {
       setShowProfileModal(false);
       setAdminInitialTab('courses');
       setShowAdminDashboard(true);
-      showToast('🛡️ Sub-Admin Mode activated! लोगो (Logo) मा क्लिक गरी आफ्नो कोर्ष ड्यासबोर्ड खोल्न सक्नुहुन्छ।', 'success');
+      showToast('🛡️ Sub-Admin Mode activated! Click the Logo anytime to open your course dashboard.', 'success');
       return;
     }
 
@@ -2727,7 +2733,7 @@ export default function App() {
 
       // STRICT VALIDATION: Reject if key was never created by Admin or was deleted by Admin
       if (!keyData || (checkedFirestore && !existsInFirestore) || keyData.status === 'deleted') {
-        showToast('❌ अमान्य वा मेटाइएको सेक्रेट कोड! कृपया Admin ले दिएको सही कोड राख्नुहोस्। (Invalid or deleted code)', 'error');
+        showToast('❌ Invalid or deleted secret code! Please enter the valid code provided by Admin.', 'error');
         setIsActivating(false);
         return;
       }
@@ -2797,14 +2803,14 @@ export default function App() {
       const isAlreadyExpired = keyData?.status === 'expired' || (calculatedExpiresAt > 0 && Date.now() > calculatedExpiresAt);
 
       if (isAlreadyExpired) {
-        showToast('⚠️ यो कोडको म्याद समाप्त भइसकेको छ! (This activation code has expired!)', 'error');
+        showToast('⚠️ This activation code has expired!', 'error');
         setIsActivating(false);
         return;
       }
 
       // Single-device login check:
       if (keyData && keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
-        showToast('यो कोड पहिले नै अर्को डिभाइसमा एक्टिभ छ! कृपया पहिले त्यहाँबाट लगआउट गर्नुहोस्। (This code is already active on another device!)', 'error');
+        showToast('This code is already active on another device! Please log out there first.', 'error');
         setIsActivating(false);
         return;
       }
@@ -3014,7 +3020,7 @@ export default function App() {
         setAllActivationKeys(updatedAdminCache);
       } catch (e) {}
 
-      showToast(`नमस्ते ${assignedStudentName}! सफलतापूर्वक अनलक भयो: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
+      showToast(`Welcome ${assignedStudentName}! Successfully unlocked: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
       setActivationCodeInput('');
       setShowCodeInputModal(false);
       setShowProfileModal(false);
@@ -3044,7 +3050,7 @@ export default function App() {
     durationArg?: '1day' | '1month' | '1year'
   ) => {
     if (!isMainAdmin && !isSubAdmin) {
-      showToast('अनधिकृत पहुँच! कोर्ष कोड बनाउने अनुमति छैन।', 'error');
+      showToast('Unauthorized access! You do not have permission to generate course codes.', 'error');
       return;
     }
 
@@ -3125,14 +3131,14 @@ export default function App() {
     avatarUrl?: string
   ): Promise<SubAdminAccount | null> => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Sub-Admin कोड बनाउन सक्छ।', 'error');
+      showToast('Only Main Admin can create Sub-Admin codes.', 'error');
       return null;
     }
 
     const cleanName = name.trim();
     const targetCourse = courses.find(c => c.id === courseId);
     if (!cleanName || !targetCourse) {
-      showToast('Sub-Admin को नाम र कोर्ष अनिवार्य छ।', 'error');
+      showToast('Sub-Admin name and assigned course are required.', 'error');
       return null;
     }
 
@@ -3148,13 +3154,13 @@ export default function App() {
 
     // Prevent collision with Main Admin secret code
     if (await verifyAdminSecret(finalCode)) {
-      showToast('यो कोड Main Admin कोडसँग मिल्छ, कृपया अर्को कोड प्रयोग गर्नुहोस्।', 'error');
+      showToast('This code conflicts with the Main Admin code. Please use another code.', 'error');
       return null;
     }
 
     // Prevent collision with existing Sub-Admin or Student key
     if (subAdminList.some(s => s.code === finalCode)) {
-      showToast(`कोड "${finalCode}" पहिले नै प्रयोगमा छ। कृपया अर्को कोड राख्नुहोस्।`, 'error');
+      showToast(`Code "${finalCode}" is already in use. Please choose another code.`, 'error');
       return null;
     }
 
@@ -3164,7 +3170,7 @@ export default function App() {
         getDoc(doc(db, 'activation_keys', finalCode)).catch(() => null),
       ]);
       if (existingSubSnap?.exists() || existingKeySnap?.exists()) {
-        showToast(`कोड "${finalCode}" पहिले नै अवस्थित छ। कृपया फरक कोड राख्नुहोस्।`, 'error');
+        showToast(`Code "${finalCode}" already exists. Please use a different code.`, 'error');
         return null;
       }
     } catch {}
@@ -3199,7 +3205,7 @@ export default function App() {
             ...(safeSubAvatar ? { userAvatar: safeSubAvatar } : {}),
             courseId: targetCourse.id,
             activeCourse: targetCourse.title,
-            lastMessage: 'कुनै म्यासेज छैन',
+            lastMessage: 'No messages yet',
             lastMessageAt: subNow,
             lastSender: 'system',
             unreadAdminCount: 0,
@@ -3218,7 +3224,7 @@ export default function App() {
       return newSubAdmin;
     } catch (err) {
       console.error('Error creating Sub-Admin:', err);
-      showToast('Sub-Admin कोड सुरक्षित गर्न असफल भयो।', 'error');
+      showToast('Failed to save Sub-Admin code.', 'error');
       return null;
     }
   };
@@ -3226,7 +3232,7 @@ export default function App() {
   const handleUpdateSubAdminAvatar = async (subAdmin: SubAdminAccount, avatarUrl: string) => {
     const canUpdate = isMainAdmin || (isSubAdmin && subAdminSession?.code === subAdmin.code);
     if (!canUpdate) {
-      showToast('अनुमति छैन।', 'error');
+      showToast('Permission denied.', 'error');
       return;
     }
     const cleanAvatar = (avatarUrl || '').trim();
@@ -3254,7 +3260,7 @@ export default function App() {
           userAvatar: safeConvAvatar,
           courseId: subAdmin.courseId,
           activeCourse: subAdmin.courseTitle,
-          lastMessage: 'कुनै म्यासेज छैन',
+          lastMessage: 'No messages yet',
           lastMessageAt: now,
           lastSender: 'system',
           unreadAdminCount: 0,
@@ -3280,16 +3286,16 @@ export default function App() {
         } catch {}
       }
 
-      showToast(cleanAvatar ? `"${subAdmin.name}" को फोटो/लोगो अपडेट भयो!` : 'फोटो/लोगो हटाइयो।', 'success');
+      showToast(cleanAvatar ? `Updated photo/logo for "${subAdmin.name}"!` : 'Photo/logo removed.', 'success');
     } catch (err) {
       console.error('Error updating Sub-Admin avatar:', err);
-      showToast('फोटो/लोगो अपडेट गर्न सकिएन।', 'error');
+      showToast('Failed to update photo/logo.', 'error');
     }
   };
 
   const handleToggleSubAdminStatus = async (subAdmin: SubAdminAccount) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Sub-Admin स्थिति परिवर्तन गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can change Sub-Admin status.', 'error');
       return;
     }
     const nextStatus: 'active' | 'disabled' = subAdmin.status === 'active' ? 'disabled' : 'active';
@@ -3305,19 +3311,19 @@ export default function App() {
       });
       showToast(
         nextStatus === 'active'
-          ? `Sub-Admin "${subAdmin.name}" सक्रिय (Active) गरियो। ✅`
-          : `Sub-Admin "${subAdmin.name}" निष्क्रिय (Disabled) गरियो। ⛔`,
+          ? `Sub-Admin "${subAdmin.name}" is now Active. ✅`
+          : `Sub-Admin "${subAdmin.name}" has been Disabled. ⛔`,
         nextStatus === 'active' ? 'success' : 'info'
       );
     } catch (err) {
       console.error('Error toggling Sub-Admin status:', err);
-      showToast('Sub-Admin स्थिति अपडेट गर्न सकिएन।', 'error');
+      showToast('Failed to update Sub-Admin status.', 'error');
     }
   };
 
   const handleUpdateSubAdminCourse = async (subAdmin: SubAdminAccount, newCourseId: string) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्ष परिवर्तन गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can change the assigned course.', 'error');
       return;
     }
     const targetCourse = courses.find(c => c.id === newCourseId);
@@ -3337,16 +3343,16 @@ export default function App() {
         localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
         return updated;
       });
-      showToast(`"${subAdmin.name}" को कोर्ष "${targetCourse.title}" मा अपडेट गरियो!`, 'success');
+      showToast(`Updated course for "${subAdmin.name}" to "${targetCourse.title}"!`, 'success');
     } catch (err) {
       console.error('Error updating Sub-Admin course:', err);
-      showToast('Sub-Admin कोर्ष अपडेट गर्न सकिएन।', 'error');
+      showToast('Failed to update Sub-Admin course.', 'error');
     }
   };
 
   const handleDeleteSubAdmin = async (code: string) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Sub-Admin हटाउन सक्छ।', 'error');
+      showToast('Only Main Admin can delete a Sub-Admin.', 'error');
       return;
     }
     try {
@@ -3356,17 +3362,17 @@ export default function App() {
         localStorage.setItem('clipzone_sub_admins_cache', JSON.stringify(updated));
         return updated;
       });
-      showToast(`Sub-Admin (${code}) स्थायी रूपमा हटाइयो।`, 'success');
+      showToast(`Sub-Admin (${code}) permanently removed.`, 'success');
     } catch (err) {
       console.error('Error deleting Sub-Admin:', err);
-      showToast('Sub-Admin हटाउन सकिएन।', 'error');
+      showToast('Failed to delete Sub-Admin.', 'error');
     }
   };
 
   // ADMIN PAYMENT QR SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSavePaymentConfig = async (newConfig: PaymentQrConfig) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र Global Payment सेटिङ परिवर्तन गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can update Global Payment settings.', 'error');
       return;
     }
     setPaymentConfig(newConfig);
@@ -3382,7 +3388,7 @@ export default function App() {
   // ADMIN FAQS SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSaveFaqs = async (newFaqs: FAQItem[]) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र FAQ परिवर्तन गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can update FAQs.', 'error');
       return;
     }
     setFaqs(newFaqs);
@@ -3401,7 +3407,7 @@ export default function App() {
   // ADMIN OVERALL SITE SETTINGS HANDLER (MAIN ADMIN ONLY)
   const handleSaveSiteSettings = async (newSettings: SiteSettingsConfig) => {
     if (!isMainAdmin) {
-      const msg = 'केवल Main Admin ले मात्र Site सेटिङ परिवर्तन गर्न सक्छ।';
+      const msg = 'Only Main Admin can update Site settings.';
       showToast(msg, 'error');
       throw new Error(msg);
     }
@@ -3426,7 +3432,7 @@ export default function App() {
   // ADMIN & SCOPED SUB-ADMIN DIRECT COURSE UPDATE HANDLER
   const handleSaveCourseDirect = async (updatedCourse: Course) => {
     if (!canEditCourse(updatedCourse.id)) {
-      const msg = 'तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।';
+      const msg = 'You are only permitted to edit your assigned course.';
       showToast(msg, 'error');
       throw new Error(msg);
     }
@@ -3478,7 +3484,7 @@ export default function App() {
   // MAIN ADMIN ONLY: Hide or Unhide Course from Home & Public Screen
   const handleToggleCourseVisibility = async (course: Course) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्ष Hide/Unhide गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can hide or unhide courses.', 'error');
       return;
     }
     const nextHidden = !Boolean(course.isHidden);
@@ -3490,8 +3496,8 @@ export default function App() {
       });
       showToast(
         nextHidden
-          ? `🙈 "${course.title}" Home स्क्रिनबाट लुकाइयो! (Sub-Admin ले अझै Student Code बनाउन सक्छ)`
-          : `👁️ "${course.title}" Home स्क्रिनमा पुन: देखाइयो!`,
+          ? `🙈 "${course.title}" hidden from Home screen! (Sub-Admin can still generate Student Codes)`
+          : `👁️ "${course.title}" is now visible on Home screen!`,
         nextHidden ? 'info' : 'success'
       );
     } catch (err) {
@@ -3503,7 +3509,7 @@ export default function App() {
   const handleAddDirectVideoLecture = async (e: FormEvent, targetCourse: Course) => {
     e.preventDefault();
     if (!canEditCourse(targetCourse.id)) {
-      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्षमा मात्र भिडियो थप्ने अनुमति छ।', 'error');
+      showToast('You are only permitted to add videos to your assigned course.', 'error');
       return;
     }
     const cleanTitle = directVideoTitle.trim();
@@ -3511,7 +3517,7 @@ export default function App() {
     const cleanChapter = directVideoChapter.trim();
 
     if (!cleanTitle || !cleanUrl) {
-      showToast('कृपया Lecture Title र Video Link दुवै भर्नुहोस्।', 'error');
+      showToast('Please enter both Lecture Title and Video Link.', 'error');
       return;
     }
 
@@ -3538,10 +3544,10 @@ export default function App() {
       setDirectVideoTitle('');
       setDirectVideoUrl('');
       setShowDirectVideoAddForm(false);
-      showToast(`🎬 "${cleanTitle}" कोर्षमा सिधै थपियो!`, 'success');
+      showToast(`🎬 "${cleanTitle}" added directly to course!`, 'success');
     } catch (err) {
       console.error('Error adding direct video lecture:', err);
-      const errMsg = err instanceof Error ? err.message : 'भिडियो सेभ गर्न समस्या भयो।';
+      const errMsg = err instanceof Error ? err.message : 'Failed to save video lecture.';
       showToast(errMsg, 'error');
     } finally {
       setIsSavingDirectVideo(false);
@@ -3550,7 +3556,7 @@ export default function App() {
 
   const handleDeleteDirectVideoLecture = async (targetCourse: Course, videoIndex: number) => {
     if (!canEditCourse(targetCourse.id)) {
-      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्षको मात्र भिडियो हटाउने अनुमति छ।', 'error');
+      showToast('You are only permitted to remove videos from your assigned course.', 'error');
       return;
     }
     const existingVideos = targetCourse.videos || [];
@@ -3564,10 +3570,10 @@ export default function App() {
         updatedAt: Date.now(),
       });
       setConfirmDeleteVideoIdx(null);
-      showToast(`🗑️ "${removedTitle}" हटाइयो।`, 'info');
+      showToast(`🗑️ Removed "${removedTitle}".`, 'info');
     } catch (err) {
       console.error('Error removing direct video lecture:', err);
-      showToast('भिडियो हटाउन समस्या भयो।', 'error');
+      showToast('Failed to remove video lecture.', 'error');
     }
   };
 
@@ -3587,7 +3593,7 @@ export default function App() {
   const isReorderingCoursesRef = useRef(false);
   const handleMoveCourse = async (courseId: string, direction: 'up' | 'down') => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्षको क्रम परिवर्तन गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can reorder courses.', 'error');
       return;
     }
     if (isReorderingCoursesRef.current) return;
@@ -3628,8 +3634,8 @@ export default function App() {
       await batch.commit();
       showToast(
         direction === 'up'
-          ? `⬆️ "${movedCourse.title}" माथि (#${targetIndex + 1}) सारियो!`
-          : `⬇️ "${movedCourse.title}" तल (#${targetIndex + 1}) सारियो!`,
+          ? `⬆️ Moved "${movedCourse.title}" up to #${targetIndex + 1}!`
+          : `⬇️ Moved "${movedCourse.title}" down to #${targetIndex + 1}!`,
         'success'
       );
     } catch (err) {
@@ -3638,7 +3644,7 @@ export default function App() {
       try {
         localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(previousCourses));
       } catch {}
-      showToast('कोर्षको क्रम सेभ गर्न समस्या भयो (Failed to save course order)', 'error');
+      showToast('Failed to save course order.', 'error');
       handleFirestoreError(err, OperationType.UPDATE, `courses/${courseId}`);
     } finally {
       isReorderingCoursesRef.current = false;
@@ -3664,7 +3670,7 @@ export default function App() {
 
   const handleDeleteActivationKey = async (code: string) => {
     if (!(await verifyKeyPermission(code))) {
-      showToast('तपाईं केवल आफ्नो तोकिएको कोर्षको कोड मात्र मेटाउन सक्नुहुन्छ।', 'error');
+      showToast('You can only delete codes for your assigned course.', 'error');
       return;
     }
 
@@ -3721,7 +3727,7 @@ export default function App() {
   // ADMIN HANDLER: DELETE ALL STUDENT ACTIVATION KEYS PERMANENTLY (MAIN ADMIN ONLY)
   const handleDeleteAllKeys = async () => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र सबै कोडहरू मेटाउन सक्छ।', 'error');
+      showToast('Only Main Admin can delete all codes.', 'error');
       return;
     }
     setIsAdminLoadingKeys(true);
@@ -3738,13 +3744,13 @@ export default function App() {
       // Clear local storage and state
       setAllActivationKeys([]);
       localStorage.removeItem('clipzone_admin_keys_cache');
-      showToast('सबै विद्यार्थी कोर्ष कोडहरू स्थायी रूपमा मेटाइएका छन् (All student course codes permanently deleted)', 'success');
+      showToast('All student course codes permanently deleted.', 'success');
     } catch (err) {
       console.error('Failed to delete all keys:', err);
       // Ensure local state is cleared even if offline
       setAllActivationKeys([]);
       localStorage.removeItem('clipzone_admin_keys_cache');
-      showToast('सबै कोर्ष कोडहरू मेटाइएका छन्।', 'info');
+      showToast('All course codes deleted.', 'info');
     } finally {
       setIsAdminLoadingKeys(false);
     }
@@ -3753,7 +3759,7 @@ export default function App() {
   // ADMIN HANDLER: FORCE LOGOUT A SPECIFIC USER/KEY SESSION
   const handleLogoutUserKey = async (code: string) => {
     if (!(await verifyKeyPermission(code))) {
-      showToast('तपाईं केवल आफ्नो तोकिएको कोर्षको डिभाइस मात्र लगआउट गर्न सक्नुहुन्छ।', 'error');
+      showToast('You can only log out devices for your assigned course.', 'error');
       return;
     }
     const logoutTime = Date.now();
@@ -3806,7 +3812,7 @@ export default function App() {
   // ADMIN HANDLER: EXPIRE A SPECIFIC USER/KEY IMMEDIATELY
   const handleExpireKey = async (code: string) => {
     if (!(await verifyKeyPermission(code))) {
-      showToast('तपाईं केवल आफ्नो तोकिएको कोर्षको कोड मात्र Expire गर्न सक्नुहुन्छ।', 'error');
+      showToast('You can only expire codes for your assigned course.', 'error');
       return;
     }
     const expireTime = Date.now();
@@ -3868,19 +3874,19 @@ export default function App() {
   const handleExecuteLogoutAllUserSessions = async (e?: FormEvent) => {
     if (e) e.preventDefault();
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र सबै डिभाइस लगआउट गर्न सक्छ।', 'error');
+      showToast('Only Main Admin can log out all devices.', 'error');
       return;
     }
 
     if (logoutAllConfirmWord.trim().toUpperCase() !== 'CONFIRM') {
-      showToast('❌ अगाडि बढ्न कृपया CONFIRM टाइप गर्नुहोस्।', 'error');
+      showToast('❌ Please type CONFIRM to proceed.', 'error');
       return;
     }
 
     const inputCode = logoutSecretCodeInput.trim().toUpperCase();
     const isAuthorized = await verifyAdminSecret(inputCode);
     if (!isAuthorized) {
-      showToast('❌ अमान्य सेक्रेट कोड! सेसन लगआउट गर्न सकिएन। (Invalid secret code)', 'error');
+      showToast('❌ Invalid secret code! Unable to log out sessions.', 'error');
       return;
     }
 
@@ -3931,10 +3937,10 @@ export default function App() {
       // Refresh admin key list
       fetchAdminKeys();
 
-      showToast('⚡ सफलता: प्लेटफर्मका सबै युजर डिभाइस र सेसनहरु लगआउट गराइयो! (All active user devices & sessions logged out!)', 'success');
+      showToast('⚡ Success: All active user devices and sessions logged out!', 'success');
     } catch (err) {
       console.error('Failed to reset all user sessions:', err);
-      showToast('सबै सेसन लगआउट गर्दा त्रुटि भयो।', 'error');
+      showToast('An error occurred while logging out all sessions.', 'error');
     }
   };
 
@@ -4136,20 +4142,20 @@ export default function App() {
     const setter = targetSetter || setActivationCodeInput;
     try {
       if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
-        showToast('कृपया इनपुट बक्समा लामो समय थिचेर पेस्ट गर्नुहोस् (Please long-press the input box to paste)', 'info');
+        showToast('Please long-press the input box to paste.', 'info');
         return;
       }
       const text = await navigator.clipboard.readText();
       if (!text || !text.trim()) {
-        showToast('क्लिपबोर्ड खाली छ! पहिले आफ्नो कोड कपी गर्नुहोस् (Clipboard is empty. Copy your code first)', 'error');
+        showToast('Clipboard is empty. Copy your code first.', 'error');
         return;
       }
       const cleaned = extractAndCleanCode(text);
       setter(cleaned);
-      showToast(`📋 कोड पेस्ट गरियो: ${cleaned}`, 'success');
+      showToast(`📋 Code pasted: ${cleaned}`, 'success');
     } catch (err) {
       console.warn('Clipboard read error or permission denied:', err);
-      showToast('क्लिपबोर्ड अनुमति अस्वीकार गरियो। कृपया इनपुट बक्समा सिधै पेस्ट गर्नुहोस् (Please paste directly into the input box)', 'info');
+      showToast('Clipboard permission denied. Please paste directly into the input box.', 'info');
     }
   }, [showToast]);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
@@ -4288,7 +4294,7 @@ export default function App() {
     const currentIndex = angles.indexOf(videoRotation);
     const nextDeg = angles[currentIndex === -1 ? 1 : (currentIndex + 1) % angles.length];
     setVideoRotation(nextDeg);
-    showToast(`भिडियो Rotation: ${nextDeg}°`, 'info');
+    showToast(`Video Rotation: ${nextDeg}°`, 'info');
     resetOverlayControlsTimer(1800);
   };
 
@@ -4495,7 +4501,7 @@ export default function App() {
   // Contact Form state
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
-  const [contactCourse, setContactCourse] = useState('General Inquiry / सामान्य सोधपुछ');
+  const [contactCourse, setContactCourse] = useState('General Inquiry');
   const [contactMsg, setContactMsg] = useState('');
 
   // Ask & Live Support unread badge counts
@@ -4598,7 +4604,7 @@ export default function App() {
       targetCourse?.includeLive === true
     );
     if (!isAllowed) {
-      showToast('तपाईंलाई Live Session बनाउने अनुमति छैन।', 'error');
+      showToast('You do not have permission to create Live Sessions.', 'error');
       return;
     }
 
@@ -4639,7 +4645,7 @@ export default function App() {
         const liveNotif: PushNotificationItem = cleanUndefined({
           id: notifRef.id,
           title: `🎥 Live Class: ${data.title}`,
-          body: `${data.courseTitle}${scheduleHint ? ` (${scheduleHint})` : ''} — कक्षामा Join गर्न आफ्नो Course Section -> Live Session खोल्नुहोस्।`,
+          body: `${data.courseTitle}${scheduleHint ? ` (${scheduleHint})` : ''} — Open Course Section -> Live Session to join the class.`,
           type: 'live' as const,
           badge: data.status === 'live' ? 'LIVE NOW' : 'LIVE SCHEDULED',
           target: 'course_students' as const,
@@ -4668,7 +4674,7 @@ export default function App() {
     const target = liveSessions.find(s => s.id === sessionId);
     const isAllowed = isMainAdmin || (isSubAdmin && target && target.courseId === subAdminSession?.courseId);
     if (!isAllowed) {
-      showToast('तपाईंलाई यो Live Session मेटाउने अनुमति छैन।', 'error');
+      showToast('You do not have permission to delete this Live Session.', 'error');
       return;
     }
     try {
@@ -4708,7 +4714,7 @@ export default function App() {
     if (fullscreenVideo && fullscreenVideo.courseId && !isUserAdminSession) {
       if (!activeCourseIds.includes(fullscreenVideo.courseId)) {
         setFullscreenVideo(null);
-        showToast('⚠️ कोर्षको म्याद समाप्त भएकोले भिडियो बन्द गरिएको छ (Access expired).', 'error');
+        showToast('⚠️ Video closed because your course access has expired.', 'error');
       }
     }
   }, [activeCourseIds, fullscreenVideo, isUserAdminSession]);
@@ -4798,7 +4804,7 @@ export default function App() {
       c => activeCourseIds.includes(c.id) && !secondaryCourseIds.includes(c.id) && !c.includeLive && c.includeCertificate !== false
     );
     if (enrolledCourses.length === 0) {
-      showToast('🔒 प्रमाणपत्र केवल Certificate समावेश सक्रिय कोर्सका विद्यार्थीहरूका लागि मात्र उपलब्ध छ।', 'error');
+      showToast('🔒 Certificates are only available to students enrolled in certificate-enabled courses.', 'error');
       if (activeCourseIds.length === 0) {
         setShowCodeInputModal(true);
       }
@@ -4808,7 +4814,7 @@ export default function App() {
     const effectivePhoto = userAvatar || localStorage.getItem('clipzone_student_avatar') || '';
     const hasPhoto = Boolean(effectivePhoto && (effectivePhoto.startsWith('data:') || effectivePhoto.startsWith('http')));
     if (!hasPhoto) {
-      showToast('📸 प्रमाणपत्र हेर्नका लागि कृपया पहिले आफ्नो फोटो अपलोड गर्नुहोस् (Photo upload required for certificate)!', 'info');
+      showToast('📸 Please upload your profile photo first to view your certificate!', 'info');
       setCurrentView('account');
       setTimeout(() => {
         avatarFileInputRef.current?.click();
@@ -5031,119 +5037,126 @@ export default function App() {
     }
   }, [currentUser, isUserAdminSession, allActivationKeys, userActivationKeys, authName, activeSubAdmins, activeCourseIds, courses]);
 
-  // PWA Installation states
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
+  // PWA Download Advertisement & Install Modal states
+  const [showPwaAdModal, setShowPwaAdModal] = useState<boolean>(false);
+  const [pwaAdDismissedThisVisit, setPwaAdDismissedThisVisit] = useState<boolean>(false);
   const [showPwaInstallModal, setShowPwaInstallModal] = useState<boolean>(false);
   const [isInstallingPwa, setIsInstallingPwa] = useState<boolean>(false);
-  const [showInstallBanner, setShowInstallBanner] = useState<boolean>(true);
-  const [isIOS, setIsIOS] = useState<boolean>(false);
+  const pageOpenedAtRef = useRef<number>(Date.now());
+  const prevAppInstalledRef = useRef<boolean>(isAppInstalled);
 
+  // Check query params for deep-link / PWA shortcuts (e.g. ?tab=course or ?tab=classroom)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const userAgent = window.navigator.userAgent.toLowerCase();
-      const iosDevice = /iphone|ipad|ipod/.test(userAgent);
-      setIsIOS(iosDevice);
-
-      const inApp = checkIsAppMode();
-      setIsRunningInAppMode(inApp);
-      if (inApp) {
-        setIsAppInstalled(true);
-      }
-
-      // Check query params for deep-link / PWA shortcuts (e.g. ?tab=course or ?tab=classroom)
-      if (typeof window !== 'undefined') {
-        const searchParams = new URLSearchParams(window.location.search);
-        const tab = searchParams.get('tab');
-        if (tab === 'course' || tab === 'classroom') {
-          setCurrentView('classroom');
-        } else if (tab === 'home' || tab === 'courses') {
-          setCurrentView('home');
-        }
-      }
+    if (typeof window === 'undefined') return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const tab = searchParams.get('tab');
+    if (tab === 'course' || tab === 'classroom') {
+      setCurrentView('classroom');
+    } else if (tab === 'home' || tab === 'courses') {
+      setCurrentView('home');
     }
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    const handleAppInstalled = () => {
-      setIsAppInstalled(true);
-      setDeferredPrompt(null);
-      showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Successfully Installed!`, 'success');
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
   }, []);
 
-  const handleInstallPwa = async () => {
-    if (isAppInstalled) {
-      showToast(`✅ ${siteSettings.instituteName || 'HamroLms'} App is already installed on your device!`, 'success');
-      return;
-    }
-    if (deferredPrompt) {
-      try {
-        deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-        if (choiceResult?.outcome === 'accepted') {
-          showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
-          setIsAppInstalled(true);
-        }
-        setDeferredPrompt(null);
-        return;
-      } catch (err) {
-        console.warn('Install prompt error:', err);
+  // Toast & auto-hide whenever app finishes installing
+  useEffect(() => {
+    if (!prevAppInstalledRef.current && isAppInstalled) {
+      setShowPwaAdModal(false);
+      setShowPwaInstallModal(false);
+      setIsInstallingPwa(false);
+      if (!isRunningInAppMode && !checkIsAppMode()) {
+        showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Successfully Installed!`, 'success');
       }
     }
+    prevAppInstalledRef.current = isAppInstalled;
+  }, [isAppInstalled, isRunningInAppMode, siteSettings.instituteName]);
+
+  // Show PWA Download Advertisement 5 seconds after opening website ONLY when app is NOT installed
+  // Automatically hides in App mode & when installed on website; re-appears on website if user deletes the app
+  useEffect(() => {
+    if (
+      isRunningInAppMode ||
+      checkIsAppMode() ||
+      isAppInstalled ||
+      !isInstallCheckComplete ||
+      pwaAdDismissedThisVisit ||
+      showPwaInstallModal
+    ) {
+      if (isRunningInAppMode || checkIsAppMode() || isAppInstalled) {
+        setShowPwaAdModal(false);
+      }
+      return;
+    }
+
+    const elapsedMs = Date.now() - pageOpenedAtRef.current;
+    const delayMs = Math.max(1000, 5000 - elapsedMs);
+    const timer = window.setTimeout(() => {
+      if (!checkIsAppMode() && !isAppInstalled) {
+        setShowPwaAdModal(true);
+      }
+    }, delayMs);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    isRunningInAppMode,
+    isAppInstalled,
+    isInstallCheckComplete,
+    pwaAdDismissedThisVisit,
+    showPwaInstallModal,
+  ]);
+
+  const handleDownloadFromAd = async () => {
+    setShowPwaAdModal(false);
+    if (isRunningInAppMode || checkIsAppMode() || isAppInstalled) {
+      return;
+    }
+
+    // Open the Install App dialog where the user gets the direct Install option
+    if (canPromptNativeInstall) {
+      setIsInstallingPwa(true);
+      const outcome = await promptNativeInstall();
+      setIsInstallingPwa(false);
+      if (outcome === 'accepted') {
+        showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
+        return;
+      }
+      if (outcome === 'dismissed') {
+        setPwaAdDismissedThisVisit(true);
+        return;
+      }
+    }
+
     setShowPwaInstallModal(true);
   };
 
+  const handleDismissPwaAd = () => {
+    setShowPwaAdModal(false);
+    setPwaAdDismissedThisVisit(true);
+  };
+
   const handleConfirmInstallModal = async () => {
-    if (deferredPrompt) {
-      try {
-        deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-        if (choiceResult?.outcome === 'accepted') {
-          showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
-          setIsAppInstalled(true);
-          setShowPwaInstallModal(false);
-          setDeferredPrompt(null);
-          return;
-        }
-        setDeferredPrompt(null);
-      } catch (e) {
-        console.warn('Install prompt error:', e);
+    if (canPromptNativeInstall) {
+      setIsInstallingPwa(true);
+      const outcome = await promptNativeInstall();
+      setIsInstallingPwa(false);
+      if (outcome === 'accepted') {
+        showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
+        setShowPwaInstallModal(false);
+        return;
+      }
+      if (outcome === 'dismissed') {
+        setShowPwaInstallModal(false);
+        setPwaAdDismissedThisVisit(true);
+        return;
       }
     }
-
-    const isInIframe = typeof window !== 'undefined' && window.top !== window.self;
-    if (isInIframe) {
-      window.open(window.location.href, '_blank');
-      showToast('📲 Full Tab मा खुल्यो! Chrome Menu (⋮) -> "Add to Home Screen" थिच्नुहोस्!', 'info');
-      setShowPwaInstallModal(false);
-      return;
-    }
-
-    setIsInstallingPwa(true);
-    setTimeout(() => {
-      setIsInstallingPwa(false);
-      setShowPwaInstallModal(false);
-      setIsAppInstalled(true);
-      showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} App Added to Home Screen!`, 'success');
-    }, 1000);
+    setShowPwaInstallModal(false);
+    setPwaAdDismissedThisVisit(true);
   };
 
   // Trigger Edit Course Form
   const handleEditCourseClick = (course: Course) => {
     if (!canEditCourse(course.id)) {
-      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
+      showToast('You are only permitted to edit your assigned course.', 'error');
       return;
     }
     const freeCourse = isCourseFree(course);
@@ -5161,7 +5174,7 @@ export default function App() {
     setFormIncludeLive(Boolean(course.includeLive));
     setFormIncludeCertificate(course.includeCertificate !== false);
     setFormIsHidden(Boolean(course.isHidden));
-    setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
+    setFormLanguage(course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English');
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
     setFormPdfs(course.pdfs && Array.isArray(course.pdfs) ? [...course.pdfs] : []);
@@ -5171,7 +5184,7 @@ export default function App() {
   // Trigger Create Course Form (MAIN ADMIN ONLY)
   const handleCreateCourseClick = () => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र नयाँ कोर्ष थप्न सक्छ।', 'error');
+      showToast('Only Main Admin can add new courses.', 'error');
       return;
     }
     setEditingCourse(null);
@@ -5188,7 +5201,7 @@ export default function App() {
     setFormIncludeLive(false);
     setFormIncludeCertificate(true);
     setFormIsHidden(false);
-    setFormLanguage('Hindi & Nepali');
+    setFormLanguage('English');
     setFormLearnText('');
     setFormVideos([]);
     setFormPdfs([]);
@@ -5234,11 +5247,11 @@ export default function App() {
   const handleCourseFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingCourse && !isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र नयाँ कोर्ष थप्न सक्छ।', 'error');
+      showToast('Only Main Admin can add new courses.', 'error');
       return;
     }
     if (editingCourse && !canEditCourse(editingCourse.id)) {
-      showToast('तपाईंलाई केवल आफ्नो तोकिएको कोर्ष मात्र सम्पादन गर्ने अनुमति छ।', 'error');
+      showToast('You are only permitted to edit your assigned course.', 'error');
       return;
     }
 
@@ -5296,7 +5309,7 @@ export default function App() {
       includeLive: isMainAdmin ? formIncludeLive : Boolean(editingCourse?.includeLive),
       includeCertificate: isMainAdmin ? formIncludeCertificate : (editingCourse?.includeCertificate ?? true),
       isHidden: isMainAdmin ? formIsHidden : Boolean(editingCourse?.isHidden),
-      language: formLanguage.trim() || 'Hindi & Nepali',
+      language: (formLanguage.trim() && !/nepali|hindi/i.test(formLanguage)) ? formLanguage.trim() : 'English',
       order: currentOrder,
       videos: formVideos,
       pdfs: formPdfs
@@ -5343,7 +5356,7 @@ export default function App() {
   // Delete Course (MAIN ADMIN ONLY)
   const handleDeleteCourse = async (courseId: string) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्ष मेटाउन सक्छ।', 'error');
+      showToast('Only Main Admin can delete courses.', 'error');
       return;
     }
     try {
@@ -5425,7 +5438,7 @@ export default function App() {
         console.warn('Config deleted ids set error:', e);
       }
 
-      showToast('कोर्ष स्थायी रूपमा हटाइयो! (Course permanently deleted!)', 'success');
+      showToast('Course permanently deleted!', 'success');
     } catch (err) {
       console.error('Failed to delete course:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -5437,12 +5450,12 @@ export default function App() {
   // Trigger Confirmation & Permission Prompt before deleting any course (MAIN ADMIN ONLY)
   const handlePromptDeleteCourse = (courseId: string) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्ष मेटाउन सक्छ।', 'error');
+      showToast('Only Main Admin can delete courses.', 'error');
       return;
     }
     const target = courses.find(c => c.id === courseId) || null;
     if (!target) {
-      showToast('कोर्ष फेला परेन (Course not found)', 'error');
+      showToast('Course not found.', 'error');
       return;
     }
     setCourseToDelete(target);
@@ -5454,7 +5467,7 @@ export default function App() {
     if (!isMainAdmin) return;
     if (!courseToDelete) return;
     if (deleteConfirmInput.trim().toUpperCase() !== 'DELETE') {
-      showToast('कृपया मेटाउन पुष्टि गर्न DELETE टाइप गर्नुहोस्! (Type DELETE to confirm)', 'error');
+      showToast('Please type DELETE to confirm deletion!', 'error');
       return;
     }
 
@@ -5473,7 +5486,7 @@ export default function App() {
   // Handle Batch Deletion of multiple courses at once in a single bulk operation (MAIN ADMIN ONLY)
   const handleBatchDeleteCourses = async (courseIds: string[]) => {
     if (!isMainAdmin) {
-      showToast('केवल Main Admin ले मात्र कोर्ष मेटाउन सक्छ।', 'error');
+      showToast('Only Main Admin can delete courses.', 'error');
       return;
     }
     if (!courseIds || courseIds.length === 0) return;
@@ -5558,7 +5571,7 @@ export default function App() {
         console.warn('Config deleted ids set error:', e);
       }
 
-      showToast(`${courseIds.length} वटा कोर्षहरू सफलतापूर्वक हटाइयो! (${courseIds.length} courses deleted!)`, 'success');
+      showToast(`${courseIds.length} courses deleted successfully!`, 'success');
     } catch (err) {
       console.error('Failed to batch delete courses:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -5676,7 +5689,7 @@ export default function App() {
   const handleSendContactMessage = (e: FormEvent) => {
     e.preventDefault();
     if (!contactName.trim() || !contactMsg.trim()) {
-      showToast('कृपया तपाईंको नाम र सन्देश लेख्नुहोस्!', 'error');
+      showToast('Please enter your name and message!', 'error');
       return;
     }
     const fullMessage = `Name: ${contactName}\nPhone: ${contactPhone || 'N/A'}\nSelected Course: ${contactCourse}\nMessage: ${contactMsg}`;
@@ -5686,9 +5699,9 @@ export default function App() {
     // Clear Inputs
     setContactName('');
     setContactPhone('');
-    setContactCourse('General Inquiry / सामान्य सोधपुछ');
+    setContactCourse('General Inquiry');
     setContactMsg('');
-    showToast('तपाईंको सन्देश WhatsApp मा पठाइयो।', 'success');
+    showToast('Your message has been prepared on WhatsApp.', 'success');
   };
 
   // WhatsApp Number & Purchase helper
@@ -5701,7 +5714,7 @@ export default function App() {
   const getWhatsappPurchaseUrl = (course: Course) => {
     const effPayment = getEffectivePaymentConfig(course);
     const number = getFormattedWhatsappNumber(effPayment.whatsappNumber);
-    const text = course.message || `नमस्ते! म "${course.title}" (${course.price}) खरिद गर्न चाहन्छु। कृपया मलाई भुक्तानी विवरण र Secret Activation Key पठाइदिनुहोस्।`;
+    const text = course.message || `Hello! I want to enroll in "${course.title}" (${course.price}). Please share the payment details and Secret Activation Key.`;
     return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
   };
 
@@ -5957,7 +5970,7 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="py-4 text-center text-zinc-400 text-xs">
-                        <p className="font-semibold text-zinc-300">कुनै कोर्ष भेटिएन</p>
+                        <p className="font-semibold text-zinc-300">No Courses Found</p>
                         <p className="text-[11px] text-zinc-500 mt-0.5">No courses matching "{courseSearchQuery}"</p>
                       </div>
                     )}
@@ -6148,7 +6161,7 @@ export default function App() {
                   ) : (
                     <div className="text-center py-10 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-3">
                       <p className="text-sm font-bold text-zinc-300">
-                        यस कोर्षमा Live Session उपलब्ध छैन।
+                        No Live Sessions are available for this course.
                       </p>
                       <button
                         type="button"
@@ -6365,7 +6378,7 @@ export default function App() {
                     {siteSettings.instituteName || 'HamroLms'} 🇳🇵
                   </h3>
                   <p className="text-xs text-zinc-400 leading-relaxed max-w-sm mx-auto">
-                    तपाईंको भिडियो कोर्सहरू अनलक गर्न र विद्यार्थी खाता खोल्न एडमिनबाट प्राप्त <strong>Secret Activation Code</strong> यहाँ राख्नुहोस्:
+                    Enter the <strong>Secret Activation Code</strong> provided by your admin below to unlock your video courses and sign in:
                   </p>
                 </div>
 
@@ -6379,13 +6392,13 @@ export default function App() {
                   <div className="space-y-2 text-left">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase text-blue-400 tracking-wider">
-                        Secret Activation Code (सेक्रेट कोड) *
+                        Secret Activation Code *
                       </label>
                       <button
                         type="button"
                         onClick={() => handlePasteCodeToInput()}
                         className="text-[11px] font-extrabold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                        title="Paste code from clipboard"
                       >
                         <ClipboardPaste className="w-3.5 h-3.5 text-blue-400" />
                         <span>📋 Paste Code</span>
@@ -6404,7 +6417,7 @@ export default function App() {
                             e.preventDefault();
                             const clean = extractAndCleanCode(pasted);
                             setActivationCodeInput(clean);
-                            showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                            showToast(`📋 Code pasted: ${clean}`, 'success');
                           }
                         }}
                         placeholder="CLIP-XXXXXX"
@@ -6439,7 +6452,7 @@ export default function App() {
                     </div>
 
                     <p className="text-[11px] text-zinc-400 font-medium">
-                      💡 सजिलै <strong>Paste</strong> बटन थिच्नुहोस् वा आफ्नो कोड टाइप गर्नुहोस्।
+                      💡 Click <strong>Paste</strong> or type your activation code above.
                     </p>
                   </div>
 
@@ -6468,7 +6481,7 @@ export default function App() {
                     }}
                     className="text-xs text-blue-400 hover:text-blue-300 font-bold transition cursor-pointer"
                   >
-                    कोर्सहरू हेर्नुहोस् (Browse Available Courses) →
+                    Browse Available Courses →
                   </button>
                 </div>
               </div>
@@ -6485,7 +6498,7 @@ export default function App() {
                           type="button"
                           onClick={() => avatarFileInputRef.current?.click()}
                           className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-zinc-900 ring-2 ring-zinc-700/80 group-hover:ring-blue-500/80 overflow-hidden flex items-center justify-center relative cursor-pointer transition active:scale-95"
-                          title="फोटो परिवर्तन गर्नुहोस्"
+                          title="Change photo"
                         >
                           {userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data:')) ? (
                             <img
@@ -6507,7 +6520,7 @@ export default function App() {
                           type="button"
                           onClick={() => avatarFileInputRef.current?.click()}
                           className="absolute -bottom-0.5 -right-0.5 bg-zinc-900 hover:bg-blue-600 text-zinc-200 hover:text-white p-1.5 rounded-full border border-zinc-700 ring-2 ring-zinc-950 cursor-pointer transition"
-                          title="फोटो अपलोड गर्नुहोस्"
+                          title="Upload photo"
                         >
                           <Camera className="w-3 h-3" />
                         </button>
@@ -6532,7 +6545,7 @@ export default function App() {
                                 localStorage.removeItem('clipzone_student_avatar');
                               } catch (e) {}
                               syncStudentAvatarToFirestore('');
-                              showToast('फोटो हटाइयो', 'info');
+                              showToast('Photo removed', 'info');
                             }}
                             className="text-[11px] text-zinc-500 hover:text-rose-400 transition cursor-pointer font-medium"
                           >
@@ -6586,7 +6599,7 @@ export default function App() {
 
                   {activeCourseIds.length === 0 ? (
                     <div className="bg-zinc-950 p-7 rounded-2xl border border-zinc-800/80 text-center space-y-3">
-                      <p className="text-xs text-zinc-400 font-medium">कुनै सक्रिय कोर्ष छैन।</p>
+                      <p className="text-xs text-zinc-400 font-medium">No active courses yet.</p>
                       <button
                         type="button"
                         onClick={() => {
@@ -6785,6 +6798,14 @@ export default function App() {
                   <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition" />
                 </a>
               </div>
+            )}
+
+            {(!authLoading || hasStudentProfile) && (
+              <ProfileDetailsFaqSection
+                locale={activeLocale}
+                supportEmail={siteSettings.supportEmail || 'support.hamrolms@gmail.com'}
+                onNavigatePath={navigateToPath}
+              />
             )}
           </section>
         ) : (
@@ -6991,8 +7012,8 @@ export default function App() {
                             </h4>
                             <p className="text-xs text-zinc-400 font-medium font-sans">
                               {hasChapters
-                                ? 'कुनै पनि Chapter मा क्लिक गरेर त्यस भित्रका भिडियो कक्षाहरू हेर्नुहोस्!'
-                                : 'कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!'}
+                                ? 'Click any Chapter below to view its video lectures!'
+                                : 'Click any video lecture below to start watching in Full Screen!'}
                             </p>
                           </div>
 
@@ -7067,7 +7088,7 @@ export default function App() {
                                 : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
                             }`}
                           >
-                            <span>🎬 भिडियो कक्षाहरू (Videos)</span>
+                            <span>🎬 Video Lectures</span>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${classroomTab === 'videos' ? 'bg-zinc-950 text-blue-300' : 'bg-zinc-800 text-zinc-400'}`}>
                               {activePlaylist.length}
                             </span>
@@ -7083,7 +7104,7 @@ export default function App() {
                             }`}
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>📕 अध्ययन सामग्री र PDF नोटहरू (PDFs & Notes)</span>
+                            <span>📕 Study Materials (PDFs & Notes)</span>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${classroomTab === 'pdfs' ? 'bg-zinc-950 text-blue-300' : 'bg-zinc-800 text-zinc-400'}`}>
                               {currentClassroomCourse.pdfs?.length || 0}
                             </span>
@@ -7103,7 +7124,7 @@ export default function App() {
                                       Direct Video Lecture Manager
                                     </span>
                                     <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
-                                      Course Edit नखोली सिधै यहीँबाट नयाँ Video Lecture वा Chapter थप्नुहोस्।
+                                      Add a new Video Lecture or Chapter directly here without opening Edit Course.
                                     </p>
                                   </div>
                                   <button
@@ -7142,13 +7163,13 @@ export default function App() {
                                   >
                                     <div>
                                       <label className="block text-[10px] font-black uppercase tracking-wider text-blue-400 mb-1">
-                                        Chapter Name (Optional — Chapter-wise को लागि मात्र)
+                                        Chapter Name (Optional — for Chapter-wise organization)
                                       </label>
                                       <input
                                         type="text"
                                         value={directVideoChapter}
                                         onChange={(e) => setDirectVideoChapter(e.target.value)}
-                                        placeholder="e.g. Chapter 1: Introduction (खाली छोडेमा सिधै भिडियो लिस्टमा बस्नेछ)"
+                                        placeholder="e.g. Chapter 1: Introduction (leave blank for flat list)"
                                         className="w-full bg-black border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-hidden placeholder:text-zinc-600"
                                       />
                                       {existingChapterNames.length > 0 && (
@@ -7315,11 +7336,11 @@ export default function App() {
                             ) : (
                               <div className="text-center py-12 bg-zinc-950/80 rounded-2xl border border-zinc-800 p-6 space-y-2">
                                 <div className="text-3xl">📹</div>
-                                <h5 className="text-sm font-bold text-zinc-300 font-sans">कुनै भिडियो लेक्चरहरू उपलब्ध छैनन्</h5>
+                                <h5 className="text-sm font-bold text-zinc-300 font-sans">No Video Lectures Available</h5>
                                 <p className="text-xs text-zinc-500 font-sans">
                                   {canDirectEditThisCourse
-                                    ? 'माथि रहेको "+ Add Video Lecture" बटनमा क्लिक गरी सिधै भिडियो थप्नुहोस्।'
-                                    : 'एडमिनले प्लेलिस्टमा भिडियो थपेपछि यहाँ देखिनेछ। (Videos added by admin will appear here.)'}
+                                    ? 'Click the "+ Add Video Lecture" button above to add videos directly.'
+                                    : 'Videos added by the instructor will appear here.'}
                                 </p>
                               </div>
                             )}
@@ -7337,10 +7358,10 @@ export default function App() {
                                 </div>
                                 <div>
                                   <h5 className="text-xs font-black text-white">
-                                    Google Drive PDF अध्ययन सामग्री (Direct Notes Viewer)
+                                    Google Drive PDF Study Materials (Direct Notes Viewer)
                                   </h5>
                                   <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
-                                    विद्यार्थीहरूले Google Drive लगइन नगरिकनै सिधै पढ्न वा सुरक्षित डाउनलोड गर्न सक्छन्।
+                                    Students can read PDF notes directly in full screen without signing in to Google Drive.
                                   </p>
                                 </div>
                               </div>
@@ -7398,7 +7419,7 @@ export default function App() {
                                         className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-md shadow-blue-500/20 cursor-pointer"
                                       >
                                         <Maximize2 className="w-4 h-4" />
-                                        <span>Full Screen मा पढ्नुहोस्</span>
+                                        <span>Read in Full Screen</span>
                                       </button>
                                     </div>
                                   </motion.div>
@@ -7409,9 +7430,9 @@ export default function App() {
                                 <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto text-xl border border-blue-500/20">
                                   <FileText className="w-6 h-6" />
                                 </div>
-                                <h5 className="text-sm font-bold text-zinc-300 font-sans">यस कोर्षमा अहिले कुनै PDF नोट उपलब्ध छैन</h5>
+                                <h5 className="text-sm font-bold text-zinc-300 font-sans">No PDF Notes Available Yet</h5>
                                 <p className="text-xs text-zinc-500 font-sans max-w-sm mx-auto">
-                                  एडमिनले Google Drive बाट PDF नोटहरू लिङ्क गरेपछि यहाँ सिधै Full Screen मा पढ्न सकिनेछ।
+                                  Once the instructor links Google Drive PDF notes, you can read them directly in Full Screen here.
                                 </p>
                                 {canEditCourse(currentClassroomCourse.id) && (
                                   <button
@@ -7454,13 +7475,13 @@ export default function App() {
                   <div className="space-y-2">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-black uppercase tracking-wider">
                       <Clock className="w-3.5 h-3.5" />
-                      Course Access Expired • म्याद समाप्त भयो
+                      Course Access Expired
                     </span>
                     <h4 className="text-xl sm:text-2xl font-black text-white font-sans">
-                      तपाईंको कोर्षको म्याद समाप्त भएको छ
+                      Your Course Access Has Expired
                     </h4>
                     <p className="text-xs text-zinc-300 leading-relaxed font-medium max-w-sm mx-auto">
-                      तपाईंको कोर्षको समयावधि सकिएको छ। पुनः भिडियो कक्षाहरू हेर्न नयाँ Secret Activation Code राख्नुहोस् वा एडमिनसँग सम्पर्क गर्नुहोस्।
+                      Your access period for this course has ended. Enter a new Secret Activation Code or contact the admin to continue watching.
                     </p>
                   </div>
 
@@ -7485,13 +7506,13 @@ export default function App() {
                   <form onSubmit={handleClaimActivationCode} className="space-y-3 pt-2 text-left">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-black uppercase tracking-wider text-zinc-300">
-                        नयाँ सेक्रेट कोड राख्नुहोस् (Enter New Secret Code)
+                        Enter New Secret Code
                       </label>
                       <button
                         type="button"
                         onClick={() => handlePasteCodeToInput()}
                         className="text-[11px] font-extrabold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-                        title="Clipboard बाट कोड Paste गर्नुहोस्"
+                        title="Paste code from clipboard"
                       >
                         <ClipboardPaste className="w-3.5 h-3.5" />
                         <span>📋 Paste</span>
@@ -7509,7 +7530,7 @@ export default function App() {
                             e.preventDefault();
                             const clean = extractAndCleanCode(pasted);
                             setActivationCodeInput(clean);
-                            showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                            showToast(`📋 Code pasted: ${clean}`, 'success');
                           }
                         }}
                         placeholder="CLIP-XXXXXX"
@@ -7660,7 +7681,7 @@ export default function App() {
             <div className="w-16 h-16 bg-rose-950/60 border border-rose-800/60 text-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner">
               <AlertTriangle className="w-8 h-8" />
             </div>
-            <h4 className="text-xl font-black text-white font-sans">कोर्षहरू लोड गर्न समस्या भयो</h4>
+            <h4 className="text-xl font-black text-white font-sans">Unable to Load Courses</h4>
             <p className="text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
               {coursesLoadError}
             </p>
@@ -7668,7 +7689,7 @@ export default function App() {
               onClick={() => refreshCoursesFromServer(true)}
               className="mt-6 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 cursor-pointer transition active:scale-95"
             >
-              <RotateCw className="w-4 h-4" /> पुन: प्रयास गर्नुहोस् (Retry)
+              <RotateCw className="w-4 h-4" /> Retry
             </button>
           </div>
         ) : (courses && courses.length > 0) ? (
@@ -7772,7 +7793,7 @@ export default function App() {
                           ) : userActivationKeys.some((k: any) => (k.courseId === course.id || (k.courseTitle && k.courseTitle.toLowerCase() === course.title.toLowerCase())) && isCourseKeyExpired(k)) ? (
                             <span className="bg-rose-950/80 text-rose-300 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-rose-500/40 flex items-center gap-1.5 shadow-2xs">
                               <Clock className="w-3 h-3 text-rose-400" />
-                              Access Expired (म्याद समाप्त)
+                              Access Expired
                             </span>
                           ) : (
                             <div className="flex items-baseline gap-2.5">
@@ -7800,7 +7821,7 @@ export default function App() {
                             );
                           })()}
                           <span className="bg-zinc-800 text-zinc-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-zinc-700">
-                            🌐 {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
+                            🌐 {course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English'}
                           </span>
                           {course.includeLive ? (
                             <span className="bg-rose-950/60 text-rose-300 text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-xl border border-rose-500/40">
@@ -7848,7 +7869,7 @@ export default function App() {
                             className="flex-1 font-black text-xs sm:text-sm py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.99] font-sans bg-rose-600 hover:bg-rose-500 text-white shadow-rose-500/20"
                           >
                             <Clock className="w-4 h-4" />
-                            Renew Course Access (म्याद नवीकरण)
+                            Renew Course Access
                           </button>
                         ) : (
                           <button
@@ -7870,7 +7891,7 @@ export default function App() {
                                   onClick={() => handleMoveCourse(course.id, 'up')}
                                   disabled={index === 0}
                                   className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-zinc-700"
-                                  title="माथि सार्नुहोस् (Move Up)"
+                                  title="Move Up"
                                   aria-label="Move course up"
                                 >
                                   <ArrowUp className="w-4 h-4" />
@@ -7880,7 +7901,7 @@ export default function App() {
                                   onClick={() => handleMoveCourse(course.id, 'down')}
                                   disabled={index === filteredHomeCourses.length - 1}
                                   className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-300 p-3 rounded-2xl transition cursor-pointer font-sans border border-zinc-700"
-                                  title="तल सार्नुहोस् (Move Down)"
+                                  title="Move Down"
                                   aria-label="Move course down"
                                 >
                                   <ArrowDown className="w-4 h-4" />
@@ -7943,13 +7964,13 @@ export default function App() {
             ) : courseSearchQuery.trim() ? (
               <div className="py-16 text-center bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-lg mx-auto">
                 <Search className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-white mb-1">कुनै कोर्ष भेटिएन</h3>
+                <h3 className="text-base font-bold text-white mb-1">No Courses Found</h3>
                 <p className="text-xs text-zinc-400 mb-4">No courses matching "{courseSearchQuery}". Try another keyword.</p>
                 <button
                   onClick={() => setCourseSearchQuery('')}
                   className="px-5 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
                 >
-                  सबै कोर्षहरू हेर्नुहोस् (View All Courses)
+                  View All Courses
                 </button>
               </div>
             ) : (
@@ -7957,9 +7978,9 @@ export default function App() {
                 <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 text-blue-400 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-5 shadow-inner">
                   🎓
                 </div>
-                <h4 className="text-xl font-black text-white font-sans">हाल कुनै पनि कोर्ष उपलब्ध छैन</h4>
+                <h4 className="text-xl font-black text-white font-sans">No Courses Currently Available</h4>
                 <p className="text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-                  नयाँ कोर्षहरू चाँडै उपलब्ध हुनेछन्। यदि तपाईंसँग Activation Code छ भने Course वा Profile ट्याबबाट कोर्ष खोल्न सक्नुहुन्छ।
+                  New courses will be available soon. If you already have an Activation Code, open it from the Course or Profile tab.
                 </p>
                 {isMainAdmin && (
                   <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -7972,14 +7993,14 @@ export default function App() {
                         }}
                         className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-5 py-3 rounded-2xl shadow-lg shadow-amber-500/20 cursor-pointer transition active:scale-95"
                       >
-                        <Eye className="w-4 h-4" /> लुकाइएका कोर्षहरू हेर्नुहोस् ({hiddenCoursesCount})
+                        <Eye className="w-4 h-4" /> View Hidden Courses ({hiddenCoursesCount})
                       </button>
                     )}
                     <button
                       onClick={handleCreateCourseClick}
                       className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 cursor-pointer transition active:scale-95"
                     >
-                      <Plus className="w-4 h-4" /> नयाँ कोर्ष थप्नुहोस् (Add New Course)
+                      <Plus className="w-4 h-4" /> Add New Course
                     </button>
                   </div>
                 )}
@@ -7991,101 +8012,26 @@ export default function App() {
               <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 text-blue-400 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-5 shadow-inner">
                 🎓
               </div>
-              <h4 className="text-xl font-black text-white font-sans">हाल कुनै पनि कोर्ष उपलब्ध छैन</h4>
+              <h4 className="text-xl font-black text-white font-sans">No Courses Currently Available</h4>
               <p className="text-sm text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-                नयाँ प्रिमियम कोर्षहरू चाँडै उपलब्ध हुनेछन्। थप जानकारीका लागि सम्पर्कमा रहनुहोला।
+                New premium courses will be available soon. Stay tuned for upcoming releases.
               </p>
               {isMainAdmin && (
                 <button
                   onClick={handleCreateCourseClick}
                   className="mt-6 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 cursor-pointer transition active:scale-95"
                 >
-                  <Plus className="w-4 h-4" /> नयाँ कोर्ष थप्नुहोस् (Add New Course)
+                  <Plus className="w-4 h-4" /> Add New Course
                 </button>
               )}
             </div>
           )}
         </section>
 
-            {/* Compact Footer with Crawlable Sitelinks */}
+            {/* Compact Footer */}
             {(currentView === 'home' || currentView === 'courses') && (
               <footer className="mt-auto pt-4">
-                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left space-y-2">
-                  <nav
-                    aria-label="Footer Site Links"
-                    className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-[11px] font-medium text-zinc-400"
-                  >
-                    <a
-                      href={buildLocalizedPath('/', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      Home
-                    </a>
-                    <a
-                      href={buildLocalizedPath('/courses', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/courses');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      Course
-                    </a>
-                    <a
-                      href={buildLocalizedPath('/privacy-policy', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/privacy-policy');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      Privacy Policy
-                    </a>
-                    <a
-                      href={buildLocalizedPath('/about-us', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/about-us');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      About Us
-                    </a>
-                    <a
-                      href={buildLocalizedPath('/learn', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/learn');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      Learn. Apply. Grow.
-                    </a>
-                    <a
-                      href={buildLocalizedPath('/instructors', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/instructors');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      Instructors
-                    </a>
-                    <a
-                      href={buildLocalizedPath('/terms', activeLocale)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigateToPath('/terms');
-                      }}
-                      className="hover:text-blue-400 transition-colors"
-                    >
-                      Terms
-                    </a>
-                  </nav>
+                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left">
                   <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <span>© {new Date().getFullYear()} HamroLms. All rights reserved.</span>
                     <span>Learn. Apply. Grow. — Structured Online Courses &amp; Certificates</span>
@@ -8149,7 +8095,7 @@ export default function App() {
                           }}
                           className="bg-purple-600/60 hover:bg-purple-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full border border-purple-400/30 transition flex items-center gap-1 cursor-pointer"
                         >
-                          🔑 + Add Course (कोड हाल्नुहोस्)
+                          🔑 + Add Course
                         </button>
                       </div>
                       {canEditCourse(selectedCourse.id) && (
@@ -8272,7 +8218,7 @@ export default function App() {
                             playlist: list,
                             courseId: selectedCourse.id,
                           });
-                          showToast(`भिडियोलाई इमर्सिभ फुलस्क्रिनमा खोलिँदैछ! 🎥`, 'success');
+                          showToast(`Opening video in immersive fullscreen! 🎥`, 'success');
                         }}
                         className="bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
                       >
@@ -8298,7 +8244,7 @@ export default function App() {
                           onClick={() => handleOpenStudentCertificate(selectedCourse.id)}
                           className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
                         >
-                          📜 View Certificate (प्रमाणपत्र)
+                          📜 View Certificate
                         </button>
                       )}
                     </div>
@@ -8494,7 +8440,7 @@ export default function App() {
                                   className="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 px-3 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                                 >
                                   <Maximize2 className="w-3.5 h-3.5" />
-                                  <span>Full Screen मा पढ्नुहोस्</span>
+                                  <span>Read in Full Screen</span>
                                 </button>
                               </div>
                             </div>
@@ -8502,9 +8448,9 @@ export default function App() {
                         ) : (
                           <div className="text-center py-10 px-3 bg-slate-950/40 rounded-xl border border-slate-800 text-slate-400 space-y-1.5">
                             <FileText className="w-7 h-7 text-slate-600 mx-auto" />
-                            <p className="text-xs font-bold text-slate-300">कुनै PDF उपलब्ध छैन</p>
+                            <p className="text-xs font-bold text-slate-300">No PDF Available</p>
                             <p className="text-[10px] text-slate-500">
-                              एडमिनले यस कोर्षमा Google Drive बाट PDF थपेपछि यहाँ बिना लगइन हेर्न सकिनेछ।
+                              Once the instructor adds Google Drive PDFs to this course, you can read them directly here without signing in.
                             </p>
                           </div>
                         )}
@@ -8520,7 +8466,7 @@ export default function App() {
                       }}
                       className="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 border border-purple-400/30 shadow-md active:scale-98"
                     >
-                      <span>🔑 Add Another Course (नयाँ कोर्ष जोड्नुहोस्)</span>
+                      <span>🔑 Add Another Course</span>
                     </button>
 
                     <div className="text-[10px] text-slate-500 font-semibold space-y-1">
@@ -8557,7 +8503,7 @@ export default function App() {
                 
                 <div className="flex items-center gap-2 mt-2">
                   <span className="bg-zinc-900 text-zinc-300 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-zinc-750 flex items-center gap-1">
-                    🌐 Language: {selectedCourse.language || (selectedCourse.id.includes('rathee') || selectedCourse.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
+                    🌐 Language: {selectedCourse.language && !/nepali|hindi/i.test(selectedCourse.language) ? selectedCourse.language : 'English'}
                   </span>
                   {selectedCourse.includeLive ? (
                     <span className="bg-zinc-900 text-rose-400 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-rose-500/30">
@@ -8576,7 +8522,7 @@ export default function App() {
 
                 <div className="mt-6 text-left">
                   <h4 className="text-xs font-black text-blue-400 uppercase tracking-wider mb-3">
-                    यो Course बाट के सिक्नुहुन्छ ?
+                    What You Will Learn
                   </h4>
                   
                   <ul className="space-y-3">
@@ -8596,8 +8542,8 @@ export default function App() {
                   <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
                   <span>
                     {isCourseFree(selectedCourse)
-                      ? 'यो कोर्ष निःशुल्क (FREE) छ — नाम र फोन नम्बर भरेर सिधै Enroll गर्न सक्नुहुन्छ।'
-                      : 'Payment गरेपछि payment screenshot send our WhatsApp and get your course access'}
+                      ? 'This course is FREE — enter your name and phone number to enroll immediately.'
+                      : 'After completing payment, send your payment screenshot on WhatsApp to receive your course access.'}
                   </span>
                 </div>
 
@@ -8614,7 +8560,7 @@ export default function App() {
                     <span>
                       {isCourseFree(selectedCourse)
                         ? 'Enroll & Activate Free Course'
-                        : 'QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)'}
+                        : 'Scan QR for Instant Payment (eSewa / Bank)'}
                     </span>
                   </button>
                 </div>
@@ -8698,7 +8644,7 @@ export default function App() {
               </div>
 
               <div className="bg-emerald-500/10 p-3.5 rounded-xl border border-emerald-500/30 text-xs text-emerald-300 font-medium leading-normal mb-6 text-left">
-                📌 <strong>भुक्तानी निर्देशन:</strong> {effectivePayment.paymentInstruction || `QR स्क्यान गरी वा eSewa ID ${effectivePayment.esewaId || '9763323268'} (${effectivePayment.accountName || 'Ayush Chaurasiya'}) मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।`}
+                📌 <strong>Payment Instructions:</strong> {effectivePayment.paymentInstruction || `Scan the QR code or transfer to eSewa ID ${effectivePayment.esewaId || '9763323268'} (${effectivePayment.accountName || 'Ayush Chaurasiya'}), then send the screenshot on WhatsApp.`}
               </div>
 
               {/* Action buttons */}
@@ -8894,7 +8840,7 @@ export default function App() {
                         e.preventDefault();
                         const clean = extractAndCleanCode(pasted);
                         setAdminCodeInput(clean);
-                        showToast(`📋 कोड पेस्ट गरियो: ${clean}`, 'success');
+                        showToast(`📋 Code pasted: ${clean}`, 'success');
                       }
                     }}
                     placeholder="Enter secret activation key..."
@@ -9030,7 +8976,7 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-base font-black text-white">Logout All User Devices</h3>
-                    <p className="text-xs text-rose-300 font-medium">सुरक्षा पुष्टि (Security Verification)</p>
+                    <p className="text-xs text-rose-300 font-medium">Security Verification</p>
                   </div>
                 </div>
                 <button
@@ -9047,10 +8993,10 @@ export default function App() {
 
               <div className="p-4 bg-rose-950/40 border border-rose-500/30 rounded-2xl text-xs text-rose-200 space-y-2">
                 <p className="font-extrabold text-rose-100">
-                  ⚠️ एडमिन चेतावनी (Admin Confirmation):
+                  ⚠️ Admin Confirmation:
                 </p>
                 <p className="leading-relaxed">
-                  के तपाईं साच्चैं प्लेटफर्मका सम्पूर्ण विद्यार्थी तथा युजरहरुका Active Devices र Sessions लगआउट गराउन चाहनुहुन्छ?
+                  Are you sure you want to log out all active user devices and sessions across the entire platform?
                 </p>
               </div>
 
@@ -9138,7 +9084,7 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-base font-black text-white">Confirm Log Out</h3>
-                    <p className="text-[11px] text-zinc-400 font-medium">सुरक्षा प्रमाणीकरण (Verification)</p>
+                    <p className="text-[11px] text-zinc-400 font-medium">Security Verification</p>
                   </div>
                 </div>
                 <button
@@ -9154,7 +9100,7 @@ export default function App() {
 
               <div className="space-y-3.5">
                 <p className="text-xs text-zinc-300 leading-relaxed font-medium">
-                  के तपाईं यो डिभाइसबाट लगआउट गर्न निश्चित हुनुहुन्छ? अगाडि बढ्नको लागि कृपया तल <span className="font-mono font-black text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900/60 tracking-wider">CONFIRM</span> टाइप गर्नुहोस्:
+                  Are you sure you want to log out from this device? Please type <span className="font-mono font-black text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900/60 tracking-wider">CONFIRM</span> below to proceed:
                 </p>
 
                 <form
@@ -9245,7 +9191,7 @@ export default function App() {
                       Confirm Course Deletion
                     </h3>
                     <p className="text-xs text-rose-300 font-medium">
-                      कोर्ष मेटाउनु अघि अनुमति पुष्टि गर्नुहोस्
+                      Confirm permission before deleting this course
                     </p>
                   </div>
                 </div>
@@ -9272,7 +9218,7 @@ export default function App() {
                     {courseToDelete.title}
                   </p>
                   <p className="text-[11px] text-rose-300 pt-1 leading-relaxed">
-                    चेतावनी: यो कोर्ष र यस अन्तर्गतका सम्पूर्ण भिडियो तथा पिडिएफ सामग्रीहरू हट्नेछन्। दुर्घटनावश मेटाउनबाट बच्न तल <span className="font-bold text-white underline">DELETE</span> टाइप गर्नुहोस्।
+                    Warning: This will permanently remove the course along with all its video lectures and PDF materials. Type <span className="font-bold text-white underline">DELETE</span> below to confirm.
                   </p>
                 </div>
 
@@ -9302,7 +9248,7 @@ export default function App() {
                   }}
                   className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
                 >
-                  Cancel (रद्द गर्नुहोस्)
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -9446,7 +9392,7 @@ export default function App() {
                   {formIsFree ? (
                     <div className="bg-emerald-950/40 border border-emerald-500/35 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black text-emerald-400">FREE Course (निःशुल्क)</p>
+                        <p className="text-xs font-black text-emerald-400">FREE Course</p>
                         <p className="text-[10px] text-emerald-200/80 font-medium mt-0.5">
                           Students enter only Name &amp; Phone Number and click Enroll to open the course immediately.
                         </p>
@@ -9502,17 +9448,17 @@ export default function App() {
 
                 {/* Course Language / Medium */}
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Course Language / Medium (कोर्षको भाषा) *</label>
+                  <label className="block text-[10px] font-black uppercase text-blue-400 mb-1.5">Course Language / Medium *</label>
                   <input 
                     type="text"
                     required
                     value={formLanguage}
                     onChange={(e) => setFormLanguage(e.target.value)}
-                    placeholder="e.g. Nepali, Hindi & Nepali, English"
+                    placeholder="e.g. English"
                     className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-white transition outline-hidden placeholder-zinc-600"
                   />
                   <div className="mt-1.5 flex gap-1.5 flex-wrap">
-                    {['Nepali', 'Hindi & Nepali', 'Nepali & English', 'Hindi', 'English'].map((langOption) => (
+                    {['English'].map((langOption) => (
                       <button
                         key={langOption}
                         type="button"
@@ -9653,7 +9599,7 @@ export default function App() {
                       <div>
                         <span>🎥 Include Live Session (Zoom Live Class)</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          सक्रिय विद्यार्थीहरूलाई Course Section मा Certificate को सट्टा Live Session देखा पर्नेछ र Sub-Admin लाई Live मेनु खुल्नेछ।
+                          Active students will see Live Session instead of Certificate in their Course section, and Sub-Admins will get access to the Live tab.
                         </span>
                       </div>
                     </label>
@@ -9668,7 +9614,7 @@ export default function App() {
                       <div>
                         <span>📜 Include Course Certificate</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          Live Session सक्रिय नभएको अवस्थामा विद्यार्थीलाई प्रमाणपत्र विकल्प देखाउन।
+                          Show the Course Certificate option to students when Live Session is disabled.
                         </span>
                       </div>
                     </label>
@@ -9683,7 +9629,7 @@ export default function App() {
                       <div>
                         <span>🙈 Hide Course from Home Screen (Private / Code-Only)</span>
                         <span className="block text-[10px] text-zinc-400 font-medium mt-0.5">
-                          यो कोर्षको thumbnail, about र जानकारी Home मा देखिने छैन, तर Sub-Admin ले Student Code बनाउन र विद्यार्थीले Code बाट पढ्न सक्नेछन्।
+                          This course's thumbnail, overview, and details will be hidden from the Home screen, while Sub-Admins can still generate Student Codes and enrolled students can access it via code.
                         </span>
                       </div>
                     </label>
@@ -9698,7 +9644,7 @@ export default function App() {
                     required
                     value={formLearnText}
                     onChange={(e) => setFormLearnText(e.target.value)}
-                    placeholder="💡 Video idea खोज्ने तरिका&#10;✍️ Script writing र storytelling&#10;🎥 Shooting र presentation&#10;✂️ Editing skills"
+                    placeholder="💡 How to find winning video ideas&#10;✍️ Script writing & storytelling&#10;🎥 Shooting & camera presentation&#10;✂️ Professional editing skills"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-800 transition outline-hidden leading-relaxed"
                   />
                 </div>
@@ -9788,7 +9734,7 @@ export default function App() {
                         Course PDF Notes & Resources ({formPdfs.length})
                       </label>
                       <p className="text-[10px] text-rose-600 font-medium mt-0.5">
-                        Google Drive PDF लिङ्क (विद्यार्थीले बिना लगइन सिधै पढ्न सक्नेछन्)
+                        Google Drive PDF Link (Students can read directly without signing in)
                       </p>
                     </div>
                     <button
@@ -9813,14 +9759,14 @@ export default function App() {
                     <p className="font-bold flex items-center gap-1 text-rose-900 mb-0.5">
                       💡 Admin Drive Upload Guide:
                     </p>
-                    Google Drive मा PDF upload गरेर <strong>"Anyone with the link can view"</strong> बनाउनुहोस् र लिङ्क यहाँ paste गर्नुहोस्। 
-                    हाम्रो प्रणालीले स्वतः Direct Viewer मा रूपान्तरण गर्दछ जसले गर्दा विद्यार्थीले Drive login नगरिकनै सिधै हेर्न र download गर्न सक्छन्।
+                    Upload your PDF to Google Drive, set sharing to <strong>"Anyone with the link can view"</strong>, and paste the link below.
+                    Our system automatically converts it into a direct viewer so students can read it without logging into Google Drive.
                   </div>
 
                   <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                     {formPdfs.length === 0 ? (
                       <div className="text-center py-5 bg-white/70 rounded-lg border border-dashed border-rose-200 text-xs text-rose-600">
-                        अहिले कुनै PDF थपिएको छैन। माथिको <strong>"+ Add PDF Note"</strong> बटन थिचेर Drive को PDF लिङ्क थप्नुहोस्।
+                        No PDFs added yet. Click <strong>"+ Add PDF Note"</strong> above to attach a Google Drive PDF link.
                       </div>
                     ) : (
                       formPdfs.map((pdf, pidx) => (
@@ -9985,7 +9931,7 @@ export default function App() {
                     handleRotateVideo();
                   }}
                   className="bg-purple-900/90 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg active:scale-95"
-                  title="Rotate Video Screen 🔄 (भिडियो घुमाउनुहोस्)"
+                  title="Rotate Video Screen 🔄"
                 >
                   <RotateCw className="w-4 h-4" />
                   <span className="font-sans font-bold">Rotate 🔄</span>
@@ -10008,7 +9954,7 @@ export default function App() {
                 <button
                   onClick={handleCloseVideo}
                   className="bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full border border-rose-500/50 transition cursor-pointer flex items-center justify-center shadow-2xl active:scale-95 z-50"
-                  title="Close Video (भिडियो बन्द गर्नुहोस्)"
+                  title="Close Video"
                 >
                   <X className="w-5 h-5 stroke-[2.5]" />
                 </button>
@@ -10046,7 +9992,7 @@ export default function App() {
                   <button
                     onClick={handleCloseVideo}
                     className="bg-rose-600 hover:bg-rose-700 text-white p-3 rounded-full border border-rose-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
-                    title="Close Video (भिडियो बन्द गर्नुहोस्)"
+                    title="Close Video"
                   >
                     <X className="w-6 h-6 stroke-[3]" />
                   </button>
@@ -10253,8 +10199,17 @@ export default function App() {
         onConfirm={handleConfirmAdjustedAvatar}
       />
 
-      {/* PWA INSTALLATION NATIVE DIALOG MATCHING USER SCREENSHOT */}
-      {showPwaInstallModal && (
+      {/* 5-SECOND WEBSITE-ONLY PWA DOWNLOAD ADVERTISEMENT */}
+      <PwaDownloadAdModal
+        isOpen={showPwaAdModal && !isRunningInAppMode && !isAppInstalled}
+        appName={siteSettings.instituteName || 'HamroLms'}
+        logoUrl={siteSettings.instituteLogoUrl?.trim() || '/logo.png'}
+        onDownloadClick={handleDownloadFromAd}
+        onClose={handleDismissPwaAd}
+      />
+
+      {/* PWA INSTALLATION DIALOG (TRIGGERED WHEN BROWSER NATIVE PROMPT NEEDS FALLBACK / APK / IOS GUIDE) */}
+      {showPwaInstallModal && !isRunningInAppMode && !isAppInstalled && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[5000] flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.92, y: 15 }}
@@ -10280,7 +10235,7 @@ export default function App() {
                 <div>
                   <h4 className="text-lg font-semibold text-white">Installing {siteSettings.instituteName || 'App'}...</h4>
                   <p className="text-xs text-blue-400 font-medium mt-1">
-                    होम स्क्रिनमा थपिँदैछ, कृपया १ सेकेन्ड पर्खनुहोस्...
+                    Adding to Home Screen, please wait a moment...
                   </p>
                 </div>
                 <div className="w-full bg-zinc-800 h-2.5 rounded-full overflow-hidden relative mt-3">
@@ -10289,8 +10244,7 @@ export default function App() {
               </div>
             ) : (
               <>
-                {/* Title */}
-                <h3 className="text-xl font-medium text-slate-100 mb-6 text-left tracking-tight">
+                <h3 className="text-xl font-medium text-slate-100 mb-5 text-left tracking-tight">
                   Install app
                 </h3>
 
@@ -10319,6 +10273,29 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Browser / Platform Install Steps when native prompt is unavailable */}
+                {!canPromptNativeInstall && (
+                  <div className="mt-4 rounded-2xl bg-zinc-900/90 border border-zinc-700/60 p-3.5 text-left text-xs text-slate-300 space-y-1.5">
+                    {isIOS ? (
+                      <>
+                        <p className="font-semibold text-white">Install on iPhone / iPad:</p>
+                        <p>1. Tap the <strong>Share</strong> icon in your Safari toolbar.</p>
+                        <p>2. Scroll down and tap <strong>Add to Home Screen</strong>.</p>
+                      </>
+                    ) : typeof window !== 'undefined' && window.top !== window.self ? (
+                      <>
+                        <p className="font-semibold text-white">Open in full browser tab to install:</p>
+                        <p>Direct app installation requires opening outside embedded preview frames.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-white">Direct Browser Install:</p>
+                        <p>Tap your browser menu (<strong>⋮</strong>) or address bar install icon and choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Direct APK Download Option if configured */}
                 {siteSettings.apkDownloadUrl && siteSettings.apkDownloadUrl.trim() && (
                   <div className="mt-4 pt-3 border-t border-zinc-700/60">
@@ -10342,17 +10319,57 @@ export default function App() {
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end gap-3 mt-6 pt-2">
                   <button
-                    onClick={() => setShowPwaInstallModal(false)}
+                    type="button"
+                    onClick={() => {
+                      setShowPwaInstallModal(false);
+                      setPwaAdDismissedThisVisit(true);
+                    }}
                     className="text-[#a8c7fa] hover:bg-white/10 text-sm font-medium px-5 py-2.5 rounded-full transition cursor-pointer active:bg-white/20"
                   >
                     Cancel
                   </button>
-                  <button
-                    onClick={handleConfirmInstallModal}
-                    className="text-[#a8c7fa] hover:bg-white/10 text-sm font-semibold px-5 py-2.5 rounded-full transition cursor-pointer active:bg-white/20"
-                  >
-                    Install
-                  </button>
+                  {canPromptNativeInstall ? (
+                    <button
+                      type="button"
+                      onClick={handleConfirmInstallModal}
+                      className="bg-[#a8c7fa] text-slate-950 hover:bg-blue-300 text-sm font-semibold px-5 py-2.5 rounded-full transition cursor-pointer"
+                    >
+                      Install
+                    </button>
+                  ) : typeof window !== 'undefined' && window.top !== window.self ? (
+                    <a
+                      href={window.location.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        setShowPwaInstallModal(false);
+                        setPwaAdDismissedThisVisit(true);
+                      }}
+                      className="bg-[#a8c7fa] text-slate-950 hover:bg-blue-300 text-sm font-semibold px-5 py-2.5 rounded-full transition cursor-pointer"
+                    >
+                      Install in Browser
+                    </a>
+                  ) : isIOS ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        markManualInstallConfirmed();
+                        setShowPwaInstallModal(false);
+                        showToast(`🎉 ${siteSettings.instituteName || 'HamroLms'} saved to Home Screen!`, 'success');
+                      }}
+                      className="bg-[#a8c7fa] text-slate-950 hover:bg-blue-300 text-sm font-semibold px-5 py-2.5 rounded-full transition cursor-pointer"
+                    >
+                      I&apos;ve Added It
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleConfirmInstallModal}
+                      className="bg-[#a8c7fa] text-slate-950 hover:bg-blue-300 text-sm font-semibold px-5 py-2.5 rounded-full transition cursor-pointer"
+                    >
+                      Got It
+                    </button>
+                  )}
                 </div>
               </>
             )}

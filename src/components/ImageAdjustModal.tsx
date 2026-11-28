@@ -239,7 +239,7 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
             {/* Subtle Helper Hint */}
             <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
               <span className="bg-black/80 backdrop-blur-xs text-[10px] text-zinc-300 font-bold px-3 py-1 rounded-full border border-white/10 shadow-md">
-                👆 फोटो तान्नुहोस् र मिलाउनुहोस् (Drag to position)
+                👆 Drag photo to adjust position
               </span>
             </div>
           </div>
@@ -296,7 +296,7 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
               onClick={onClose}
               className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-black py-3 rounded-2xl border border-zinc-800 transition cursor-pointer active:scale-98"
             >
-              रद्द गर्नुहोस् (Cancel)
+              Cancel
             </button>
 
             <button
@@ -305,7 +305,7 @@ export const ImageAdjustModal: React.FC<ImageAdjustModalProps> = ({
               className="flex-1 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/25 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>फोटो सेट गर्नुहोस् (Done)</span>
+              <span>Save Photo</span>
             </button>
           </div>
         </motion.div>

@@ -50,7 +50,7 @@ export async function signInWithGoogleForMeet(): Promise<{
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error(
-        'Google Meet permission token प्राप्त भएन। कृपया पुनः Sign in with Google गर्नुहोस्।'
+        'Could not obtain Google Meet permission token. Please sign in with Google again.'
       );
     }
     cachedMeetAccessToken = credential.accessToken;

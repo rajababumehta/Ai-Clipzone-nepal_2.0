@@ -51,10 +51,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </div>
             
             <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">
-              केही प्राविधिक समस्या आयो
+              Something went wrong
             </h1>
             <p className="text-sm text-gray-300 mb-6 leading-relaxed">
-              चिन्ता नगर्नुहोस्, तपाईंको डाटा सुरक्षित छ। कृपया एपलाई पुनः लोड गर्नुहोस्।
+              Do not worry, your data is safe. Please reload the app to continue.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -63,14 +63,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold transition active:scale-95 shadow-lg shadow-amber-500/20"
               >
                 <RefreshCw className="w-4 h-4" />
-                पुनः लोड गर्नुहोस् (Reload)
+                Reload
               </button>
               <button
                 onClick={this.handleReset}
                 className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 font-medium transition active:scale-95 border border-white/10"
               >
                 <Home className="w-4 h-4" />
-                गृहपृष्ठ (Home)
+                Home
               </button>
             </div>
           </div>

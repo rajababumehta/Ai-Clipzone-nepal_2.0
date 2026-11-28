@@ -17,7 +17,7 @@ export const CORE_INSTRUCTORS: PublicInstructorProfile[] = [
     ],
     avatarUrl: '/institute-logo.png',
     location: 'Birgunj, Nepal',
-    languages: ['English', 'Nepali', 'Hindi'],
+    languages: ['English'],
     courseIds: [
       'Ai master class course by Ai clipzone',
       'youtube-blueprint-course-by-al-clipzone',
@@ -85,7 +85,7 @@ export function buildPublicInstructors(
       bio: `${cleanName} teaches and mentors learners on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.`,
       expertise: assignedCourse?.learn?.slice(0, 4) || ['Digital Skills', 'Mentorship'],
       avatarUrl: sub.avatarUrl || '/institute-logo.png',
-      languages: assignedCourse?.language ? [assignedCourse.language] : ['English', 'Nepali'],
+      languages: assignedCourse?.language ? [assignedCourse.language] : ['English'],
       courseIds: sub.courseId ? [sub.courseId] : [],
       isFounder: false,
     });

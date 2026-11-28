@@ -233,7 +233,7 @@ export function mountSharedApiMiddlewareAndRoutes(app: Express) {
       if (!ai) {
         return res.json({
           reply:
-            'नमस्ते! 🙏 HamroLms मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।',
+            'Hello! Welcome to HamroLms. For information about our premium courses (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Keys, or eSewa payments, please contact our official WhatsApp at 976-3323268.',
         });
       }
 
@@ -269,7 +269,7 @@ Payment & Activation Flow:
 - Activation: Send payment screenshot to official WhatsApp 976-3323268 to receive instant course activation code.
 - Live Classes are available inside the website classroom for live-enabled courses; recorded courses include completion certificates.
 
-Respond concisely and politely in the user's language (Nepali or English).`;
+Respond concisely and politely in English.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -283,13 +283,13 @@ Respond concisely and politely in the user's language (Nepali or English).`;
 
       const replyText =
         response.text ||
-        'थप जानकारीका लागि कृपया हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।';
+        'For further information, please contact our official WhatsApp number at 976-3323268.';
       res.json({ reply: replyText });
     } catch (error) {
       console.error('Gemini API Error:', error);
       res.json({
         reply:
-          'नमस्ते! 🙏 HamroLms मा यहाँलाई स्वागत छ। हाम्रा प्रिमियम कोर्षहरू (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, वा eSewa भुक्तानी सम्बन्धी जानकारीका लागि सिधै हाम्रो आधिकारिक WhatsApp नम्बर 976-3323268 मा सम्पर्क गर्नुहोस्।',
+          'Hello! Welcome to HamroLms. For information about our premium courses (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Keys, or eSewa payments, please contact our official WhatsApp at 976-3323268.',
       });
     }
   });

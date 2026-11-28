@@ -31,7 +31,7 @@ export function buildOrganizationSchema(origin: string, brand: string, supportEm
         '@type': 'ContactPoint',
         email: supportEmail,
         contactType: 'customer support',
-        availableLanguage: ['English', 'Nepali', 'Hindi'],
+        availableLanguage: ['English'],
       },
     ],
     sameAs: [
@@ -42,14 +42,14 @@ export function buildOrganizationSchema(origin: string, brand: string, supportEm
   };
 }
 
-export function buildWebsiteSchema(origin: string, brand: string, locale: SupportedLocale) {
+export function buildWebsiteSchema(origin: string, brand: string, _locale: SupportedLocale) {
   return {
     '@type': 'WebSite',
     '@id': `${origin}/#website`,
-    url: `${origin}${buildLocalizedPath('/', locale)}`,
+    url: `${origin}${buildLocalizedPath('/', 'en')}`,
     name: brand,
     alternateName: ['Hamro LMS', 'HamroLms Nepal'],
-    inLanguage: locale,
+    inLanguage: 'en',
     publisher: { '@id': `${origin}/#organization` },
     potentialAction: {
       '@type': 'SearchAction',
@@ -142,7 +142,8 @@ export function buildCourseSchema(
       course.prerequisites?.join('; ') ||
       'No prior experience required; smartphone or computer with internet access.',
     educationalLevel: course.level || 'All Levels',
-    inLanguage: course.language ? [course.language] : ['en', 'ne', 'hi'],
+    inLanguage:
+      course.language && !/nepali|hindi/i.test(course.language) ? [course.language] : ['en'],
     educationalCredentialAwarded:
       course.includeCertificate !== false && !course.includeLive ? 'Certificate of Completion' : undefined,
     offers: {
@@ -255,7 +256,7 @@ export function buildArticleSchema(
     dateModified: post.updatedAt,
     articleSection: post.category,
     keywords: post.tags.join(', '),
-    inLanguage: locale,
+    inLanguage: 'en',
     author: {
       '@type': 'Person',
       name: author.name,

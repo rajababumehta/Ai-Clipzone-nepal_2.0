@@ -2,7 +2,7 @@
 // Designed to execute safely in Vercel Node serverless functions AND Express without firebase-admin/gRPC/express overhead.
 
 export const DEFAULT_PUBLIC_ORIGIN = 'https://hamrolms.vercel.app';
-export const SUPPORTED_LOCALES = ['en', 'ne', 'hi'];
+export const SUPPORTED_LOCALES = ['en'];
 const KNOWN_LOCALE_PREFIXES = ['ne', 'hi'];
 
 const FIREBASE_PROJECT_ID =
@@ -32,7 +32,7 @@ export const SEED_COURSES = [
     amount: 449,
     isFree: false,
     order: 0,
-    language: 'Hindi & Nepali',
+    language: 'English',
     instructorSlug: 'rajababu-mehta',
     instructorName: 'Rajababu Mehta',
     includeCertificate: true,
@@ -62,21 +62,21 @@ export const SEED_COURSES = [
     amount: 849,
     isFree: false,
     order: 1,
-    language: 'Hindi & Nepali',
+    language: 'English',
     instructorSlug: 'rajababu-mehta',
     instructorName: 'Rajababu Mehta',
     includeCertificate: true,
     includeLive: false,
     learn: [
-      'Channel setup र niche छनोट',
-      'Video idea खोज्ने तरिका',
-      'Script writing storytelling',
-      'Shooting presentation',
+      'Channel setup & niche selection',
+      'Finding winning video ideas',
+      'Script writing & storytelling',
+      'Shooting & presentation',
       'Editing skills',
-      'Thumbnail title',
+      'Thumbnail & title strategy',
       'YouTube growth strategy',
-      'Monetization earning methods',
-      'AI tools प्रयोग गरेर content बनाउने तरिका',
+      'Monetization & earning methods',
+      'Creating content with AI tools',
     ],
     image:
       'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png',
@@ -100,7 +100,7 @@ export const CORE_INSTRUCTORS = [
     ],
     avatarUrl: '/institute-logo.png',
     location: 'Birgunj, Nepal',
-    languages: ['English', 'Nepali', 'Hindi'],
+    languages: ['English'],
     courseIds: [
       'Ai master class course by Ai clipzone',
       'youtube-blueprint-course-by-al-clipzone',
@@ -183,77 +183,35 @@ export const SEED_BLOG_POSTS = [
   },
 ];
 
+const SEO_EN_TEXT = {
+  htmlLang: 'en',
+  homeTitle: 'HamroLms – Online Learning & Digital Skill Courses',
+  homeDescription:
+    'Learn AI tools, video editing, graphic design, and web development from verified instructors on HamroLms with structured lessons and certificates.',
+  coursesTitle: 'Course Catalog – Online Digital Skill Courses | HamroLms',
+  coursesDescription:
+    'Explore all structured online courses on HamroLms including AI tools, video editing, graphic design, and web development with certificates.',
+  aboutTitle: 'About Us – HamroLms Online Learning Platform',
+  aboutDescription:
+    'Learn about HamroLms, our verified instructors, structured video modules, study notes, and digital skill certificates for learners in Nepal and beyond.',
+  learnTitle: 'Learn. Apply. Grow. – Skill Learning Pathway | HamroLms',
+  learnDescription:
+    'Learn practical digital skills, apply them on real creative projects, and grow your career with verified certificates on HamroLms.',
+  instructorsTitle: 'Instructors & Teachers Directory | HamroLms',
+  instructorsDescription:
+    'Meet the teachers, trainers, and mentors teaching online courses in AI tools, video editing, graphic design, and web development on HamroLms.',
+  blogTitle: 'Online Learning Blog, AI Course & Skill Guides | HamroLms',
+  blogDescription:
+    'Read practical guides on AI training, video production, prompt engineering, and digital skills on the HamroLms Learning Blog.',
+  notFoundTitle: 'Page Not Found (404) | HamroLms',
+  notFoundDescription:
+    'The requested page could not be found. Browse online courses, instructors, and AI training guides on HamroLms.',
+};
+
 const SEO_LOCALE_TEXT = {
-  en: {
-    htmlLang: 'en',
-    homeTitle: 'HamroLms – Online Learning & Digital Skill Courses',
-    homeDescription:
-      'Learn AI tools, video editing, graphic design, and web development from verified instructors on HamroLms with structured lessons and certificates.',
-    coursesTitle: 'Course Catalog – Online Digital Skill Courses | HamroLms',
-    coursesDescription:
-      'Explore all structured online courses on HamroLms including AI tools, video editing, graphic design, and web development with certificates.',
-    aboutTitle: 'About Us – HamroLms Online Learning Platform',
-    aboutDescription:
-      'Learn about HamroLms, our verified instructors, structured video modules, study notes, and digital skill certificates for learners in Nepal and beyond.',
-    learnTitle: 'Learn. Apply. Grow. – Skill Learning Pathway | HamroLms',
-    learnDescription:
-      'Learn practical digital skills, apply them on real creative projects, and grow your career with verified certificates on HamroLms.',
-    instructorsTitle: 'Instructors & Teachers Directory | HamroLms',
-    instructorsDescription:
-      'Meet the teachers, trainers, and mentors teaching online courses in AI tools, video editing, graphic design, and web development on HamroLms.',
-    blogTitle: 'Online Learning Blog, AI Course & Skill Guides | HamroLms',
-    blogDescription:
-      'Read practical guides on AI training, video production, prompt engineering, and digital skills on the HamroLms Learning Blog.',
-    notFoundTitle: 'Page Not Found (404) | HamroLms',
-    notFoundDescription:
-      'The requested page could not be found. Browse online courses, instructors, and AI training guides on HamroLms.',
-  },
-  ne: {
-    htmlLang: 'ne',
-    homeTitle: 'HamroLms – अनलाइन कोर्ष र डिजिटल सीप सिकाइ प्लेटफर्म',
-    homeDescription:
-      'HamroLms मा प्रमाणित प्रशिक्षकहरूबाट AI उपकरण, भिडियो सम्पादन, ग्राफिक डिजाइन र वेब विकास कोर्षहरू प्रमाणपत्रसहित सिक्नुहोस्।',
-    coursesTitle: 'सबै अनलाइन कोर्षहरू | HamroLms',
-    coursesDescription:
-      'AI तालिम, भिडियो सम्पादन, ग्राफिक डिजाइन र वेब विकासका सम्पूर्ण अनलाइन कोर्षहरू HamroLms मा हेर्नुहोस्।',
-    aboutTitle: 'हाम्रो बारेमा (About Us) | HamroLms',
-    aboutDescription:
-      'HamroLms को उद्देश्य, प्रमाणित प्रशिक्षकहरू र व्यावहारिक डिजिटल सीप प्रमाणपत्र प्रणाली बारे विस्तृत जानकारी।',
-    learnTitle: 'Learn. Apply. Grow. – डिजिटल सीप यात्रा | HamroLms',
-    learnDescription:
-      'नयाँ सीप सिक्नुहोस्, वास्तविक प्रोजेक्टमा प्रयोग गर्नुहोस् र HamroLms बाट प्रमाणित प्रमाणपत्रसहित करियर अघि बढाउनुहोस्।',
-    instructorsTitle: 'प्रशिक्षक र शिक्षकहरू | HamroLms',
-    instructorsDescription:
-      'HamroLms मा AI, भिडियो सम्पादन र डिजिटल सीप सिकाउने अनुभवी प्रशिक्षक र मेन्टरहरूको प्रोफाइल हेर्नुहोस्।',
-    blogTitle: 'डिजिटल सीप र AI सिकाइ ब्लग | HamroLms',
-    blogDescription:
-      'AI उपकरण, भिडियो निर्माण, प्रम्प्ट इन्जिनियरिङ र अनलाइन शिक्षा सम्बन्धी उपयोगी लेखहरू HamroLms ब्लगमा पढ्नुहोस्।',
-    notFoundTitle: 'पृष्ठ भेटिएन (404) | HamroLms',
-    notFoundDescription: 'तपाईंले खोज्नुभएको पृष्ठ उपलब्ध छैन। कृपया मुख्य पृष्ठ, कोर्ष वा ब्लगमा जानुहोस्।',
-  },
-  hi: {
-    htmlLang: 'hi',
-    homeTitle: 'HamroLms – ऑनलाइन लर्निंग और डिजिटल कौशल कोर्स',
-    homeDescription:
-      'HamroLms पर सत्यापित प्रशिक्षकों से AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और वेब डेवलपमेंट सर्टिफिकेट के साथ सीखें।',
-    coursesTitle: 'सभी ऑनलाइन कोर्स | HamroLms',
-    coursesDescription:
-      'HamroLms पर AI टूल्स, वीडियो एडिटिंग, ग्राफिक डिज़ाइन और वेब डेवलपमेंट के संरचित कोर्स देखें।',
-    aboutTitle: 'हमारे बारे में (About Us) | HamroLms',
-    aboutDescription:
-      'HamroLms ऑनलाइन लर्निंग प्लेटफॉर्म, सत्यापित प्रशिक्षकों और डिजिटल कौशल प्रमाणपत्र के बारे में जानें।',
-    learnTitle: 'Learn. Apply. Grow. – कौशल विकास मार्ग | HamroLms',
-    learnDescription:
-      'संरचित पाठों से सीखें, प्रोजेक्ट्स पर लागू करें और HamroLms के सत्यापित सर्टिफिकेट के साथ आगे बढ़ें।',
-    instructorsTitle: 'प्रशिक्षक और मेंटर्स डायरेक्टरी | HamroLms',
-    instructorsDescription:
-      'HamroLms पर AI, वीडियो एडिटिंग और डिजिटल स्किल्स सिखाने वाले प्रशिक्षकों की प्रोफाइल और कोर्स देखें।',
-    blogTitle: 'लर्निंग ब्लॉग और AI गाइड्स | HamroLms',
-    blogDescription:
-      'AI टूल्स, वीडियो प्रोडक्शन, प्रॉम्प्ट इंजीनियरिंग और ऑनलाइन शिक्षा से जुड़े गाइड्स HamroLms ब्लॉग पर पढ़ें।',
-    notFoundTitle: 'पेज नहीं मिला (404) | HamroLms',
-    notFoundDescription: 'आप जिस पेज को खोज रहे हैं वह उपलब्ध नहीं है। होम पेज, कोर्स या ब्लॉग देखें।',
-  },
+  en: SEO_EN_TEXT,
+  ne: SEO_EN_TEXT,
+  hi: SEO_EN_TEXT,
 };
 
 export function escapeXml(str) {
@@ -554,7 +512,7 @@ function mergePublicInstructors(courses, subAdmins) {
       headline: sub.courseTitle ? `Instructor for ${sub.courseTitle}` : 'Instructor on Hamro LMS Nepal',
       bio: `${String(sub.name).trim()} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
       avatarUrl: sub.avatarUrl || '/institute-logo.png',
-      languages: ['English', 'Nepali'],
+      languages: ['English'],
       courseIds: sub.courseId ? [sub.courseId] : [],
       expertise: ['Online Education', 'Digital Skills'],
     });
@@ -573,7 +531,8 @@ function mergePublicInstructors(courses, subAdmins) {
           headline: `Instructor for ${c.title}`,
           bio: `${String(c.instructorName).trim()} teaches ${c.title} on Hamro LMS.`,
           avatarUrl: '/institute-logo.png',
-          languages: c.language ? [c.language] : ['English', 'Nepali'],
+          languages:
+            c.language && !/nepali|hindi/i.test(c.language) ? [c.language] : ['English'],
           courseIds: [c.id],
           expertise: Array.isArray(c.learn) ? c.learn.slice(0, 4) : ['Online Education'],
         });
@@ -655,7 +614,10 @@ export async function fetchPublicCatalogSnapshot() {
           amount: typeof d.amount === 'number' ? d.amount : 0,
           isFree: Boolean(d.isFree),
           order: typeof d.order === 'number' ? d.order : 0,
-          language: d.language ? String(d.language) : 'Nepali & Hindi',
+          language:
+            d.language && !/nepali|hindi/i.test(String(d.language))
+              ? String(d.language)
+              : 'English',
           instructorSlug: d.instructorSlug ? String(d.instructorSlug) : undefined,
           instructorName: d.instructorName ? String(d.instructorName) : undefined,
           includeCertificate: d.includeCertificate !== false,
@@ -909,7 +871,8 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
         name: course.title,
         description,
         image: ogImage,
-        inLanguage: course.language || parsed.locale,
+        inLanguage:
+          course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'en',
         courseCode: course.id,
         educationalLevel: course.level || 'All Levels',
         provider: {
@@ -1199,7 +1162,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
               url: `${origin}${buildLocalizedPath('/', parsed.locale)}`,
               name: 'HamroLms',
               alternateName: ['Hamro LMS', 'HamroLms Nepal'],
-              inLanguage: parsed.locale,
+              inLanguage: 'en',
               publisher: { '@id': `${origin}/#organization` },
               potentialAction: {
                 '@type': 'SearchAction',

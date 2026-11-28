@@ -23,7 +23,7 @@ export async function createGoogleMeetSpace(
   const token = String(accessToken || '').trim();
   if (!token) {
     throw new GoogleMeetApiError(
-      'Google Meet जडान गर्न पहिले "Sign in with Google" थिचेर अनुमति दिनुहोस्।',
+      'Please click "Sign in with Google" and grant permission before connecting Google Meet.',
       401,
       'GOOGLE_MEET_REAUTH'
     );
@@ -50,7 +50,7 @@ export async function createGoogleMeetSpace(
       `Google Meet Space creation failed (${res.status})`;
     if (res.status === 401) {
       throw new GoogleMeetApiError(
-        'Google Meet सेसनको समय सकिएको छ। कृपया पुनः "Sign in with Google" थिच्नुहोस्।',
+        'Your Google Meet session has expired. Please click "Sign in with Google" again.',
         401,
         'GOOGLE_MEET_REAUTH'
       );

@@ -123,7 +123,8 @@ export function buildCourseSeoMetadata(
     Array.isArray(course.videos) && course.videos.length > 0
       ? `${course.videos.length} structured video lessons`
       : 'practical video modules';
-  const langLabel = course.language ? ` in ${course.language}` : '';
+  const normalizedLang = course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English';
+  const langLabel = normalizedLang ? ` in ${normalizedLang}` : '';
   const instructorLabel = instructor?.name ? ` taught by ${instructor.name}` : '';
   const synthesizedDesc = course.overview?.trim()
     ? `${course.overview.trim()} Includes ${lectureSummary}${langLabel}${instructorLabel}.`
@@ -463,22 +464,16 @@ export function generateDynamicPageMetadata(
 
   const canonicalPath = isRoute404
     ? rawPathname
-    : buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, input.activeLocale);
+    : buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, 'en');
   const canonicalUrl = `${origin}${canonicalPath}`;
 
   const hreflangLinks: HreflangAlternateLink[] = [];
   if (!isRoute404 && parsedRoute.isPublicIndexable) {
-    const locales: SupportedLocale[] = ['en', 'ne', 'hi'];
-    locales.forEach((loc) => {
-      hreflangLinks.push({
-        hreflang: loc,
-        href: `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, loc)}`,
-      });
-    });
-    hreflangLinks.push({
-      hreflang: 'x-default',
-      href: `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, 'en')}`,
-    });
+    const enHref = `${origin}${buildLocalizedPath(parsedRoute.cleanPathWithoutLocale, 'en')}`;
+    hreflangLinks.push(
+      { hreflang: 'en', href: enHref },
+      { hreflang: 'x-default', href: enHref }
+    );
   }
 
   const jsonLdGraph = {

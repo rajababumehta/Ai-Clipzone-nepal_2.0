@@ -55,17 +55,17 @@ interface AdminAskTabProps {
 }
 
 const ADMIN_QUICK_PRESETS = [
-  'नमस्ते! तपाईंलाई के सहयोग चाहिन्छ?',
-  'तपाईंको भुक्तानी भेरिफाई भयो, धन्यवाद!',
-  'तपाईंको Activation Key तयार छ।',
-  'कृपया आफ्नो पेमेन्ट स्क्रिनसट वा ट्रान्ज्याक्सन आईडी पठाउनुहोस्।',
-  'समस्या समाधान भएको छ, कृपया पुनः भिडियो खोलेर हेर्नुहोस्।'
+  'Hello! How can I help you today?',
+  'Your payment has been verified. Thank you!',
+  'Your Activation Key is ready.',
+  'Please send your payment screenshot or transaction ID.',
+  'The issue has been resolved. Please try opening the video again.'
 ];
 
 const SUB_ADMIN_TO_MAIN_PRESETS = [
-  'नमस्ते! मलाई कोर्ष सम्बन्धी सहयोग चाहिन्छ।',
-  'कोर्ष अपडेट / सेटिङ बारे जानकारी दिनुहोस्।',
-  'धन्यवाद!'
+  'Hello! I need assistance regarding the course.',
+  'Please share details about the course update or settings.',
+  'Thank you!'
 ];
 
 const cleanRealName = (name?: string | null): string => {
@@ -182,7 +182,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               courseId: sub.courseId,
               activeCourse: courseName,
               purchasedCourses: courseName ? [courseName] : [],
-              lastMessage: remote?.lastMessage || 'कुनै म्यासेज छैन',
+              lastMessage: remote?.lastMessage || 'No messages yet',
               lastMessageAt: remote?.lastMessageAt || sub.lastLoginAt || sub.createdAt || Date.now(),
               lastSender: remote?.lastSender || 'system',
               unreadAdminCount: remote?.unreadAdminCount || 0,
@@ -206,7 +206,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               courseId: remote.courseId || '',
               activeCourse: remote.activeCourse || '',
               purchasedCourses: remote.activeCourse ? [remote.activeCourse] : [],
-              lastMessage: remote.lastMessage || 'कुनै म्यासेज छैन',
+              lastMessage: remote.lastMessage || 'No messages yet',
               lastMessageAt: remote.lastMessageAt || remote.updatedAt || Date.now(),
               lastSender: remote.lastSender || 'user',
               unreadAdminCount: remote.unreadAdminCount || 0,
@@ -407,7 +407,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             courseId: subAdminSession.courseId,
             activeCourse: '',
             purchasedCourses: [],
-            lastMessage: officialRemote?.lastMessage || `${brandName} सँग कुराकानी गर्नुहोस्`,
+            lastMessage: officialRemote?.lastMessage || `Chat with ${brandName}`,
             lastMessageAt: officialRemote?.lastMessageAt || Date.now(),
             lastSender: officialRemote?.lastSender || 'system',
             unreadAdminCount: officialRemote?.unreadAdminCount || 0,
@@ -538,10 +538,10 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
       }
       setCopiedMessageId(msg.id);
       setTimeout(() => setCopiedMessageId(null), 2000);
-      showToast('म्यासेज कपी भयो (Copied)', 'success');
+      showToast('Message copied to clipboard', 'success');
     } catch (e) {
       console.warn('Copy failed:', e);
-      showToast('कपी गर्न सकिएन', 'error');
+      showToast('Failed to copy message', 'error');
     }
   };
 
@@ -555,7 +555,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
       setShowAttachMenu(false);
       replyInputRef.current?.focus();
     } catch (err: any) {
-      showToast(err.message || 'फोटो प्रोसेस गर्न सकिएन', 'error');
+      showToast(err.message || 'Could not process photo', 'error');
     } finally {
       setIsAttaching(false);
       e.target.value = '';
@@ -572,7 +572,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
       setShowAttachMenu(false);
       replyInputRef.current?.focus();
     } catch (err: any) {
-      showToast(err.message || 'कागजात लोड गर्न सकिएन', 'error');
+      showToast(err.message || 'Could not load document', 'error');
     } finally {
       setIsAttaching(false);
       e.target.value = '';
@@ -615,7 +615,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
     try {
       assertFirestoreMessageSize(msgPayload);
     } catch (sizeErr: any) {
-      showToast(sizeErr?.message || 'फाइल धेरै ठूलो छ। कृपया सानो फाइल पठाउनुहोस्।', 'error');
+      showToast(sizeErr?.message || 'File is too large. Please send a smaller file.', 'error');
       return;
     }
 
@@ -694,20 +694,20 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         batch.commit().catch((offlineErr) => {
           console.warn('Queued offline admin reply sync failed:', offlineErr);
         });
-        showToast('अफलाइन मोड: इन्टरनेट जोडिएपछि म्यासेज पठाइनेछ।', 'info');
+        showToast('Offline mode: Message will be sent once internet is connected.', 'info');
       } else {
         await batch.commit();
-        showToast(isSubViewingMainAdmin ? `${brandName} लाई म्यासेज पठाइयो!` : 'जवाफ पठाइयो!', 'success');
+        showToast(isSubViewingMainAdmin ? `Message sent to ${brandName}!` : 'Reply sent!', 'success');
       }
     } catch (err: any) {
       console.error('Failed to send reply:', err);
       const errMsg = String(err?.message || '');
       if (errMsg.includes('exceeds') || err?.code === 'invalid-argument' || err?.code === 'resource-exhausted') {
-        showToast('फाइल वा फोटोको साइज धेरै ठूलो छ। कृपया सानो साइज पठाउनुहोस्।', 'error');
+        showToast('File or photo size is too large. Please send a smaller file.', 'error');
       } else if (err?.code === 'permission-denied') {
-        showToast('डाटाबेस अनुमति समस्या आयो। कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+        showToast('Database permission error. Please try again.', 'error');
       } else {
-        showToast('म्यासेज पठाउन सकिएन, कृपया पुन: प्रयास गर्नुहोस्।', 'error');
+        showToast('Failed to send message. Please try again.', 'error');
       }
       setReplyText(text);
       setAdminPendingAttachment(attachmentToSend);
@@ -728,10 +728,10 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
         setSelectedConvId(null);
       }
       setConvToDelete(null);
-      showToast('च्याट सफलतापूर्वक हटाइयो।', 'info');
+      showToast('Conversation deleted successfully.', 'info');
     } catch (err) {
       console.error('Failed to delete conversation:', err);
-      showToast('च्याट हटाउन सकिएन।', 'error');
+      showToast('Could not delete conversation.', 'error');
     }
   };
 
@@ -837,11 +837,11 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
             ) : filteredConversations.length === 0 ? (
               <div className="py-16 text-center text-zinc-500 text-xs px-4">
                 <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30 text-zinc-400" />
-                <p className="font-semibold text-zinc-300">कुनै च्याट भेटिएन</p>
+                <p className="font-semibold text-zinc-300">No chats found</p>
                 <p className="mt-1 text-[11px] text-zinc-500">
                   {isMainAdmin
-                    ? 'Sub-Admin बनाएपछि यहाँ देखिनेछ।'
-                    : 'कोर्ष सक्रिय गरेका विद्यार्थीले म्यासेज पठाउँदा यहाँ देखिनेछ।'}
+                    ? 'Sub-Admins will appear here once created.'
+                    : 'Students who activate the course and send messages will appear here.'}
                 </p>
               </div>
             ) : (
@@ -889,7 +889,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           </div>
                           <p className={`text-xs truncate ${hasUnread ? 'text-zinc-100 font-semibold' : 'text-zinc-400'}`}>
                             {isMeLast ? <span className="text-blue-400 font-semibold mr-1">You:</span> : null}
-                            {conv.lastMessage || 'कुनै म्यासेज छैन'}
+                            {conv.lastMessage || 'No messages yet'}
                           </p>
                         </>
                       ) : isMainViewingSub ? (
@@ -911,7 +911,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           </div>
                           <p className={`text-xs truncate ${hasUnread ? 'text-zinc-100 font-semibold' : 'text-zinc-400'}`}>
                             {isMeLast ? <span className="text-blue-400 font-semibold mr-1">You:</span> : null}
-                            {conv.lastMessage || 'कुनै म्यासेज छैन'}
+                            {conv.lastMessage || 'No messages yet'}
                           </p>
                         </>
                       ) : (
@@ -933,7 +933,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           )}
                           <p className={`text-xs truncate ${hasUnread ? 'text-zinc-100 font-semibold' : 'text-zinc-400'}`}>
                             {isMeLast ? <span className="text-blue-400 font-semibold mr-1">You:</span> : null}
-                            {conv.lastMessage || 'कुनै म्यासेज छैन'}
+                            {conv.lastMessage || 'No messages yet'}
                           </p>
                         </>
                       )}
@@ -1012,7 +1012,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 ) : messages.length === 0 ? (
                   <div className="py-12 text-center text-zinc-500 text-xs">
                     <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    यो च्याटमा हालसम्म कुनै म्यासेज छैन। तलबाट सिधै सन्देश पठाउनुहोस्।
+                    No messages in this chat yet. Send a message below to get started.
                   </div>
                 ) : (
                   messages.map((msg) => {
@@ -1275,7 +1275,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           </div>
                           <div>
                             <p className="font-semibold text-white">Photos & Images</p>
-                            <p className="text-[10px] text-zinc-400">फोटो / स्क्रिनसट</p>
+                            <p className="text-[10px] text-zinc-400">Photo / Screenshot</p>
                           </div>
                         </button>
                         <button
@@ -1291,7 +1291,7 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                           </div>
                           <div>
                             <p className="font-semibold text-white">Document / PDF</p>
-                            <p className="text-[10px] text-zinc-400">कागजात / फाइल (&lt;620KB)</p>
+                            <p className="text-[10px] text-zinc-400">Document / File (&lt;620KB)</p>
                           </div>
                         </button>
                       </div>
@@ -1328,9 +1328,9 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
               <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3 text-blue-400/60">
                 <MessageSquare className="w-7 h-7" />
               </div>
-              <h4 className="text-sm font-bold text-zinc-200 mb-1">च्याट छनोट गर्नुहोस्</h4>
+              <h4 className="text-sm font-bold text-zinc-200 mb-1">Select a chat</h4>
               <p className="text-xs text-zinc-500 max-w-sm">
-                बायाँतर्फको सूचीबाट सम्पर्क छानेर तुरुन्त सन्देश पठाउनुहोस्।
+                Choose a contact from the left panel to send a message right away.
               </p>
             </div>
           )}
@@ -1346,13 +1346,13 @@ export const AdminAskTab: React.FC<AdminAskTabProps> = ({
                 <AlertCircle className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-bold text-white text-sm">च्याट हटाउन निश्चित हुनुहुन्छ?</h4>
+                <h4 className="font-bold text-white text-sm">Delete this conversation?</h4>
                 <p className="text-[11px] text-zinc-400">{convToDelete.userName}</p>
               </div>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              यो च्याट वार्तालाप र यसका सम्पूर्ण म्यासेजहरू क्लाउडबाट स्थायी रूपमा हटाइनेछ।
+              This conversation and all of its messages will be permanently deleted from the cloud.
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2">

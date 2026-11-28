@@ -57,29 +57,29 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
   const applyPreset = (presetType: 'discount' | 'welcome' | 'course' | 'announcement') => {
     switch (presetType) {
       case 'discount':
-        setTitle('🎉 महा-छुट: AI Masterclass मा ५०% विशेष छुट!');
-        setBody('सीमित अवधिको लागि AI भिडियो एडिटिङ र ३०+ AI टूल्स कोर्ष मात्र Rs. 449 मा उपलब्ध छ। अहिले नै आफ्नो सिट सुरक्षित गर्नुहोस्!');
+        setTitle('🎉 Special Offer: 50% OFF AI Masterclass!');
+        setBody('For a limited time, get the AI Video Editing & 30+ AI Tools course for only Rs. 449. Reserve your seat today!');
         setType('discount');
         setBadge('50% OFF');
         setUrl('/#courses');
         break;
       case 'welcome':
-        setTitle('✨ HamroLms मा हार्दिक स्वागत छ!');
-        setBody('तपाईंको AI सिकाइ यात्रा आजै सुरु गर्नुहोस्। प्रिमियम भिडियोहरू, प्रोम्प्ट प्याक र सर्टिफिकेटहरू अन्लक गर्नुहोस्।');
+        setTitle('✨ Welcome to HamroLms!');
+        setBody('Start your AI learning journey today. Unlock premium video lessons, prompt packs, and verified certificates.');
         setType('welcome');
         setBadge('WELCOME');
         setUrl('/');
         break;
       case 'course':
-        setTitle('🔥 नयाँ कोर्ष: YouTube Blueprint Masterclass Live!');
-        setBody('YouTube च्यानल सुरु गर्ने र भिडियो भाइरल बनाउने सम्पूर्ण ब्लुप्रिन्ट कोर्ष थपिएको छ। अहिले नै चेक गर्नुहोस्!');
+        setTitle('🔥 New Course: YouTube Blueprint Masterclass Live!');
+        setBody('Our complete blueprint course on launching a YouTube channel and growing viral videos is now live. Check it out today!');
         setType('course');
         setBadge('NEW COURSE');
         setUrl('/#courses');
         break;
       case 'announcement':
-        setTitle('📢 आवश्यक सूचना: नयाँ फिचर तथा अपडेट!');
-        setBody('HamroLms पोर्टलमा नयाँ PDF नोट्स, च्याप्टर प्लेलिस्ट र डिजिटल सर्टिफिकेट भेरिफिकेसन थपिएको छ।');
+        setTitle('📢 Important Notice: New Features & Updates!');
+        setBody('New PDF study notes, chapter playlists, and digital certificate verification have been added to HamroLms.');
         setType('announcement');
         setBadge('NOTICE');
         setUrl('/');
@@ -159,14 +159,14 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h4 className="font-extrabold text-white text-sm">
-              Admin Push Notifications & Broadcast Hub (सूचना पठाउने प्रणाली)
+              Admin Push Notifications &amp; Broadcast Hub
             </h4>
             <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
-              PWA & Mobile Push
+              PWA &amp; Mobile Push
             </span>
           </div>
           <p className="text-[11px] text-zinc-300 leading-relaxed">
-            यहाँबाट पठाइएका सूचनाहरू प्रयोगकर्ताको ब्राउजर/PWA मोबाइल स्क्रिनमा तत्काल देखा पर्नेछन् र एपको <strong>Notification Center</strong> मा पनि सुरक्षित रहनेछन्।
+            Notifications sent here will appear immediately on user browsers and PWA mobile screens and remain saved in the app <strong>Notification Center</strong>.
           </p>
         </div>
       </div>
@@ -175,7 +175,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
       <div>
         <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider mb-2.5 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          Quick Preset Templates (द्रुत टेम्प्लेटहरू)
+          Quick Preset Templates
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <button
@@ -187,7 +187,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               <Tag className="w-3.5 h-3.5" /> 50% Special Discount
             </div>
             <p className="text-[10px] text-zinc-400 mt-1 line-clamp-1 group-hover:text-zinc-200">
-              महा-छुट र कुपन कोड अफर
+              Special discount &amp; coupon offer
             </p>
           </button>
 
@@ -200,7 +200,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               <Sparkles className="w-3.5 h-3.5" /> Welcome Greeting
             </div>
             <p className="text-[10px] text-zinc-400 mt-1 line-clamp-1 group-hover:text-zinc-200">
-              स्वागत सन्देश र प्रारम्भिक गाइड
+              Welcome message &amp; quick guide
             </p>
           </button>
 
@@ -213,7 +213,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               <BookOpen className="w-3.5 h-3.5" /> New Course Launch
             </div>
             <p className="text-[10px] text-zinc-400 mt-1 line-clamp-1 group-hover:text-zinc-200">
-              नयाँ AI मास्टरक्लास र च्याप्टर
+              New AI masterclass &amp; chapters
             </p>
           </button>
 
@@ -226,7 +226,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               <AlertCircle className="w-3.5 h-3.5" /> Important Notice
             </div>
             <p className="text-[10px] text-zinc-400 mt-1 line-clamp-1 group-hover:text-zinc-200">
-              संस्थागत जानकारी र अपडेटहरू
+              Platform news &amp; feature updates
             </p>
           </button>
         </div>
@@ -243,13 +243,13 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
           {/* Title */}
           <div>
             <label className="block text-xs font-bold text-zinc-300 mb-1">
-              Notification Title (शीर्षक) *
+              Notification Title *
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. 🎉 महा-छुट: AI Masterclass मा ५०% छुट!"
+              placeholder="e.g. 🎉 Special Offer: 50% OFF AI Masterclass!"
               required
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-hidden transition"
             />
@@ -258,13 +258,13 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
           {/* Body */}
           <div>
             <label className="block text-xs font-bold text-zinc-300 mb-1">
-              Message Body (सन्देश विवरण) *
+              Message Body *
             </label>
             <textarea
               rows={3}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="e.g. सीमित अवधिको लागि ३०+ AI टूल्स कोर्ष मात्र Rs. 449 मा पाउनुहोस्। आजै दर्ता गरी लाभ उठाउनुहोस्।"
+              placeholder="e.g. For a limited time, get the 30+ AI Tools course for only Rs. 449. Enroll today!"
               required
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-purple-500 focus:outline-hidden transition resize-none leading-relaxed"
             />
@@ -274,7 +274,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-zinc-300 mb-1">
-                Category / Type (प्रकार)
+                Category / Type
               </label>
               <select
                 value={type}
@@ -288,17 +288,17 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                 }}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-purple-500 focus:outline-hidden transition cursor-pointer"
               >
-                <option value="discount">🎁 Discount / Offer (छुट)</option>
-                <option value="welcome">✨ Welcome Greeting (स्वागत)</option>
-                <option value="course">🎓 Course Launch (नयाँ कोर्ष)</option>
-                <option value="announcement">📢 Announcement (सूचना)</option>
-                <option value="general">💡 General Update (सामान्य)</option>
+                <option value="discount">🎁 Discount / Offer</option>
+                <option value="welcome">✨ Welcome Greeting</option>
+                <option value="course">🎓 Course Launch</option>
+                <option value="announcement">📢 Announcement</option>
+                <option value="general">💡 General Update</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-zinc-300 mb-1">
-                Badge / Tag (ब्याज/ट्याग)
+                Badge / Tag
               </label>
               <input
                 type="text"
@@ -314,7 +314,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-zinc-300 mb-1">
-                Action URL / Link (ऐच्छिक लिङ्क)
+                Action URL / Link (Optional)
               </label>
               <input
                 type="text"
@@ -327,15 +327,15 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-zinc-300 mb-1">
-                Target Audience (लक्षित समूह)
+                Target Audience
               </label>
               <select
                 value={target}
                 onChange={(e) => setTarget(e.target.value as any)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-purple-500 focus:outline-hidden transition cursor-pointer"
               >
-                <option value="all">🌐 All App Users (सबै प्रयोगकर्ताहरू)</option>
-                <option value="students">🎓 Enrolled Students Only (विद्यार्थीहरू मात्र)</option>
+                <option value="all">🌐 All App Users</option>
+                <option value="students">🎓 Enrolled Students Only</option>
               </select>
             </div>
           </div>
@@ -353,7 +353,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                 <Send className="w-4 h-4" />
               )}
               <span>
-                {isSending ? 'Sending Broadcast...' : 'सबैलाई सूचना पठाउनुहोस् (Broadcast to All)'}
+                {isSending ? 'Sending Broadcast...' : 'Broadcast to All'}
               </span>
             </button>
 
@@ -375,7 +375,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
                 <Smartphone className="w-3.5 h-3.5 text-purple-400" />
-                Live Notification Preview (पूर्वावलोकन)
+                Live Notification Preview
               </h4>
               <span className="text-[10px] text-zinc-500">Android / iOS / Desktop</span>
             </div>
@@ -414,11 +414,11 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                       </span>
                     )}
                     <h5 className="text-xs font-bold text-white truncate">
-                      {title || '🎉 महा-छुट: ५०% Discount on AI Courses!'}
+                      {title || '🎉 Special Offer: 50% Discount on AI Courses!'}
                     </h5>
                   </div>
                   <p className="text-[11px] text-zinc-300 leading-snug line-clamp-3">
-                    {body || 'सीमित अवधिको लागि ३०+ AI टूल्स र भिडियो एडिटिङ कोर्षमा विशेष छुट पाउनुहोस्।'}
+                    {body || 'For a limited time, get a special discount on 30+ AI tools and video editing courses.'}
                   </p>
                 </div>
               </div>
@@ -437,7 +437,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               PWA Push Delivery:
             </div>
             <p className="text-[10px] leading-relaxed">
-              प्रयोगकर्ताले PWA एप इन्स्टल गरेपछि वा सूचना अनुमति दिएपछि स्क्रिन बन्द वा एप ब्याकग्राउन्डमा हुँदा पनि यो अलर्ट बज्नेछ।
+              Once users install the PWA or enable notification permissions, this alert will be delivered even when the app is in the background.
             </p>
           </div>
         </div>
@@ -450,20 +450,20 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
             <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">
               📋 Sent Broadcasts History ({safeNotifications.length})
             </h4>
-            <span className="text-[10px] text-zinc-500">हालसम्म पठाइएका सूचनाहरू</span>
+            <span className="text-[10px] text-zinc-500">All notifications sent so far</span>
           </div>
         </div>
 
         {safeNotifications.length === 0 ? (
           <div className="py-8 text-center text-zinc-500">
             <Bell className="w-8 h-8 mx-auto mb-2 text-zinc-600" />
-            <p className="text-xs font-semibold">कुनै सूचना पठाइएको छैन (No broadcast sent yet)</p>
-            <p className="text-[11px] text-zinc-600 mt-0.5">माथिको फर्मबाट पहिलो सूचना पठाउनुहोस्।</p>
+            <p className="text-xs font-semibold">No broadcast sent yet</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">Send your first notification using the form above.</p>
           </div>
         ) : (
           <div className="divide-y divide-zinc-800/80 max-h-72 overflow-y-auto">
             {safeNotifications.map((notif) => {
-              const formattedDate = new Date(notif.createdAt).toLocaleDateString('ne-NP', {
+              const formattedDate = new Date(notif.createdAt).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',

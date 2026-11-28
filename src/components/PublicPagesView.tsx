@@ -21,22 +21,16 @@ import { getLocaleDict } from '../utils/i18n';
 interface HomeOverviewProps {
   courses: Course[];
   instructors: PublicInstructorProfile[];
-  faqs: FAQItem[];
   locale: SupportedLocale;
-  supportEmail: string;
   onNavigatePath: (cleanPath: string) => void;
 }
 
 export const HomePlatformOverviewSection: React.FC<HomeOverviewProps> = ({
   courses,
   instructors,
-  faqs,
   locale,
-  supportEmail,
   onNavigatePath,
 }) => {
-  const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
-
   return (
     <div className="mt-14 space-y-12 text-left">
       {/* Semantic Platform Overview for Visitors & Search Crawlers */}
@@ -86,7 +80,7 @@ export const HomePlatformOverviewSection: React.FC<HomeOverviewProps> = ({
             <ul className="space-y-1.5 text-xs sm:text-sm text-zinc-400">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>Learn in Nepali, Hindi, and English at your own pace from mobile or laptop.</span>
+                <span>Learn in English at your own pace from mobile or laptop.</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -147,59 +141,6 @@ export const HomePlatformOverviewSection: React.FC<HomeOverviewProps> = ({
           </a>
         </div>
       </section>
-
-      {/* Frequently Asked Questions Section (Real Dynamic FAQs) */}
-      {faqs && faqs.length > 0 && (
-        <section
-          id="faq-section"
-          aria-labelledby="faq-heading"
-          className="bg-zinc-950/95 border border-zinc-800/90 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h2 id="faq-heading" className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-blue-400 shrink-0" />
-                <span>Frequently Asked Questions</span>
-              </h2>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                Common questions about enrolling, course access, certificates, and support on Hamro LMS Nepal.
-              </p>
-            </div>
-            <span className="text-xs text-zinc-500">Support: {supportEmail}</span>
-          </div>
-
-          <div className="space-y-2.5">
-            {faqs.map((faq, idx) => {
-              const isOpen = openFaqIdx === idx;
-              return (
-                <div
-                  key={faq.id || idx}
-                  className="border border-zinc-800/80 rounded-2xl bg-black/50 overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    aria-expanded={isOpen}
-                    onClick={() => setOpenFaqIdx(isOpen ? null : idx)}
-                    className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left text-sm font-bold text-zinc-100 hover:text-blue-400 transition cursor-pointer"
-                  >
-                    <span>{faq.question}</span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${
-                        isOpen ? 'rotate-180 text-blue-400' : ''
-                      }`}
-                    />
-                  </button>
-                  {isOpen && (
-                    <div className="px-4 pb-4 text-xs sm:text-sm text-zinc-300 leading-relaxed border-t border-zinc-900 pt-3">
-                      {faq.answer}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
     </div>
   );
 };
@@ -362,7 +303,7 @@ export const LearnApplyGrowView: React.FC<StaticPageProps> = ({
           <span className="text-xs font-black uppercase tracking-wider text-blue-400">01 • Learn</span>
           <h2 className="text-lg font-extrabold text-white">Structured Video Chapters</h2>
           <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
-            Watch focused lessons organized by chapters alongside downloadable guides in Nepali, Hindi, and English.
+            Watch focused lessons organized by chapters alongside downloadable study guides in English.
           </p>
         </section>
         <section className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-2">
@@ -619,3 +560,143 @@ export const NotFoundView: React.FC<{ locale: SupportedLocale; onNavigatePath: (
     </section>
   );
 };
+
+interface ProfileDetailsFaqProps {
+  locale: SupportedLocale;
+  supportEmail: string;
+  onNavigatePath: (cleanPath: string) => void;
+}
+
+export const ProfileDetailsFaqSection: React.FC<ProfileDetailsFaqProps> = ({
+  locale,
+  supportEmail,
+  onNavigatePath,
+}) => {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+
+  const platformDetails = [
+    {
+      key: 'about-us',
+      title: 'About Us – HamroLms',
+      body: `HamroLms is an online learning and digital skill platform built to help learners master AI tools, video editing, graphic design, and web development from verified instructors with structured chapters, downloadable notes, and digital certificates.`,
+      linkLabel: 'Open About Us Page',
+      linkPath: '/about-us',
+    },
+    {
+      key: 'learn-apply-grow',
+      title: 'Learn. Apply. Grow.',
+      body: '01 • Learn structured video chapters in English. 02 • Apply skills through real creative workflows and mentor Q&A. 03 • Grow your career with verifiable completion certificates.',
+      linkLabel: 'Explore Learning Pathway',
+      linkPath: '/learn',
+    },
+    {
+      key: 'courses-guide',
+      title: 'Courses & Activation Guide',
+      body: 'Browse all public courses on Home or the Course Catalog, enroll via QR/eSewa or free signup, and enter your Secret Activation Code in Profile to unlock video lectures and PDF study handbooks.',
+      linkLabel: 'Browse All Courses',
+      linkPath: '/courses',
+    },
+    {
+      key: 'privacy-policy',
+      title: 'Privacy Policy',
+      body: `We collect only the details needed for course access, progress saving, and certificates (name, email, enrollment keys, and optional profile photo). Data is protected via Firebase Authentication and Firestore security controls and is never sold. Support: ${supportEmail}.`,
+      linkLabel: 'Read Full Privacy Policy',
+      linkPath: '/privacy-policy',
+    },
+    {
+      key: 'terms-of-use',
+      title: 'Terms of Use',
+      body: 'Course activation codes grant individual non-transferable access to videos, study PDFs, and live workshops. Sharing credentials or redistributing private course materials is prohibited. Refund requests follow our published 48-hour policy.',
+      linkLabel: 'Read Terms of Use',
+      linkPath: '/terms',
+    },
+    {
+      key: 'instructors-blog',
+      title: 'Instructors & Learning Blog',
+      body: 'Meet our verified instructors, trainers, and mentors or read practical step-by-step guides on AI workflows, video editing, and creator growth.',
+      linkLabel: 'Meet Instructors',
+      linkPath: '/instructors',
+      secondaryLinkLabel: 'Read Blog',
+      secondaryLinkPath: '/blog',
+    },
+  ];
+
+  const toggleItem = (key: string) => {
+    setOpenKey((prev) => (prev === key ? null : key));
+  };
+
+  return (
+    <section
+      aria-labelledby="profile-faq-details-heading"
+      className="bg-zinc-950/90 border border-zinc-800/80 rounded-3xl p-4 sm:p-5 shadow-xl space-y-3 text-left"
+    >
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-blue-400 shrink-0" />
+          <h3 id="profile-faq-details-heading" className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+            Platform Info &amp; Policies
+          </h3>
+        </div>
+        <span className="text-[10px] font-semibold text-zinc-500">Tap to expand</span>
+      </div>
+
+      <div className="space-y-2">
+        {platformDetails.map((item) => {
+          const isOpen = openKey === item.key;
+          return (
+            <div
+              key={item.key}
+              className="border border-zinc-800/80 rounded-2xl bg-black/50 overflow-hidden transition-colors"
+            >
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => toggleItem(item.key)}
+                className="w-full px-3.5 py-3 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-bold text-zinc-100 hover:text-blue-400 transition cursor-pointer"
+              >
+                <span>{item.title}</span>
+                <ChevronDown
+                  className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${
+                    isOpen ? 'rotate-180 text-blue-400' : ''
+                  }`}
+                />
+              </button>
+              {isOpen && (
+                <div className="px-3.5 pb-3.5 pt-2.5 border-t border-zinc-900 space-y-2.5 text-xs text-zinc-300 leading-relaxed">
+                  <p>{item.body}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                    <a
+                      href={buildLocalizedPath(item.linkPath, locale)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onNavigatePath(item.linkPath);
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-400 hover:text-blue-300 bg-blue-500/10 border border-blue-500/25 px-2.5 py-1 rounded-lg transition"
+                    >
+                      <span>{item.linkLabel}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </a>
+                    {item.secondaryLinkPath && item.secondaryLinkLabel && (
+                      <a
+                        href={buildLocalizedPath(item.secondaryLinkPath, locale)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onNavigatePath(item.secondaryLinkPath!);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-lg transition"
+                      >
+                        <span>{item.secondaryLinkLabel}</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+

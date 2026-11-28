@@ -43,7 +43,7 @@ export const assertFirestoreMessageSize = (payload: Record<string, any>): void =
     : json.length;
   if (byteSize > MAX_MESSAGE_PAYLOAD_BYTES) {
     throw new Error(
-      'फाइल वा म्यासेजको साइज धेरै ठूलो छ (Maximum 1MB limit)। कृपया सानो फोटो वा फाइल पठाउनुहोस्।'
+      'File or message size is too large (maximum 1 MB limit). Please send a smaller photo or file.'
     );
   }
 };
@@ -102,7 +102,7 @@ export const compressImageFile = (
 
         if (dataUrl.length > MAX_IMAGE_DATA_URL_CHARS) {
           reject(
-            new Error('फोटोको साइज धेरै ठूलो भयो। कृपया अर्को सानो फोटो छनोट गर्नुहोस्।')
+            new Error('Image size is too large. Please select a smaller image.')
           );
           return;
         }
@@ -248,7 +248,7 @@ export const readDocumentFile = (
     if (file.size > maxBytes) {
       reject(
         new Error(
-          `फाइल धेरै ठूलो छ (${formatFileSize(file.size)})। कृपया ६२० KB भन्दा सानो फाइल छनोट गर्नुहोस्।`
+          `File is too large (${formatFileSize(file.size)}). Please select a file smaller than 620 KB.`
         )
       );
       return;
@@ -260,7 +260,7 @@ export const readDocumentFile = (
       if (resultUrl.length > 880 * 1024) {
         reject(
           new Error(
-            `फाइल धेरै ठूलो छ (${formatFileSize(file.size)})। कृपया अझ सानो फाइल छनोट गर्नुहोस्।`
+            `File is too large (${formatFileSize(file.size)}). Please select a smaller file.`
           )
         );
         return;

@@ -9,6 +9,25 @@ const isDevHost =
     window.location.hostname === '127.0.0.1' ||
     window.location.hostname.startsWith('ais-dev-'));
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    (window as unknown as { __deferredPwaInstallPrompt?: Event | null }).__deferredPwaInstallPrompt = e;
+    try {
+      localStorage.removeItem('hamrolms_pwa_installed');
+    } catch {}
+    window.dispatchEvent(new CustomEvent('hamrolms-pwa-prompt-ready'));
+  });
+
+  window.addEventListener('appinstalled', () => {
+    (window as unknown as { __deferredPwaInstallPrompt?: Event | null }).__deferredPwaInstallPrompt = null;
+    try {
+      localStorage.setItem('hamrolms_pwa_installed', 'true');
+    } catch {}
+    window.dispatchEvent(new CustomEvent('hamrolms-pwa-installed'));
+  });
+}
+
 if ('serviceWorker' in navigator) {
   const isProd = Boolean((import.meta as unknown as { env?: { PROD?: boolean } }).env?.PROD);
   if (!isProd || isDevHost) {

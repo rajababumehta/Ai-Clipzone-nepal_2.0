@@ -255,7 +255,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setIsBatchModeCourses(false);
     } catch (e) {
       console.error('Batch delete error:', e);
-      showToast('कोर्षहरू मेटाउँदा त्रुटि भयो (Error deleting courses)', 'error');
+      showToast('Error deleting courses', 'error');
     } finally {
       setIsBatchDeletingCourses(false);
     }
@@ -300,7 +300,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [qrBankBranch, setQrBankBranch] = useState(paymentConfig.bankBranch || '');
   const [qrImageUrl, setQrImageUrl] = useState(paymentConfig.qrImageUrl || '');
   const [qrPaymentInstruction, setQrPaymentInstruction] = useState(
-    paymentConfig.paymentInstruction || '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
+    paymentConfig.paymentInstruction || 'Payment Instruction: Scan the QR code or transfer to the eSewa ID and send the payment screenshot on WhatsApp.'
   );
   const [isSavingQr, setIsSavingQr] = useState(false);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -359,7 +359,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setQrBankBranch(paymentConfig.bankBranch || '');
       setQrImageUrl(paymentConfig.qrImageUrl || '');
       setQrPaymentInstruction(
-        paymentConfig.paymentInstruction || '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
+        paymentConfig.paymentInstruction || 'Payment Instruction: Scan the QR code or transfer to the eSewa ID and send the payment screenshot on WhatsApp.'
       );
     } else {
       const targetId = isSubAdmin ? assignedCourseId : scopeId;
@@ -385,7 +385,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         setQrBankBranch(cp?.bankBranch ?? '');
         setQrImageUrl(cp?.qrImageUrl ?? '');
         setQrPaymentInstruction(
-          cp?.paymentInstruction ?? '📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।'
+          cp?.paymentInstruction ?? 'Payment Instruction: Scan the QR code or transfer to the eSewa ID and send the payment screenshot on WhatsApp.'
         );
       }
     }
@@ -463,7 +463,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
     if (isSubAdmin) {
       if (!qrImageUrl.trim()) {
-        showToast('कृपया Payment QR फोटो अपलोड गर्नुहोस्!', 'error');
+        showToast('Please upload a Payment QR photo!', 'error');
         return;
       }
     } else if (!qrImageUrl.trim() && (!qrEsewaId.trim() || !qrAccountName.trim())) {
@@ -521,7 +521,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               }
         };
         await onSaveCourse(updatedCourse);
-        showToast(`"${targetCourse.title}" को Payment र WhatsApp विवरण सुरक्षित भयो! 💳`, 'success');
+        showToast(`Payment & WhatsApp details saved for "${targetCourse.title}"! 💳`, 'success');
       }
     } catch (err) {
       console.error('Error saving payment config:', err);
@@ -544,7 +544,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       };
       await onSaveCourse(updatedCourse);
       loadPaymentScopeFields(selectedPaymentScope);
-      showToast(`"${targetCourse.title}" अब Global Default Payment प्रयोग गर्नेछ!`, 'info');
+      showToast(`"${targetCourse.title}" will now use Global Default Payment!`, 'info');
     } catch (err) {
       showToast('Failed to reset course payment settings.', 'error');
     } finally {
@@ -939,7 +939,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             ) : (
               <label
                 className="relative w-11 h-11 rounded-2xl bg-purple-600/30 border border-purple-500/40 overflow-hidden text-white flex items-center justify-center font-black text-base shadow-md cursor-pointer group/subhead shrink-0"
-                title="आफ्नो लोगो / फोटो अपलोड वा परिवर्तन गर्नुहोस्"
+                title="Upload or change your logo / photo"
               >
                 {subAdminSession?.avatarUrl ? (
                   <img
@@ -966,7 +966,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           const compressed = await compressImageFile(file, 400, 0.85);
                           await onUpdateSubAdminAvatar(subAdminSession, compressed.url);
                         } catch (err: any) {
-                          showToast(err?.message || 'फोटो अपडेट गर्न सकिएन', 'error');
+                          showToast(err?.message || 'Could not update photo', 'error');
                         } finally {
                           e.target.value = '';
                         }
@@ -993,7 +993,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <p className="text-xs text-zinc-400 font-medium mt-0.5">
                 {isMainAdmin
                   ? 'Manage all courses, Sub-Admin codes, student activation keys, payments, FAQs, and global settings.'
-                  : `तोकिएको कोर्ष मात्र: "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}" — Course Details, Payment/WhatsApp & Student Codes.`}
+                  : `Assigned Course Only: "${assignedCourse?.title || subAdminSession?.courseTitle || 'Assigned Course'}" — Course Details, Payment/WhatsApp & Student Codes.`}
               </p>
             </div>
           </div>
@@ -1080,20 +1080,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <QrIcon className="w-3.5 h-3.5" />
             {isMainAdmin ? '💳 QR & Payment Details' : '💳 Course Payment & WhatsApp'}
           </button>
-
-          {isMainAdmin && (
-            <button
-              onClick={() => setActiveTab('faqs')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                activeTab === 'faqs'
-                  ? 'bg-blue-600 text-white shadow-md font-bold'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-              }`}
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              ❓ FAQs Section ({localFaqs.length})
-            </button>
-          )}
 
           {isMainAdmin && (
             <button
@@ -1200,7 +1186,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <p className="mt-0.5">
                     {isMainAdmin
                       ? 'Generate unreleased secret activation codes to unlock dynamic courses. Share generated keys with students to enable high-speed learning.'
-                      : 'तपाईंले केवल मेन एडमिनले तोकेको यही एउटा कोर्षको मात्र Student Course Code बनाउन र व्यवस्थापन गर्न सक्नुहुन्छ।'}
+                      : 'You can create and manage Student Course Codes exclusively for this course assigned by the Main Admin.'}
                   </p>
                 </div>
               </div>
@@ -1214,13 +1200,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                      Student Name (विद्यार्थीको पुरा नाम) *
+                      Student Full Name *
                     </label>
                     <input 
                       type="text"
                       value={genStudentName}
                       onChange={(e) => setGenStudentName(e.target.value)}
-                      placeholder="उदाहरण: Ramesh Sharma"
+                      placeholder="e.g. Ramesh Sharma"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-700"
                     />
                   </div>
@@ -1238,7 +1224,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         {assignedCourse?.isHidden && (
                           <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-amber-800 flex items-center gap-1.5">
                             <EyeOff className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                            <span>यो कोर्ष Home Screen बाट लुकाइएको छ, तर तपाईंले Student Code बनाएर विद्यार्थीलाई Enroll गराउन सक्नुहुन्छ।</span>
+                            <span>This course is hidden from the Home screen, but you can still create Student Codes to enroll students.</span>
                           </div>
                         )}
                       </div>
@@ -1540,11 +1526,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         🚨
                       </span>
                       <h4 className="text-sm font-black text-white">
-                        Logout All User Devices (सबै डिभाइस सेसन लगआउट)
+                        Logout All User Devices
                       </h4>
                     </div>
                     <p className="text-xs text-rose-200/80 font-medium">
-                      वेबसाइटमा समस्या आउँदा वा नयाँ अपडेट पछि सबै युजर/विद्यार्थीहरुका Active Devices र Sessions एकैपटक स्वतः लगआउट गराउनुहोस्।
+                      Force-logout all student and user active devices and sessions at once during issues or major updates.
                     </p>
                   </div>
 
@@ -1593,8 +1579,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </strong>
                   <p className="mt-0.5 text-indigo-800">
                     {isMainAdmin
-                      ? 'Global Default वा कुनै पनि कोर्षको व्यक्तिगत eSewa ID, खातावालाको नाम, WhatsApp नम्बर, QR Code र WhatsApp म्यासेज यहाँबाट फेर्न सक्नुहुन्छ।'
-                      : 'तपाईंले सिधै आफ्नो कोर्षको Payment QR फोटो अपलोड र WhatsApp नम्बर/म्यासेज सेट गर्न सक्नुहुन्छ।'}
+                      ? 'Update Global Default or per-course eSewa ID, account holder name, WhatsApp number, QR Code, and WhatsApp message here.'
+                      : 'Upload your course Payment QR photo and set your WhatsApp number and purchase message directly.'}
                   </p>
                 </div>
               </div>
@@ -1604,7 +1590,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div className="bg-zinc-950 text-white p-4 rounded-2xl border border-zinc-800 space-y-2.5 shadow-md">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <label className="block text-[11px] font-black uppercase text-blue-400 tracking-wider">
-                      🎯 Select Payment & WhatsApp Target (Global वा कुन कोर्षको लागि?):
+                      🎯 Select Payment & WhatsApp Target (Global or Specific Course):
                     </label>
                     {selectedPaymentScope !== 'global' && (
                       <button
@@ -1684,7 +1670,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             type="text"
                             value={qrEsewaId}
                             onChange={(e) => setQrEsewaId(e.target.value)}
-                            placeholder="उदा: 9763323268"
+                            placeholder="e.g. 9763323268"
                             className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                           />
                         </div>
@@ -1697,7 +1683,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             type="text"
                             value={qrAccountName}
                             onChange={(e) => setQrAccountName(e.target.value)}
-                            placeholder="उदा: Ayush Chaurasiya"
+                            placeholder="e.g. Ayush Chaurasiya"
                             className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                           />
                         </div>
@@ -1709,12 +1695,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <div className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5">
-                          Direct Payment QR Upload (सिधै QR फोटो अपलोड गर्नुहोस्) *
+                          Direct Payment QR Upload *
                         </label>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/40">
                           <label className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-3 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm">
                             <Upload className="w-4 h-4" />
-                            <span>{qrImageUrl ? 'Change QR Image (QR परिवर्तन गर्नुहोस्)' : 'Upload Payment QR Image'}</span>
+                            <span>{qrImageUrl ? 'Change QR Image' : 'Upload Payment QR Image'}</span>
                             <input 
                               type="file" 
                               accept="image/*" 
@@ -1739,14 +1725,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                       <div>
                         <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                          WhatsApp Number (विद्यार्थीले Submit / WhatsApp थिच्दा जाने नम्बर) *
+                          WhatsApp Number (Used for Submit / WhatsApp) *
                         </label>
                         <input 
                           type="text"
                           required
                           value={qrWhatsappNumber}
                           onChange={(e) => setQrWhatsappNumber(e.target.value)}
-                          placeholder="उदा: 9763323268 वा 9779763323268"
+                          placeholder="e.g. 9763323268 or 9779763323268"
                           className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                         />
                       </div>
@@ -1756,30 +1742,30 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 flex items-center justify-between">
-                            <span>WhatsApp Number (WhatsApp बाट किन्नुहोस् / Support) *</span>
+                            <span>WhatsApp Number (Buy via WhatsApp / Support) *</span>
                           </label>
                           <input 
                             type="text"
                             required
                             value={qrWhatsappNumber}
                             onChange={(e) => setQrWhatsappNumber(e.target.value)}
-                            placeholder="उदा: 9763323268 वा 9779763323268"
+                            placeholder="e.g. 9763323268 or 9779763323268"
                             className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                           />
                           <span className="text-[9.5px] text-slate-400 mt-1 block font-medium">
-                            यो नम्बर "WhatsApp" र "Submit" बटनमा प्रयोग हुन्छ।
+                            This number is used for the &quot;WhatsApp&quot; and &quot;Submit&quot; buttons.
                           </span>
                         </div>
 
                         <div>
                           <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                            Bank Name (वैकल्पिक बैंक ट्रान्सफर)
+                            Bank Name (Optional Bank Transfer)
                           </label>
                           <input 
                             type="text"
                             value={qrBankName}
                             onChange={(e) => setQrBankName(e.target.value)}
-                            placeholder="उदा: Global IME Bank / Nabil Bank"
+                            placeholder="e.g. Global IME Bank / Nabil Bank"
                             className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                           />
                         </div>
@@ -1788,26 +1774,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                            Bank Account Number (वैकल्पिक)
+                            Bank Account Number (Optional)
                           </label>
                           <input 
                             type="text"
                             value={qrBankAccountNo}
                             onChange={(e) => setQrBankAccountNo(e.target.value)}
-                            placeholder="उदा: 01234567890123"
+                            placeholder="e.g. 01234567890123"
                             className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                           />
                         </div>
 
                         <div>
                           <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                            Bank Branch (वैकल्पिक)
+                            Bank Branch (Optional)
                           </label>
                           <input 
                             type="text"
                             value={qrBankBranch}
                             onChange={(e) => setQrBankBranch(e.target.value)}
-                            placeholder="उदा: Kathmandu Branch"
+                            placeholder="e.g. Kathmandu Branch"
                             className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                           />
                         </div>
@@ -1815,14 +1801,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                       <div>
                         <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                          Custom QR Code Image URL (वा तल फाइल अपलोड गर्नुहोस्)
+                          Custom QR Code Image URL (or Upload File Below)
                         </label>
                         <div className="flex gap-2">
                           <input 
                             type="text"
                             value={qrImageUrl}
                             onChange={(e) => setQrImageUrl(e.target.value)}
-                            placeholder="खाली छाडेमा स्वतः eSewa QR कोड जेनेरेट हुनेछ"
+                            placeholder="Leave empty to auto-generate eSewa QR code"
                             className="grow bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-medium text-slate-800"
                           />
                           <label className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shrink-0 border border-slate-200">
@@ -1853,7 +1839,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                      Payment Instruction Note (भुक्तानी निर्देशन सन्देश)
+                      Payment Instruction Note
                     </label>
                     <textarea 
                       rows={2}
@@ -1866,13 +1852,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   {(isSubAdmin || selectedPaymentScope !== 'global') && (
                     <div>
                       <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5">
-                        WhatsApp Purchase Message (विद्यार्थीले पठाउने म्यासेज)
+                        WhatsApp Purchase Message (Pre-filled for Students)
                       </label>
                       <textarea 
                         rows={2}
                         value={qrWhatsappMessage}
                         onChange={(e) => setQrWhatsappMessage(e.target.value)}
-                        placeholder={`उदा: I want to buy ${assignedCourse?.title || 'this course'}`}
+                        placeholder={`e.g. I want to buy ${assignedCourse?.title || 'this course'}`}
                         className="w-full bg-purple-50/50 border border-purple-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-bold text-slate-800"
                       />
                     </div>
@@ -1895,7 +1881,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     ) : isSubAdmin ? (
                       <div className="w-full h-44 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center p-4 text-slate-500 text-xs font-semibold gap-2">
                         <QrIcon className="w-8 h-8 text-slate-400" />
-                        <span>QR अपलोड गरिएको छैन</span>
+                        <span>No QR uploaded yet</span>
                       </div>
                     ) : (
                       <canvas ref={previewCanvasRef} className="mx-auto rounded-lg shadow-xs" />
@@ -1917,7 +1903,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
 
                   <p className="text-[10px] text-slate-400 mt-3 font-medium px-2">
-                    विद्यार्थीहरूले "Enroll & Activate Course" थिच्दा ठ्याक्कै यही QR कोड देख्नेछन्।
+                    Students will see this exact QR code when they tap &quot;Enroll &amp; Activate Course&quot;.
                   </p>
                 </div>
               </div>
@@ -1969,7 +1955,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div>
                   <strong className="font-black text-white">Dynamic FAQ Management System</strong>
                   <p className="mt-0.5 text-zinc-400">
-                    यहाँबाट FAQ (बारम्बार सोधिने प्रश्नहरू) थप्न, सम्पादन गर्न, क्रम मिलाउन वा हटाउन सक्नुहुन्छ। परिमार्जन गरिसकेपछि तल रहेको <strong>"Save FAQs to Cloud"</strong> बटन थिच्नुहोस्।
+                    Add, edit, reorder, or delete FAQs here. After making changes, click <strong>&quot;Save FAQs to Cloud&quot;</strong> below.
                   </p>
                 </div>
               </div>
@@ -1982,7 +1968,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div>
                   <input 
                     type="text"
-                    placeholder="प्रश्न लेख्नुहोस् (उदा: Course सुरु गरेपछि कति समयमा सर्टिफिकेट पाइन्छ?)..."
+                    placeholder="Enter question (e.g. How long does it take to receive a certificate?)..."
                     value={newQuestion}
                     onChange={(e) => setNewQuestion(e.target.value)}
                     className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
@@ -1991,7 +1977,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div>
                   <textarea 
                     rows={2}
-                    placeholder="विस्तृत उत्तर यहाँ लेख्नुहोस्..."
+                    placeholder="Write the detailed answer here..."
                     value={newAnswer}
                     onChange={(e) => setNewAnswer(e.target.value)}
                     className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2 text-xs transition outline-hidden font-medium text-slate-800"
@@ -2155,7 +2141,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <div>
                   <strong className="font-black text-purple-900">Institute Branding & Global Website Settings</strong>
                   <p className="mt-0.5 text-purple-800">
-                    यहाँबाट सम्पूर्ण वेबसाइट र प्लेटफर्मभरिको Institute को नाम (HamroLms Institute Name), Institute Logo URL, ब्यानर शीर्षक (Headline), सबटाइटल, Notice Announcement Banner, र सपोर्ट सम्पर्क विवरणहरू प्रत्यक्ष रूपमा फेर्न सक्नुहुन्छ।
+                    Customize the Institute Name, Institute Logo URL, Headline, Subtitle, Notice Announcement Banner, and Support Contact details across the entire platform.
                   </p>
                 </div>
               </div>
@@ -2177,11 +2163,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       required
                       value={instituteName}
                       onChange={(e) => setInstituteName(e.target.value)}
-                      placeholder="उदा: HamroLms"
+                      placeholder="e.g. HamroLms"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                     />
                     <p className="text-[10px] text-slate-400 mt-1">
-                      यो नाम सम्पूर्ण साइट हेडर, फुटर, लगइन, र सर्टिफिकेटहरूमा देखा पर्नेछ।
+                      This name appears across the site header, footer, login screens, and certificates.
                     </p>
                   </div>
 
@@ -2243,28 +2229,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                    Website Top Headline (मुख्य ब्यानर शीर्षक) *
+                    Website Top Headline *
                   </label>
                   <input 
                     type="text"
                     required
                     value={siteTitle}
                     onChange={(e) => setSiteTitle(e.target.value)}
-                    placeholder="उदा: TOP AI COURSE NEPAL 🇳🇵"
+                    placeholder="e.g. TOP AI COURSE NEPAL"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                    Website Tagline / Subtitle (उप-शीर्षक) *
+                    Website Tagline / Subtitle *
                   </label>
                   <input 
                     type="text"
                     required
                     value={siteTagline}
                     onChange={(e) => setSiteTagline(e.target.value)}
-                    placeholder="उदा: Nepal's #1 AI Video Editing & Learning Platform"
+                    placeholder="e.g. Nepal's #1 AI Video Editing & Learning Platform"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
@@ -2288,7 +2274,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     type="text"
                     value={noticeBannerText}
                     onChange={(e) => setNoticeBannerText(e.target.value)}
-                    placeholder="उदा: 🎉 New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount."
+                    placeholder="e.g. New AI Tools & YouTube Blueprint Masterclasses Live! 50% Early Bird Discount."
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
@@ -2302,7 +2288,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     required
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
-                    placeholder="उदा: support.hamrolms@gmail.com"
+                    placeholder="e.g. support.hamrolms@gmail.com"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
@@ -2316,24 +2302,24 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     required
                     value={supportPhone}
                     onChange={(e) => setSupportPhone(e.target.value)}
-                    placeholder="उदा: 9763323268"
+                    placeholder="e.g. 9763323268"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-                    Android APK File Download Direct Link (वैकल्पिक सिधै APK URL)
+                    Android APK File Download Direct Link (Optional)
                   </label>
                   <input 
                     type="text"
                     value={apkDownloadUrl}
                     onChange={(e) => setApkDownloadUrl(e.target.value)}
-                    placeholder="उदा: https://your-server.com/hamrolms.apk (खाली भएमा PWA Instant Installer स्वतः प्रयोग हुन्छ)"
+                    placeholder="e.g. https://your-server.com/hamrolms.apk (leave blank to use PWA Instant Installer)"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
-                    यदि तपाईंसँग सिधै `.apk` फाइलको Direct Download Link छ भने यहाँ राख्न सक्नुहुन्छ।
+                    If you have a direct `.apk` download link, enter it here.
                   </p>
                 </div>
               </div>
@@ -2444,7 +2430,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     )}
                   </div>
                   <p className="mt-1 text-zinc-400 text-xs">
-                    यहाँबाट सम्पूर्ण कोर्सको साझा <b>Global Template</b> अथवा <b>प्रत्येक कोर्षको आफ्नै व्यक्तिगत Certificate</b> (Title, Institute Logo, Theme Color, Signatures, Course Name, Stamp) पूर्ण रूपमा परिमार्जन गर्न सकिन्छ।
+                    Customize the shared <b>Global Template</b> or individual <b>per-course Certificates</b> (Title, Institute Logo, Theme Color, Signatures, Course Name, Stamp).
                   </p>
                 </div>
               </div>
@@ -2453,7 +2439,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <div className="bg-zinc-950 text-white p-4 rounded-2xl border border-zinc-800 space-y-2.5 shadow-md">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="block text-[11px] font-black uppercase text-blue-400 tracking-wider">
-                    🎯 Select Certificate Target (कुन कोर्षको सर्टिफिकेट मिलाउने?):
+                    🎯 Select Certificate Target (Global or Specific Course):
                   </label>
                   {selectedCertScope !== 'global' && (
                     <button
@@ -2738,8 +2724,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   />
                   <p className="text-[10px] text-slate-400 mt-1 font-medium">
                     {selectedCertScope === 'global'
-                      ? '* Global template मा यो खाली छोडेमा प्रत्येक विद्यार्थीको सम्बन्धित कोर्षको नाम स्वतः प्रयोग हुनेछ।'
-                      : `* यस कोर्षको सर्टिफिकेटमा देखिने नाम यहाँबाट परिवर्तन गर्न सक्नुहुन्छ।`}
+                      ? '* If left blank in the Global template, each student\'s enrolled course title will be used automatically.'
+                      : '* You can customize the course title printed on this course\'s certificate here.'}
                   </p>
                 </div>
 
@@ -2811,7 +2797,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       type="text"
                       value={certificateDirectorName}
                       onChange={(e) => setCertificateDirectorName(e.target.value)}
-                      placeholder="उदा: Director"
+                      placeholder="e.g. Director"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs transition outline-hidden font-bold text-slate-800"
                     />
                   </div>
@@ -2870,7 +2856,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
                     ) : (
                       <p className="text-[10px] text-slate-400 mt-1 italic">
-                        * यदि signature image खाली राखियो भने सुरुवाती stylised digital script प्रयोग हुनेछ।
+                        * If no signature image is set, a stylized digital script signature will be generated automatically.
                       </p>
                     )}
                   </div>
@@ -2892,7 +2878,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       type="text"
                       value={certificateCeoName}
                       onChange={(e) => setCertificateCeoName(e.target.value)}
-                      placeholder="उदा: Founder/CEO (HamroLms)"
+                      placeholder="e.g. Founder/CEO (HamroLms)"
                       className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs transition outline-hidden font-bold text-slate-800"
                     />
                   </div>
@@ -2951,7 +2937,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
                     ) : (
                       <p className="text-[10px] text-slate-400 mt-1 italic">
-                        * यदि signature image खाली राखियो भने सुरुवाती stylised digital script प्रयोग हुनेछ।
+                        * If no signature image is set, a stylized digital script signature will be generated automatically.
                       </p>
                     )}
                   </div>
@@ -3063,7 +3049,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
                     {isMainAdmin
                       ? 'Add new courses with custom chapters, Drive/YouTube videos, price tags, and thumbnail graphics.'
-                      : 'तपाईंले केवल मेन एडमिनले तोकेको यही एउटा कोर्षको विवरण, भिडियो, PDF र WhatsApp म्यासेज मात्र परिवर्तन गर्न सक्नुहुन्छ।'}
+                      : 'You can only edit the details, videos, PDFs, and WhatsApp message for this course assigned by the Main Admin.'}
                   </p>
                 </div>
                 {isMainAdmin && (
@@ -3259,7 +3245,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   }
                                 }}
                                 className="bg-emerald-50 hover:bg-emerald-100 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-700 border border-emerald-200 font-bold p-1.5 rounded-lg text-[10px] transition cursor-pointer flex items-center"
-                                title="माथि सार्नुहोस् (Move Up)"
+                                title="Move Up"
                                 aria-label="Move course up"
                               >
                                 <ArrowUp className={`w-3.5 h-3.5 ${isMoving ? 'animate-pulse' : ''}`} />
@@ -3277,7 +3263,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   }
                                 }}
                                 className="bg-emerald-50 hover:bg-emerald-100 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-700 border border-emerald-200 font-bold p-1.5 rounded-lg text-[10px] transition cursor-pointer flex items-center"
-                                title="तल सार्नुहोस् (Move Down)"
+                                title="Move Down"
                                 aria-label="Move course down"
                               >
                                 <ArrowDown className={`w-3.5 h-3.5 ${isMoving ? 'animate-pulse' : ''}`} />
@@ -3439,7 +3425,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       Permanently Remove User Course Code?
                     </h3>
                     <p className="text-xs text-rose-600 font-bold">
-                      यो कोड र विद्यार्थीको पहुँच स्थायी रूपमा हटाइनेछ (Cannot be undone)
+                      This code and student access will be permanently removed (Cannot be undone)
                     </p>
                   </div>
                 </div>
@@ -3478,7 +3464,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     onClick={() => setKeyToDelete(null)}
                     className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
                   >
-                    Cancel (रद्द गर्नुहोस्)
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -3501,7 +3487,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    Confirm Permanent Delete (स्थायी हटाउनुहोस्)
+                    Confirm Permanent Delete
                   </button>
                 </div>
               </motion.div>
@@ -3527,20 +3513,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       Confirm Course Deletion
                     </h3>
                     <p className="text-xs text-rose-600 font-bold">
-                      कोर्ष मेटाउनु अघि कृपया पुष्टि गर्नुहोस्
+                      Please confirm before deleting this course
                     </p>
                   </div>
                 </div>
 
                 <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-1.5 text-xs text-rose-900">
                   <p className="font-extrabold text-slate-900">
-                    मेटाउन लागेको कोर्ष (Target Course):
+                    Target Course to Delete:
                   </p>
                   <p className="font-black text-sm text-rose-700 bg-white px-3 py-2 rounded-xl border border-rose-200">
                     {courseToDeleteAdmin.title}
                   </p>
                   <p className="text-[11px] text-rose-700 pt-1 leading-relaxed font-medium">
-                    यो कोर्ष र यससँग सम्बन्धित सबै भिडियो तथा पिडिएफ सामग्रीहरू हटाइनेछ। दुर्घटनावश मेटाउनबाट बच्न तल <span className="font-black text-rose-900 underline">DELETE</span> टाइप गर्नुहोस्।
+                    This course and all associated videos and PDF materials will be removed. Type <span className="font-black text-rose-900 underline">DELETE</span> below to prevent accidental deletion.
                   </p>
                 </div>
 
@@ -3569,7 +3555,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     }}
                     className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
                   >
-                    Cancel (रद्द गर्नुहोस्)
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -3594,7 +3580,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    {isAdminDeletingCourse ? 'Deleting...' : 'Confirm Delete (मेटाउनुहोस्)'}
+                    {isAdminDeletingCourse ? 'Deleting...' : 'Confirm Delete'}
                   </button>
                 </div>
               </motion.div>
@@ -3621,14 +3607,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       Confirm Bulk Course Deletion
                     </h3>
                     <p className="text-xs text-rose-600 font-bold">
-                      एकैपटक {selectedCourseIds.length} वटा कोर्षहरू मेटाउन पुष्टि गर्नुहोस्
+                      Confirm deleting {selectedCourseIds.length} selected courses at once
                     </p>
                   </div>
                 </div>
 
                 <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 text-xs text-rose-900">
                   <p className="font-extrabold text-slate-900 flex items-center justify-between">
-                    <span>मेटाउन लागिएका कोर्षहरू ({selectedCourseIds.length} Selected):</span>
+                    <span>Courses to Delete ({selectedCourseIds.length} Selected):</span>
                   </p>
                   <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                     {courses
@@ -3644,7 +3630,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       ))}
                   </div>
                   <p className="text-[11px] text-rose-700 pt-1 leading-relaxed font-medium">
-                    ⚠️ यी सबै कोर्षहरू, तिनका भिडियो/पिडिएफ सामग्रीहरू तथा सम्बन्धित एक्टिभेसन किहरू स्थायी रूपमा हटाइनेछ। दुर्घटनावश मेटाउनबाट बच्न तल <span className="font-black text-rose-900 underline">DELETE</span> टाइप गर्नुहोस्।
+                    ⚠️ All of these courses, their videos/PDF materials, and related activation keys will be permanently deleted. Type <span className="font-black text-rose-900 underline">DELETE</span> below to confirm.
                   </p>
                 </div>
 
@@ -3673,7 +3659,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     }}
                     className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
                   >
-                    Cancel (रद्द गर्नुहोस्)
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -3711,16 +3697,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-black text-white">Delete All Student Course Codes?</h3>
-                    <p className="text-xs text-rose-400 font-bold uppercase tracking-wider">स्थायी रूपमा सबै कोड मेटाउने</p>
+                    <p className="text-xs text-rose-400 font-bold uppercase tracking-wider">Permanent Bulk Deletion</p>
                   </div>
                 </div>
 
                 <div className="bg-rose-950/40 border border-rose-500/30 rounded-2xl p-4 text-xs text-rose-200/90 space-y-2">
                   <p className="font-medium leading-relaxed">
-                    यो कार्य स्थायी छ। डाटाबेसमा रहेका सबै पुराना <strong className="text-white font-black">विद्यार्थी कोर्ष कोडहरू ({allActivationKeys?.length || 0})</strong> पूर्ण रूपमा मेटिनेछन्।
+                    This action is permanent. All existing <strong className="text-white font-black">student course codes ({allActivationKeys?.length || 0})</strong> in the database will be deleted permanently.
                   </p>
                   <p className="text-[11px] text-zinc-400">
-                    पुष्टि गर्न तल <strong className="text-rose-400 font-black">DELETE</strong> टाइप गर्नुहोस्:
+                    Type <strong className="text-rose-400 font-black">DELETE</strong> below to confirm:
                   </p>
                   <input
                     type="text"
@@ -3741,7 +3727,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     }}
                     className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
                   >
-                    रद्द गर्नुहोस् (Cancel)
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -3766,7 +3752,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    {isDeletingAllKeys ? 'Deleting All...' : 'सबै मेटाउनुहोस् (Delete All)'}
+                    {isDeletingAllKeys ? 'Deleting All...' : 'Delete All'}
                   </button>
                 </div>
               </motion.div>
@@ -3810,10 +3796,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </h3>
                     <p className="text-xs font-bold text-rose-300 mt-0.5">
                       {securityConfirmAction.type === 'admin_logout'
-                        ? 'सुरक्षाको लागि Admin/Sub-Admin लगआउट गर्न CONFIRM टाइप गर्नुहोस्।'
+                        ? 'For security, type CONFIRM to log out of Admin/Sub-Admin.'
                         : securityConfirmAction.type === 'expire_key'
-                        ? 'विद्यार्थीको कोर्ष पहुँच तुरुन्तै बन्द (Expire) हुनेछ।'
-                        : 'विद्यार्थीको डिभाइस सेसन तुरुन्तै लगआउट (Logout) हुनेछ।'}
+                        ? 'The student\'s course access will expire immediately.'
+                        : 'The student\'s device session will be logged out immediately.'}
                     </p>
                   </div>
                 </div>
@@ -3842,14 +3828,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 ) : (
                   <div className="bg-black/40 border border-slate-700/80 rounded-xl p-3.5 text-xs text-slate-300 font-medium leading-relaxed">
                     {isMainAdmin
-                      ? 'Main Admin Panel बाट लगआउट हुनेछ। पुनः प्रवेश गर्न Admin Secret Code आवश्यक पर्नेछ।'
-                      : `Sub-Admin (${subAdminSession?.name || 'Staff'}) खाता लगआउट हुनेछ। पुनः प्रवेश गर्न Sub-Admin Code आवश्यक पर्नेछ।`}
+                      ? 'You will be logged out of the Main Admin Panel. Your Admin Secret Code will be required to sign in again.'
+                      : `You will be logged out of Sub-Admin (${subAdminSession?.name || 'Staff'}). Your Sub-Admin Code will be required to sign in again.`}
                   </div>
                 )}
 
                 <div className="bg-slate-800/70 border border-slate-700 rounded-xl p-3 space-y-2">
                   <label className="block text-[11px] font-extrabold text-slate-200">
-                    पक्का गर्न तल <span className="text-rose-400 font-mono font-black">CONFIRM</span> टाइप गर्नुहोस्:
+                    Type <span className="text-rose-400 font-mono font-black">CONFIRM</span> below to proceed:
                   </label>
                   <input
                     type="text"
@@ -3871,7 +3857,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     }}
                     className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
                   >
-                    रद्द गर्नुहोस् (Cancel)
+                    Cancel
                   </button>
                   <button
                     type="button"

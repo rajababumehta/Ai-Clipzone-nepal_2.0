@@ -137,7 +137,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
               </span>
               <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 font-semibold flex items-center gap-1">
                 <Globe className="w-3.5 h-3.5 text-zinc-400" />
-                {course.language || 'English / Nepali / Hindi'}
+                {course.language && !/nepali|hindi/i.test(course.language) ? course.language : 'English'}
               </span>
               {course.level && (
                 <span className="px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 font-semibold">

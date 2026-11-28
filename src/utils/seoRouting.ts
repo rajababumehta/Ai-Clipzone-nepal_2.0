@@ -81,13 +81,9 @@ export function findCourseBySlug(courses: Course[], slug?: string): Course | und
  * Strips locale prefix (/ne or /hi) and builds localized path cleanly.
  * English ('en') stays at clean root paths (/) to prevent duplicate root URLs.
  */
-export function buildLocalizedPath(cleanPath: string, locale: SupportedLocale = 'en'): string {
+export function buildLocalizedPath(cleanPath: string, _locale: SupportedLocale = 'en'): string {
   const normalized = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
-  const trimmed = normalized === '/' ? '/' : normalized.replace(/\/+$/, '');
-  if (locale === 'en') {
-    return trimmed;
-  }
-  return trimmed === '/' ? `/${locale}` : `/${locale}${trimmed}`;
+  return normalized === '/' ? '/' : normalized.replace(/\/+$/, '');
 }
 
 export function parsePathnameToRoute(pathname: string): ParsedRoute {
@@ -95,9 +91,8 @@ export function parsePathnameToRoute(pathname: string): ParsedRoute {
   const normalized = raw === '/index.html' ? '/' : raw.replace(/\/+$/, '') || '/';
   const segments = normalized.split('/').filter(Boolean);
 
-  let locale: SupportedLocale = 'en';
+  const locale: SupportedLocale = 'en';
   if (segments.length > 0 && KNOWN_LOCALE_PREFIXES.includes(segments[0] as SupportedLocale)) {
-    locale = segments[0] as SupportedLocale;
     segments.shift();
   }
 

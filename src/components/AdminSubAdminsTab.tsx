@@ -66,9 +66,9 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
     try {
       const compressed = await compressImageFile(file, 400, 0.85);
       setAvatarInput(compressed.url);
-      showToast('लोगो / फोटो लोड भयो!', 'success');
+      showToast('Logo / photo loaded!', 'success');
     } catch (err: any) {
-      showToast(err?.message || 'फोटो लोड गर्न सकिएन', 'error');
+      showToast(err?.message || 'Failed to load photo', 'error');
     } finally {
       e.target.value = '';
     }
@@ -85,7 +85,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
       const compressed = await compressImageFile(file, 400, 0.85);
       await onUpdateAvatar(subAdmin, compressed.url);
     } catch (err: any) {
-      showToast(err?.message || 'फोटो अपडेट गर्न सकिएन', 'error');
+      showToast(err?.message || 'Failed to update photo', 'error');
     } finally {
       setUploadingForCode(null);
       e.target.value = '';
@@ -96,11 +96,11 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
     const cleanName = nameInput.trim();
     const targetCourseId = selectedCourseId || courses[0]?.id || '';
     if (!cleanName) {
-      showToast('कृपया Sub-Admin को नाम लेख्नुहोस् (Please enter Sub-Admin name)', 'error');
+      showToast('Please enter Sub-Admin name', 'error');
       return;
     }
     if (!targetCourseId) {
-      showToast('कृपया एउटा कोर्ष छान्नुहोस् (Please select a course)', 'error');
+      showToast('Please select a course', 'error');
       return;
     }
 
@@ -117,14 +117,14 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
           try {
             await navigator.clipboard.writeText(created.code);
             showToast(
-              `Sub-Admin Code "${created.code}" तयार भयो र Copy गरियो! 🛡️`,
+              `Sub-Admin Code "${created.code}" created and copied! 🛡️`,
               'success'
             );
           } catch {
-            showToast(`Sub-Admin Code "${created.code}" तयार भयो! 🛡️`, 'success');
+            showToast(`Sub-Admin Code "${created.code}" created! 🛡️`, 'success');
           }
         } else {
-          showToast(`Sub-Admin Code "${created.code}" तयार भयो! 🛡️`, 'success');
+          showToast(`Sub-Admin Code "${created.code}" created! 🛡️`, 'success');
         }
         setNameInput('');
         setCustomCodeInput('');
@@ -154,7 +154,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
             Course-Scoped Sub-Admin Manager (Main Admin Only)
           </strong>
           <p className="mt-1 text-purple-200/80">
-            प्रत्येक कोर्षको लागि छुट्टाछुट्टै Sub-Admin लगइन कोड बनाउनुहोस्। Sub-Admin ले केवल आफूलाई तोकिएको कोर्षको मात्र विवरण (Course Details), Payment / QR, WhatsApp सन्देश र विद्यार्थी कोर्ष कोड (Student Course Code) बनाउन र हेर्न सक्नेछन्। अन्य कोर्ष वा मेन सेटिङहरू Sub-Admin लाई देखाइँदैन।
+            Create separate Sub-Admin login codes for each course. A Sub-Admin can only view and manage their assigned course details, payment/QR info, WhatsApp message, and student activation codes. Other courses and main site settings stay hidden.
           </p>
         </div>
       </div>
@@ -175,14 +175,14 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder="उदा: Ramesh (YouTube Course Admin)"
+              placeholder="e.g. Ramesh (YouTube Course Admin)"
               className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-800"
             />
           </div>
 
           <div>
             <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-              Assign Course (यो Sub-Admin को कोर्ष) *
+              Assign Course *
             </label>
             <select
               value={selectedCourseId || courses[0]?.id || ''}
@@ -200,13 +200,13 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
               )}
             </select>
             <p className="text-[10px] text-slate-500 mt-1 font-medium">
-              यो Sub-Admin ले केवल यही छानिएको कोर्ष मात्र सम्पादन गर्न र यसको कोड बनाउन सक्नेछ।
+              This Sub-Admin can only edit and generate codes for this selected course.
             </p>
           </div>
 
           <div>
             <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-              Custom Sub-Admin Code (वैकल्पिक — खाली राखेमा स्वतः बन्छ)
+              Custom Sub-Admin Code (Optional — auto-generated if empty)
             </label>
             <input
               type="text"
@@ -219,7 +219,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
 
           <div>
             <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">
-              Sub-Admin Logo / Profile Photo (Admin Ask मा देखिने लोगो)
+              Sub-Admin Logo / Profile Photo (Shown in Admin Ask)
             </label>
             <div className="flex items-center gap-2.5">
               <div className="w-11 h-11 rounded-full bg-slate-200 border border-slate-300 overflow-hidden flex items-center justify-center shrink-0">
@@ -234,7 +234,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                   type="text"
                   value={avatarInput}
                   onChange={(e) => setAvatarInput(e.target.value)}
-                  placeholder="Logo URL वा Upload थिच्नुहोस्..."
+                  placeholder="Paste logo URL or click Upload..."
                   className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs transition outline-hidden font-medium text-slate-700"
                 />
                 <label className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0 transition">
@@ -266,10 +266,10 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
               <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Sub-Admin Permissions:
             </p>
             <ul className="list-disc pl-4 space-y-0.5 text-[10.5px]">
-              <li>Assigned Course Details (Title, Price, Videos, PDFs) मात्र Edit गर्न मिल्ने</li>
-              <li>Assigned Course को मात्र Payment (eSewa/Bank/QR) र WhatsApp Message फेर्न मिल्ने</li>
-              <li>Assigned Course को मात्र Student Course Code Create/Manage गर्न मिल्ने</li>
-              <li>अन्य कोर्ष, Site Settings, FAQs र Notifications हेर्न/फेर्न नमिल्ने</li>
+              <li>Can only edit assigned course details (title, price, videos, PDFs)</li>
+              <li>Can only update assigned course payment (eSewa/Bank/QR) and WhatsApp message</li>
+              <li>Can only generate and manage student codes for their assigned course</li>
+              <li>Cannot view or modify other courses, site settings, or notifications</li>
             </ul>
           </div>
 
@@ -321,9 +321,9 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                 <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center mx-auto">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-black text-white">अहिले कुनै Sub-Admin कोड बनाइएको छैन</p>
+                <p className="text-sm font-black text-white">No Sub-Admin codes created yet</p>
                 <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                  बायाँपट्टिको फारमबाट प्रत्येक कोर्षको लागि छुट्टाछुट्टै Sub-Admin कोड बनाउनुहोस्।
+                  Use the form on the left to create a dedicated Sub-Admin code for each course.
                 </p>
               </div>
             ) : (
@@ -347,7 +347,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                         {/* Clickable Logo / Photo for Sub-Admin */}
                         <label
                           className="relative w-12 h-12 rounded-full bg-slate-100 border-2 border-purple-200 hover:border-purple-500 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer group/ava transition shadow-xs"
-                          title="फोटो / लोगो अपलोड वा परिवर्तन गर्नुहोस्"
+                          title="Upload or change photo / logo"
                         >
                           {sa.avatarUrl ? (
                             <img
@@ -396,7 +396,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                             <button
                               type="button"
                               onClick={async () => {
-                                const guide = `🛡️ Sub-Admin Access\nName: ${sa.name}\nAssigned Course: ${sa.courseTitle}\nLogin Code: ${sa.code}\n\nकसरी खोल्ने:\n१) वेबसाइटको Profile / Course मा गएर Secret Code बक्समा "${sa.code}" हालेर Activate गर्नुहोस्।\n२) एकपटक लगइन भएपछि माथि रहेको Logo मा क्लिक गर्दा सिधै तपाईंको कोर्षको Dashboard खुल्नेछ।`;
+                                const guide = `🛡️ Sub-Admin Access\nName: ${sa.name}\nAssigned Course: ${sa.courseTitle}\nLogin Code: ${sa.code}\n\nHow to open:\n1) Go to Profile / Course on the website, enter "${sa.code}" in the Secret Code box, and click Activate.\n2) Once logged in, click the Logo at the top to open your course dashboard directly.`;
                                 await navigator.clipboard.writeText(guide);
                                 showToast(`Sub-Admin login instructions copied! 📋`, 'success');
                               }}
@@ -534,7 +534,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                     Delete Sub-Admin Code?
                   </h4>
                   <p className="text-xs text-rose-600 font-bold">
-                    यो Sub-Admin लगइन कोड स्थायी रूपमा मेटिनेछ
+                    This Sub-Admin login code will be deleted permanently
                   </p>
                 </div>
               </div>
@@ -609,7 +609,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
                     Disable & Logout Sub-Admin?
                   </h4>
                   <p className="text-xs text-amber-700 font-bold">
-                    यो Sub-Admin खाता बन्द (Disable) हुनेछ र सेसन लगआउट हुनेछ।
+                    This Sub-Admin account will be disabled and its active session logged out.
                   </p>
                 </div>
               </div>
@@ -628,7 +628,7 @@ export const AdminSubAdminsTab: React.FC<AdminSubAdminsTabProps> = ({
 
               <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-2">
                 <label className="block text-[11px] font-extrabold text-slate-800">
-                  पक्का गर्न तल <span className="text-amber-700 font-mono font-black">CONFIRM</span> टाइप गर्नुहोस्:
+                  Type <span className="text-amber-700 font-mono font-black">CONFIRM</span> below to proceed:
                 </label>
                 <input
                   type="text"

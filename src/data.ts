@@ -8,7 +8,7 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentQrConfig = {
   bankBranch: "",
   whatsappNumber: "9763323268",
   qrImageUrl: "",
-  paymentInstruction: "📌 भुक्तानी निर्देशन: QR स्क्यान गरी वा eSewa ID मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।",
+  paymentInstruction: "📌 Payment Instruction: Scan the QR code or send the amount to our eSewa ID, then send the payment screenshot on WhatsApp.",
 };
 
 export const cleanLegacyLogoUrl = (url?: string): string => {
@@ -91,7 +91,7 @@ export const COURSES: Course[] = [
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png",
     isPopular: true,
     popularText: "🔥 MOST POPULAR - BEST SELLER",
-    language: "Hindi & Nepali",
+    language: "English",
     videos: [
       {
         videoUrl: "https://youtu.be/QivoSbWmD9o?si=34&t=34",
@@ -137,19 +137,19 @@ export const COURSES: Course[] = [
     amount: 849,
     message: "I want to buy YouTube Blueprint Course by Hamro LMS",
     learn: [
-      "Channel setup र niche छनोट",
-      "Video idea खोज्ने तरिका",
-      "Script writing storytelling",
-      "Shooting presentation",
+      "Channel setup & niche selection",
+      "Finding winning video ideas",
+      "Script writing & storytelling",
+      "Shooting & presentation",
       "Editing skills",
-      "Thumbnail title",
+      "Thumbnail & title strategy",
       "YouTube growth strategy",
-      "Monetization earning methods",
-      "AI tools प्रयोग गरेर content बनाउने तरिका"
+      "Monetization & earning methods",
+      "Creating content with AI tools"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png",
     isPopular: false,
-    language: "Hindi & Nepali",
+    language: "English",
     videos: [],
     pdfs: []
   }
@@ -160,7 +160,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Anamol Sharma",
     location: "Kathmandu",
     course: "AI Master Class",
-    text: "30+ AI tools एकै कोर्समा सिक्न पाउँदा धेरै फाइदा भयो। Studio-style presentation र practical workflows ले मेरो काम अझ professional बनायो।",
+    text: "Learning 30+ AI tools in a single course was super valuable. The studio-style lessons and practical workflows made my work much more professional.",
     avatar: "🧔",
     rating: 5
   },
@@ -168,7 +168,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Harsh Sapkota",
     location: "Pokhara",
     course: "AI Video + Image",
-    text: "यो price मा यति राम्रो content पाउँदा अचम्म लाग्यो। मेरो YouTube channel को growth 3 महिनामा दोब्बर भयो।",
+    text: "I was amazed to get such high-quality training at this price. My YouTube channel doubled in growth within just 3 months.",
     avatar: "👨‍💼",
     rating: 5
   },
@@ -176,7 +176,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Saroj Maharjan",
     location: "Lalitpur",
     course: "AI Song Creation",
-    text: "Voice cloning र AI song बनाउने तरिका सिकेर म आहाई song release गर्दैछु। Lifetime access को सबैभन्दा राम्रो फाइदा।",
+    text: "After learning voice cloning and AI song production, I am already releasing my own tracks. Lifetime access is the best part.",
     avatar: "🎤",
     rating: 5
   },
@@ -184,7 +184,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Priya Shrestha",
     location: "Biratnagar",
     course: "AI Presentation",
-    text: "Office presentation हरू अब 10 मिनेटमै तयार हुन्छन्। Boss ले पनि praise गर्नुभयो। धन्यवाद HamroLms!",
+    text: "My office presentations are now ready in 10 minutes, and my manager praised the design quality. Thank you HamroLms!",
     avatar: "👩‍💼",
     rating: 5
   },
@@ -192,7 +192,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Aashish Khadka",
     location: "Pokhara",
     course: "AI Master Class",
-    text: "Midjourney, Runway, Leonardo जस्ता tools को राम्रो training पाएँ। Beginner बाट अब confident AI user बनेको छु।",
+    text: "Got hands-on training for tools like Midjourney, Runway, and Leonardo. I went from a complete beginner to a confident AI creator.",
     avatar: "📸",
     rating: 5
   },
@@ -200,7 +200,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Roshan Thapa",
     location: "Chitwan",
     course: "AI Video Creation",
-    text: "Talking avatar video बनाउन सिकेपछि मेरो business को promo video हरू धेरै राम्रो बन्छ। Highly recommended!",
+    text: "After learning how to create talking avatar videos, my business promo videos look far more engaging. Highly recommended!",
     avatar: "🎥",
     rating: 5
   },
@@ -208,7 +208,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Srijana Karki",
     location: "Kathmandu",
     course: "AI Image + Song",
-    text: "महिलाको लागि पनि सजिलै बुझिने भाषामा course बनाइएको छ। AI ले मेरो creativity लाई नयाँ उडान दियो।",
+    text: "The lessons are explained in a clear, beginner-friendly way. AI has given my creative projects a whole new direction.",
     avatar: "🌸",
     rating: 5
   },
@@ -216,7 +216,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Bikash Gurung",
     location: "Dharan",
     course: "AI Master Class",
-    text: "Certificate सहित lifetime access पाएँ। अहिले आफैंले सिकाएर अरूलाई course बेच्दैछु। Best investment!",
+    text: "Got lifetime access along with a verified certificate. Now I even teach these digital workflows to others. Best investment!",
     avatar: "💰",
     rating: 5
   },
@@ -224,7 +224,7 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Nisha Adhikari",
     location: "Bhaktapur",
     course: "AI Presentation",
-    text: "College project हरूमा AI presentation प्रयोग गरेर Topper बनेकी छु। Teachers ले पनि सोध्न थाल्नुभयो कसरी बनाएको भनेर।",
+    text: "Used AI presentations for my college projects and topped the class. Even my teachers asked how I designed the slides so cleanly.",
     avatar: "🎓",
     rating: 5
   },
@@ -232,35 +232,11 @@ export const TESTIMONIALS: Testimonial[] = [
     name: "Suman Rai",
     location: "Pokhara",
     course: "AI Video + Song",
-    text: "Payment गरेको २ मिनेटमै access पाएँ। Support team पनि अति responsive। Nepal मा यस्तो quality course पाउन गाह्रो छ।",
+    text: "Received course access within 2 minutes of payment, and the support team is super responsive. Easily one of the best online courses available.",
     avatar: "🚀",
     rating: 5
   }
 ];
 
-export const FAQS: FAQItem[] = [
-  {
-    question: "यो course recorded हो कि live class मा?",
-    answer: "यो course मा कुनै पनि Live Class छैन। सबै Recorded Videos बनाइएको छ। तपाईं आफ्नो सुविधा अनुसार जुनसुकै समयमा पनि हेर्न सक्नुहुन्छ (Offline / Online)."
-  },
-  {
-    question: "यो course मा lifetime access हुन्छ?",
-    answer: "हो, एक पटक किन्नुभयो भने Lifetime Access + सबै Future Updates नि:शुल्क पाउनुहुन्छ।"
-  },
-  {
-    question: "Payment कसरी गर्ने?",
-    answer: "WhatsApp वा QR स्क्यान गरी eSewa (ID: 9763323268 - Ayush Chaurasiya) वा Bank Transfer मार्फत सजिलै भुक्तानी गर्न सक्नुहुन्छ।"
-  },
-  {
-    question: "Refund & Return Policy (रिफन्ड तथा फिर्ता नीति) के छ?",
-    answer: "कोर्स खरिद गरेको २ दिन (४८ घण्टा) भित्र रिफन्डको लागि आवेदन दिन सकिन्छ। सम्झौता अनुसार ५०% क्यास (50% Cash Return) उपलब्ध गराइनेछ र उक्त रकम आवेदन दर्ता भएको ३0 दिन पछि फिर्ता (Return) हुनेछ।"
-  },
-  {
-    question: "Course भाषा के हो?",
-    answer: "सबै courses नेपाली र हिन्दी भाषामा छन् जसले गर्दा सजिलै बुझ्न सकिन्छ।"
-  },
-  {
-    question: "Certificate पाइन्छ कि पाइँदैन?",
-    answer: "हो, Course पूरा गरेपछि Professional Completion Certificate उपलब्ध गराइन्छ।"
-  }
-];
+export const FAQS: FAQItem[] = [];
+

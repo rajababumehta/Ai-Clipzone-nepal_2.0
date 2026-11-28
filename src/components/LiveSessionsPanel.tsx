@@ -415,11 +415,11 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
     const matchedUrl = rawLinkInput.match(/https?:\/\/\S+/i);
     const cleanLink = matchedUrl ? matchedUrl[0] : rawLinkInput;
     if (!cleanTitle) {
-      notify('कृपया Live Session को शीर्षक (Title) लेख्नुहोस्।', 'error');
+      notify('Please enter a Live Session title.', 'error');
       return;
     }
     if (!/^https?:\/\/.+/i.test(cleanLink)) {
-      notify('कृपया मान्य Zoom Meeting Link (https://...) राख्नुहोस्।', 'error');
+      notify('Please enter a valid Zoom Meeting Link (https://...).', 'error');
       return;
     }
 
@@ -558,10 +558,10 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
               <Video className="w-5 h-5" />
             </div>
             <h5 className="text-sm font-bold text-zinc-200">
-              अहिले कुनै Live Class छैन
+              No Live Class right now
             </h5>
             <p className="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
-              शिक्षकले Live Class सुरु गरेपछि यहाँ Join Class बटन देखिनेछ।
+              When your instructor starts a Live Class, the Join Class button will appear here.
             </p>
           </div>
         )}
@@ -619,10 +619,10 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                 <div className="absolute inset-0 z-10 bg-zinc-950 flex flex-col items-center justify-center gap-2.5 p-6 text-center pointer-events-none">
                   <RefreshCw className="w-7 h-7 animate-spin text-blue-400" />
                   <p className="text-sm font-black text-white">
-                    Live Class खुल्दैछ...
+                    Opening Live Class...
                   </p>
                   <p className="text-xs text-zinc-400 max-w-xs">
-                    नाम: <strong className="text-white">{lockedStudentName}</strong>
+                    Name: <strong className="text-white">{lockedStudentName}</strong>
                   </p>
                 </div>
               )}
@@ -667,7 +667,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
             Live Sessions Management ({managerSessions.length})
           </h4>
           <p className="text-xs text-zinc-400">
-            Zoom बाट Meeting बनाउनुहोस्, लिङ्क यहाँ पेस्ट गरी Create Meeting थिच्नुहोस् — विद्यार्थीलाई स्वतः Notification जानेछ र Join बाट सिधै Zoom मा जोडिनेछन्।
+            Create a Zoom meeting, paste the link here, and click Create Meeting — students will automatically be notified and can join directly from Join Class.
           </p>
         </div>
 
@@ -688,10 +688,10 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
         <div className="bg-zinc-950 border border-amber-500/30 rounded-2xl p-6 text-center space-y-2">
           <Video className="w-8 h-8 text-amber-400 mx-auto" />
           <h5 className="text-sm font-black text-white">
-            कुनै पनि कोर्षमा Live Class सक्रिय गरिएको छैन
+            Live Class is not enabled on any course
           </h5>
           <p className="text-xs text-zinc-400 max-w-md mx-auto">
-            पहिले Main Admin बाट कोर्ष Create/Edit गर्दा &quot;Include Live Session (Zoom)&quot; अन गर्नुहोस्।
+            First turn on &quot;Include Live Session (Zoom)&quot; when creating or editing a course from Main Admin.
           </p>
         </div>
       )}
@@ -719,7 +719,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
           <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl px-3.5 py-2.5 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs text-zinc-300 font-semibold">
-                1. Zoom मा Meeting खोलेर Link कपी गर्नुहोस्:
+                1. Start a Zoom meeting and copy the link:
               </span>
               <div className="flex items-center gap-2 flex-wrap">
                 <a
@@ -755,7 +755,7 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
               </div>
             </div>
             <p className="text-[11px] text-amber-300/90 leading-snug">
-              Direct Join (Admit नचाहिने) बनाउन Zoom मा <strong>Waiting Room OFF</strong> राख्नुहोस् (Meeting भित्र: <em>Security → Enable Waiting Room</em> अनचेक गर्नुहोस्)।
+              For Direct Join (without waiting for host approval), keep <strong>Waiting Room OFF</strong> in Zoom (inside the meeting: uncheck <em>Security → Enable Waiting Room</em>).
             </p>
           </div>
 
@@ -831,9 +831,9 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
                   }}
                   className="w-full bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-hidden"
                 >
-                  <option value="live">Live Now (अहिले सुरु)</option>
-                  <option value="scheduled">Scheduled (तालिका अनुसार)</option>
-                  <option value="ended">Ended (समाप्त)</option>
+                  <option value="live">Live Now</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="ended">Ended</option>
                 </select>
               </div>
             </div>
@@ -1081,10 +1081,10 @@ export const LiveSessionsPanel: React.FC<LiveSessionsPanelProps> = ({
           <div className="bg-zinc-950 border border-dashed border-zinc-800 rounded-2xl p-8 text-center space-y-3">
             <Users className="w-8 h-8 text-zinc-600 mx-auto" />
             <p className="text-xs font-bold text-zinc-300">
-              अहिलेसम्म कुनै Live Session Create गरिएको छैन
+              No Live Sessions created yet
             </p>
             <p className="text-[11px] text-zinc-500 max-w-sm mx-auto">
-              माथिको &quot;Create Session&quot; बटनमा क्लिक गरी Zoom Meeting बनाएर यहाँ Create Meeting गर्नुहोस्।
+              Click the &quot;Create Session&quot; button above, start a Zoom meeting, and save it here.
             </p>
           </div>
         )

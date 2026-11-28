@@ -55,7 +55,7 @@ export const QrCodeScannerPanel: React.FC<QrCodeScannerPanelProps> = ({
       if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
         setStatus('error');
         setErrorMsg(
-          'यो ब्राउजर वा डिभाइसमा लाइभ क्यामेरा उपलब्ध छैन। तलबाट QR फोटो अपलोड गर्न सक्नुहुन्छ।'
+          'Live camera is unavailable in this browser or device. You can upload a QR photo below.'
         );
         return;
       }
@@ -91,15 +91,15 @@ export const QrCodeScannerPanel: React.FC<QrCodeScannerPanelProps> = ({
           setStatus('error');
           if (primaryErr?.name === 'NotAllowedError' || primaryErr?.name === 'PermissionDeniedError') {
             setErrorMsg(
-              'क्यामेराको अनुमति (Camera Permission) अस्वीकार गरियो। ब्राउजर सेटिङबाट अनुमति दिनुहोस् वा QR फोटो अपलोड गर्नुहोस्।'
+              'Camera permission was denied. Please allow camera access in browser settings or upload a QR photo.'
             );
           } else if (primaryErr?.name === 'NotFoundError' || primaryErr?.name === 'DevicesNotFoundError') {
             setErrorMsg(
-              'डिभाइसमा क्यामेरा भेटिएन। तलबाट QR कोडको फोटो अपलोड गर्न सक्नुहुन्छ।'
+              'No camera was detected on this device. You can upload a QR code photo below.'
             );
           } else {
             setErrorMsg(
-              'क्यामेरा खोल्न सकिएन। कृपया पुनः प्रयास गर्नुहोस् वा QR फोटो अपलोड गर्नुहोस्।'
+              'Could not open camera. Please try again or upload a QR photo.'
             );
           }
           return;
@@ -211,12 +211,12 @@ export const QrCodeScannerPanel: React.FC<QrCodeScannerPanelProps> = ({
           onScanSuccess(decoded.data.trim());
         } else {
           setStatus('error');
-          setErrorMsg('छनोट गरिएको फोटोमा मान्य QR कोड भेटिएन। कृपया स्पष्ट QR फोटो छान्नुहोस्।');
+          setErrorMsg('No valid QR code found in the selected photo. Please choose a clearer QR image.');
         }
       };
       img.onerror = () => {
         setStatus('error');
-        setErrorMsg('फोटो पढ्न सकिएन। कृपया अर्को QR फोटो प्रयास गर्नुहोस्।');
+        setErrorMsg('Could not read the selected image. Please try another QR photo.');
       };
       img.src = String(reader.result || '');
     };
@@ -236,7 +236,7 @@ export const QrCodeScannerPanel: React.FC<QrCodeScannerPanelProps> = ({
               Scan Activation QR Code
             </p>
             <p className="text-[10px] text-zinc-400">
-              क्यामेरा अगाडि QR कोड राख्नुहोस् — स्वतः Paste हुनेछ
+              Point your camera at the QR code — it will auto-fill
             </p>
           </div>
         </div>
@@ -291,7 +291,7 @@ export const QrCodeScannerPanel: React.FC<QrCodeScannerPanelProps> = ({
         {status === 'starting' && (
           <div className="absolute inset-0 bg-zinc-950/85 flex flex-col items-center justify-center gap-2 p-4 text-center">
             <RefreshCw className="w-6 h-6 text-blue-400 animate-spin" />
-            <p className="text-xs font-bold text-zinc-200">क्यामेरा खुल्दैछ...</p>
+            <p className="text-xs font-bold text-zinc-200">Opening camera...</p>
           </div>
         )}
 

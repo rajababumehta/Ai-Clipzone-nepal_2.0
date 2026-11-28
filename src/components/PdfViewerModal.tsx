@@ -139,7 +139,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
               <span className="text-purple-400 select-none">📖</span>
               <span className="truncate">
                 {activePdf.courseTitle ? `Course: ${activePdf.courseTitle} • ` : ''} 
-                Full Screen View: सुरक्षित रूपमा सम्पूर्ण अध्ययन सामग्री सिधै पढ्नुहोस् र जुम गर्नुहोस्।
+                Full Screen View: Read and zoom your study material securely directly in the reader.
               </span>
             </div>
             <span className="text-[10px] text-purple-300 font-bold shrink-0 flex items-center gap-1">
@@ -152,7 +152,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
             {isLoading && (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950 text-slate-300 gap-3">
                 <div className="w-10 h-10 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                <p className="text-xs font-bold text-slate-400">PDF डकुमेन्ट लोड हुँदैछ...</p>
+                <p className="text-xs font-bold text-slate-400">Loading PDF document...</p>
               </div>
             )}
 
