@@ -652,7 +652,7 @@ async function verifyStudentEnrollment(req, db, adminAuth, requiredCourseId) {
       studentEmail: adminCtx.email,
       enrolledCourseIds: adminAllowedCourseIds,
       isAdminBypass: true,
-      reason: authorized ? void 0 : "Sub-Admin is only authorized for their assigned courses."
+      reason: authorized ? void 0 : "Sub-Admin is only authorized for their assigned course."
     };
   }
   let verifiedUid = "";
@@ -1112,7 +1112,7 @@ async function createGoogleMeetSpace(accessToken, fetchFn = fetch) {
   const token = String(accessToken || "").trim();
   if (!token) {
     throw new GoogleMeetApiError(
-      'Google Meet \u091C\u0921\u093E\u0928 \u0917\u0930\u094D\u0928 \u092A\u0939\u093F\u0932\u0947 "Sign in with Google" \u0925\u093F\u091A\u0947\u0930 \u0905\u0928\u0941\u092E\u0924\u093F \u0926\u093F\u0928\u0941\u0939\u094B\u0938\u094D\u0964',
+      'Please click "Sign in with Google" and grant permission before connecting Google Meet.',
       401,
       "GOOGLE_MEET_REAUTH"
     );
@@ -1134,7 +1134,7 @@ async function createGoogleMeetSpace(accessToken, fetchFn = fetch) {
     const rawMsg = data?.error?.message || data?.message || `Google Meet Space creation failed (${res.status})`;
     if (res.status === 401) {
       throw new GoogleMeetApiError(
-        'Google Meet \u0938\u0947\u0938\u0928\u0915\u094B \u0938\u092E\u092F \u0938\u0915\u093F\u090F\u0915\u094B \u091B\u0964 \u0915\u0943\u092A\u092F\u093E \u092A\u0941\u0928\u0903 "Sign in with Google" \u0925\u093F\u091A\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964',
+        'Your Google Meet session has expired. Please click "Sign in with Google" again.',
         401,
         "GOOGLE_MEET_REAUTH"
       );
@@ -2698,7 +2698,7 @@ function createLiveClassRouter(deps = {}) {
 
 // server/seoCatalog.js
 var DEFAULT_PUBLIC_ORIGIN = "https://hamrolms.vercel.app";
-var SUPPORTED_LOCALES = ["en", "ne", "hi"];
+var SUPPORTED_LOCALES = ["en"];
 var FIREBASE_PROJECT_ID = typeof process !== "undefined" && process.env?.FIREBASE_PROJECT_ID?.trim() || "gen-lang-client-0360487518";
 var RAW_DB_ID = typeof process !== "undefined" ? process.env?.FIREBASE_DATABASE_ID?.trim() : "";
 var FIREBASE_DATABASE_ID = RAW_DB_ID && !/^https?:\/\//i.test(RAW_DB_ID) && !RAW_DB_ID.includes("/") ? RAW_DB_ID : "ai-studio-aiclipzonenepal-13e41d9c-1db8-4842-a387-8c950c1f5b2a";
@@ -2716,7 +2716,7 @@ var SEED_COURSES = [
     amount: 449,
     isFree: false,
     order: 0,
-    language: "Hindi & Nepali",
+    language: "English",
     instructorSlug: "rajababu-mehta",
     instructorName: "Rajababu Mehta",
     includeCertificate: true,
@@ -2743,21 +2743,21 @@ var SEED_COURSES = [
     amount: 849,
     isFree: false,
     order: 1,
-    language: "Hindi & Nepali",
+    language: "English",
     instructorSlug: "rajababu-mehta",
     instructorName: "Rajababu Mehta",
     includeCertificate: true,
     includeLive: false,
     learn: [
-      "Channel setup \u0930 niche \u091B\u0928\u094B\u091F",
-      "Video idea \u0916\u094B\u091C\u094D\u0928\u0947 \u0924\u0930\u093F\u0915\u093E",
-      "Script writing storytelling",
-      "Shooting presentation",
+      "Channel setup & niche selection",
+      "Finding winning video ideas",
+      "Script writing & storytelling",
+      "Shooting & presentation",
       "Editing skills",
-      "Thumbnail title",
+      "Thumbnail & title strategy",
       "YouTube growth strategy",
-      "Monetization earning methods",
-      "AI tools \u092A\u094D\u0930\u092F\u094B\u0917 \u0917\u0930\u0947\u0930 content \u092C\u0928\u093E\u0909\u0928\u0947 \u0924\u0930\u093F\u0915\u093E"
+      "Monetization & earning methods",
+      "Creating content with AI tools"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png",
     updatedAt: "2026-11-20"
@@ -2779,11 +2779,12 @@ var CORE_INSTRUCTORS = [
     ],
     avatarUrl: "/institute-logo.png",
     location: "Birgunj, Nepal",
-    languages: ["English", "Nepali", "Hindi"],
+    languages: ["English"],
     courseIds: [
       "Ai master class course by Ai clipzone",
       "youtube-blueprint-course-by-al-clipzone"
     ],
+    isFounder: true,
     socialLinks: {
       website: "https://rajababumehta.com.np",
       facebook: "https://www.facebook.com/profile.php?id=61583901232576"
@@ -2941,49 +2942,123 @@ function fromFirestoreDoc2(docJson) {
   }
   return out;
 }
+function expandServerCourseIdAliases(cid) {
+  if (cid === "al-master-class-course-by-al-clipzone") {
+    return [cid, "Ai master class course by Ai clipzone"];
+  }
+  if (cid === "Ai master class course by Ai clipzone") {
+    return [cid, "al-master-class-course-by-al-clipzone"];
+  }
+  return [cid];
+}
+function normServerTitle(val) {
+  return String(val || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function resolveServerCourseInstructor(course, instructors) {
+  const safeList = Array.isArray(instructors) && instructors.length > 0 ? instructors : CORE_INSTRUCTORS;
+  const aliases = expandServerCourseIdAliases(course.id);
+  const hasCourse = (inst) => Array.isArray(inst?.courseIds) && aliases.some((id) => inst.courseIds.includes(id));
+  const byAssignedSubAdmin = safeList.find((i) => !i.isFounder && hasCourse(i));
+  if (byAssignedSubAdmin) return byAssignedSubAdmin;
+  const byExplicitSlug = course.instructorSlug ? safeList.find((i) => i.slug === slugifyText(course.instructorSlug)) : void 0;
+  if (byExplicitSlug) return byExplicitSlug;
+  const byCourseId = safeList.find(hasCourse);
+  if (byCourseId) return byCourseId;
+  return safeList[0] || CORE_INSTRUCTORS[0];
+}
 function mergePublicInstructors(courses, subAdmins) {
   const bySlug = /* @__PURE__ */ new Map();
-  for (const inst of CORE_INSTRUCTORS) {
-    const matchedIds = courses.filter((c) => c.instructorSlug === inst.slug || inst.courseIds.includes(c.id)).map((c) => c.id);
-    bySlug.set(inst.slug, {
-      ...inst,
-      courseIds: Array.from(/* @__PURE__ */ new Set([...inst.courseIds, ...matchedIds]))
-    });
-  }
-  const BRAND_ALIAS_SLUGS = /* @__PURE__ */ new Set(["ai-clipzone", "ai-clipzone-nepal", "al-clipzone", "hamro-lms", "hamrolms", "hamro-lms-nepal"]);
+  const BRAND_ALIAS_SLUGS = /* @__PURE__ */ new Set([
+    "ai-clipzone",
+    "ai-clipzone-nepal",
+    "al-clipzone",
+    "hamro-lms",
+    "hamrolms",
+    "hamro-lms-nepal"
+  ]);
+  const subAdminOwnedCourseIds = /* @__PURE__ */ new Set();
+  const resolvedSubEntries = [];
   for (const sub of subAdmins) {
     if (!sub || sub.status !== "active" || !sub.name) continue;
-    const rawSlug = slugifyText(sub.name);
+    const cleanName = String(sub.name).trim();
+    const rawSlug = slugifyText(cleanName);
     if (!rawSlug || rawSlug === "item") continue;
-    const slug = BRAND_ALIAS_SLUGS.has(rawSlug) ? "rajababu-mehta" : rawSlug;
-    const subIds = Array.from(
-      new Set([
+    const isBrandAlias = BRAND_ALIAS_SLUGS.has(rawSlug) || rawSlug === "rajababu-mehta";
+    const slug = isBrandAlias ? "rajababu-mehta" : rawSlug;
+    const rawIds = Array.from(
+      /* @__PURE__ */ new Set([
         ...Array.isArray(sub.courseIds) ? sub.courseIds.map(String).filter(Boolean) : [],
         ...sub.courseId ? [String(sub.courseId)] : []
       ])
     );
+    const expandedIds = new Set(rawIds.flatMap(expandServerCourseIdAliases));
+    const rawTitles = new Set(
+      [
+        ...Array.isArray(sub.courseTitles) ? sub.courseTitles : [],
+        ...sub.courseTitle ? [sub.courseTitle] : []
+      ].map(normServerTitle).filter(Boolean)
+    );
+    const assignedCourses = courses.filter(
+      (c) => expandedIds.has(c.id) || rawTitles.size > 0 && rawTitles.has(normServerTitle(c.title))
+    );
+    const resolvedIds = Array.from(
+      new Set(courses.length > 0 ? assignedCourses.map((c) => c.id) : rawIds)
+    );
+    if (!isBrandAlias) {
+      for (const cid of resolvedIds) {
+        for (const aliasId of expandServerCourseIdAliases(cid)) {
+          subAdminOwnedCourseIds.add(aliasId);
+        }
+      }
+    }
+    resolvedSubEntries.push({
+      sub,
+      slug,
+      cleanName,
+      assignedCourses,
+      courseIds: resolvedIds
+    });
+  }
+  for (const inst of CORE_INSTRUCTORS) {
+    const matchedIds = courses.length > 0 ? courses.filter(
+      (c) => !subAdminOwnedCourseIds.has(c.id) && (c.instructorSlug === inst.slug || inst.courseIds.some((id) => expandServerCourseIdAliases(id).includes(c.id)))
+    ).map((c) => c.id) : inst.courseIds.filter((id) => !subAdminOwnedCourseIds.has(id));
+    bySlug.set(inst.slug, {
+      ...inst,
+      courseIds: Array.from(new Set(matchedIds))
+    });
+  }
+  for (const { sub, slug, cleanName, assignedCourses, courseIds } of resolvedSubEntries) {
     const existing = bySlug.get(slug);
     if (existing) {
-      for (const cid of subIds) {
+      for (const cid of courseIds) {
         if (!existing.courseIds.includes(cid)) {
           existing.courseIds.push(cid);
         }
       }
       continue;
     }
+    const primaryCourse = assignedCourses[0];
+    const combinedLearn = Array.from(
+      new Set(
+        assignedCourses.flatMap((c) => Array.isArray(c.learn) ? c.learn : []).map((item) => String(item).trim()).filter(Boolean)
+      )
+    ).slice(0, 6);
     bySlug.set(slug, {
       slug,
-      name: String(sub.name).trim(),
+      name: cleanName,
       role: "Course Instructor & Mentor",
-      headline: subIds.length > 1 ? `Instructor for ${subIds.length} Courses on Hamro LMS Nepal` : sub.courseTitle ? `Instructor for ${sub.courseTitle}` : "Instructor on Hamro LMS Nepal",
-      bio: `${String(sub.name).trim()} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
+      headline: assignedCourses.length > 1 ? `Course Instructor for ${assignedCourses.length} Courses on Hamro LMS Nepal` : primaryCourse ? `Course Instructor for ${primaryCourse.title}` : sub.courseTitle ? `Course Instructor for ${sub.courseTitle}` : "Verified Course Instructor on Hamro LMS Nepal",
+      bio: assignedCourses.length > 1 ? `${cleanName} is the Course Instructor for ${assignedCourses.length} courses on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.` : primaryCourse ? `${cleanName} is the Course Instructor for ${primaryCourse.title} on Hamro LMS Nepal, supporting students with practical feedback, project reviews, and course guidance.` : `${cleanName} teaches practical lessons and mentors students on Hamro LMS Nepal.`,
       avatarUrl: sub.avatarUrl || "/institute-logo.png",
       languages: ["English"],
-      courseIds: subIds,
-      expertise: ["Online Education", "Digital Skills"]
+      courseIds,
+      expertise: combinedLearn.length > 0 ? combinedLearn : ["Online Education", "Digital Skills"],
+      isFounder: false
     });
   }
   for (const c of courses) {
+    if (subAdminOwnedCourseIds.has(c.id)) continue;
     if (c.instructorName && c.instructorSlug) {
       const slug = slugifyText(c.instructorSlug);
       const existing = bySlug.get(slug);
@@ -2997,20 +3072,21 @@ function mergePublicInstructors(courses, subAdmins) {
           headline: `Instructor for ${c.title}`,
           bio: `${String(c.instructorName).trim()} teaches ${c.title} on Hamro LMS.`,
           avatarUrl: "/institute-logo.png",
-          languages: c.language ? [c.language] : ["English", "Nepali"],
+          languages: c.language && !/nepali|hindi/i.test(c.language) ? [c.language] : ["English"],
           courseIds: [c.id],
-          expertise: Array.isArray(c.learn) ? c.learn.slice(0, 4) : ["Online Education"]
+          expertise: Array.isArray(c.learn) ? c.learn.slice(0, 4) : ["Online Education"],
+          isFounder: false
         });
       }
     }
   }
   return Array.from(bySlug.values());
 }
-async function fetchJsonWithTimeout(url, init = {}, timeoutMs = 2200) {
+async function fetchJsonWithTimeout(url, init = {}, timeoutMs = 1800) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    const res = await fetch(url, { ...init, signal: controller.signal, cache: "no-store" });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -3023,9 +3099,13 @@ async function fetchPublicCatalogSnapshot() {
   let deletedIds = [];
   let courses = [...SEED_COURSES];
   const subAdmins = [];
+  let coursesSeeded = false;
+  let siteSettings = null;
+  let paymentQr = null;
+  let liveFetched = false;
   try {
     const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
-    const [configJson, coursesJson, subAdminsJson] = await Promise.all([
+    const [configJson, coursesJson, subAdminsJson, siteSettingsJson, paymentQrJson] = await Promise.all([
       fetchJsonWithTimeout(`${baseUrl}/system/config`),
       fetchJsonWithTimeout(`${baseUrl}/courses?pageSize=100`),
       fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
@@ -3043,47 +3123,65 @@ async function fetchPublicCatalogSnapshot() {
             }
           }
         })
-      })
+      }),
+      fetchJsonWithTimeout(`${baseUrl}/system/site_settings`),
+      fetchJsonWithTimeout(`${baseUrl}/system/payment_qr`)
     ]);
     if (configJson?.fields) {
+      liveFetched = true;
       const cfg = fromFirestoreDoc2(configJson);
+      coursesSeeded = Boolean(cfg.courses_seeded === true);
       if (Array.isArray(cfg.deletedCourseIds)) {
         deletedIds = cfg.deletedCourseIds.map(String);
       }
     }
-    const docList = Array.isArray(coursesJson?.documents) ? coursesJson.documents : [];
-    if (docList.length > 0) {
-      const liveCourses = [];
-      for (const docItem of docList) {
-        const d = fromFirestoreDoc2(docItem);
-        const docId = String(docItem?.name?.split("/").pop() || d.id || "");
-        if (!docId || deletedIds.includes(docId)) continue;
-        const normalizedTitle = normalizeLegacyBrandText(String(d.title || "Course")).replace(/\s+/g, " ").trim();
-        liveCourses.push({
-          id: docId,
-          slug: d.slug ? slugifyText(d.slug) : void 0,
-          title: normalizedTitle || "Course",
-          seoTitle: d.seoTitle ? String(d.seoTitle) : void 0,
-          seoDescription: d.seoDescription ? String(d.seoDescription) : void 0,
-          overview: d.overview ? String(d.overview) : void 0,
-          category: d.category ? String(d.category) : "Online Course",
-          level: d.level ? String(d.level) : "All Levels",
-          price: String(d.price || "FREE"),
-          amount: typeof d.amount === "number" ? d.amount : 0,
-          isFree: Boolean(d.isFree),
-          order: typeof d.order === "number" ? d.order : 0,
-          language: d.language ? String(d.language) : "Nepali & Hindi",
-          instructorSlug: d.instructorSlug ? String(d.instructorSlug) : void 0,
-          instructorName: d.instructorName ? String(d.instructorName) : void 0,
-          includeCertificate: d.includeCertificate !== false,
-          includeLive: Boolean(d.includeLive),
-          learn: Array.isArray(d.learn) ? d.learn.map(String) : [],
-          image: d.image ? String(d.image) : "/institute-logo.png",
-          updatedAt: d.updatedAt || docItem.updateTime || void 0
-        });
-      }
-      if (liveCourses.length > 0) {
+    if (siteSettingsJson?.fields) {
+      siteSettings = fromFirestoreDoc2(siteSettingsJson);
+    }
+    if (paymentQrJson?.fields) {
+      paymentQr = fromFirestoreDoc2(paymentQrJson);
+    }
+    if (coursesJson && typeof coursesJson === "object") {
+      liveFetched = true;
+      const docList = Array.isArray(coursesJson.documents) ? coursesJson.documents : [];
+      if (docList.length > 0) {
+        const liveCourses = [];
+        for (const docItem of docList) {
+          const d = fromFirestoreDoc2(docItem);
+          const docId = String(docItem?.name?.split("/").pop() || d.id || "");
+          if (!docId || deletedIds.includes(docId) || d.isHidden === true) continue;
+          const normalizedTitle = normalizeLegacyBrandText(String(d.title || "Course")).replace(/\s+/g, " ").trim();
+          liveCourses.push({
+            id: docId,
+            slug: d.slug ? slugifyText(d.slug) : void 0,
+            title: normalizedTitle || "Course",
+            seoTitle: d.seoTitle ? String(d.seoTitle) : void 0,
+            seoDescription: d.seoDescription ? String(d.seoDescription) : void 0,
+            overview: d.overview ? String(d.overview) : void 0,
+            message: d.message ? normalizeLegacyBrandText(String(d.message)) : void 0,
+            category: d.category ? String(d.category) : "Online Course",
+            level: d.level ? String(d.level) : "All Levels",
+            price: String(d.price || "FREE"),
+            amount: typeof d.amount === "number" ? d.amount : 0,
+            isFree: Boolean(d.isFree),
+            isPopular: Boolean(d.isPopular),
+            popularText: d.popularText ? String(d.popularText) : void 0,
+            order: typeof d.order === "number" ? d.order : 0,
+            language: d.language && !/nepali|hindi/i.test(String(d.language)) ? String(d.language) : "English",
+            instructorSlug: d.instructorSlug ? String(d.instructorSlug) : void 0,
+            instructorName: d.instructorName ? String(d.instructorName) : void 0,
+            includeCertificate: d.includeCertificate !== false,
+            includeLive: Boolean(d.includeLive),
+            learn: Array.isArray(d.learn) ? d.learn.map(String) : [],
+            image: d.image ? String(d.image) : "/institute-logo.png",
+            updatedAt: d.updatedAt || docItem.updateTime || void 0
+          });
+        }
         courses = liveCourses.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      } else if (coursesSeeded) {
+        courses = [];
+      } else if (deletedIds.length > 0) {
+        courses = courses.filter((c) => !deletedIds.includes(c.id));
       }
     } else if (deletedIds.length > 0) {
       courses = courses.filter((c) => !deletedIds.includes(c.id));
@@ -3099,6 +3197,7 @@ async function fetchPublicCatalogSnapshot() {
           courseId: String(d.courseId || ""),
           courseTitle: String(d.courseTitle || ""),
           courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
+          courseTitles: Array.isArray(d.courseTitles) ? d.courseTitles.map(String).filter(Boolean) : [],
           avatarUrl: d.avatarUrl ? String(d.avatarUrl) : void 0,
           status: "active"
         });
@@ -3107,12 +3206,24 @@ async function fetchPublicCatalogSnapshot() {
   } catch {
   }
   const instructors = mergePublicInstructors(courses, subAdmins);
-  return { courses, instructors };
+  return {
+    courses,
+    instructors,
+    subAdmins,
+    deletedCourseIds: deletedIds,
+    coursesSeeded,
+    siteSettings,
+    paymentQr,
+    liveFetched
+  };
 }
 function buildSitemapXmlFromCatalog(origin, courses, instructors) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const specs = [
     { cleanPath: "/", lastmod: today, changefreq: "daily", priority: "1.0" },
+    { cleanPath: "/courses", lastmod: today, changefreq: "daily", priority: "0.95" },
+    { cleanPath: "/about-us", lastmod: today, changefreq: "monthly", priority: "0.85" },
+    { cleanPath: "/learn", lastmod: today, changefreq: "monthly", priority: "0.85" },
     { cleanPath: "/instructors", lastmod: today, changefreq: "weekly", priority: "0.85" },
     { cleanPath: "/blog", lastmod: today, changefreq: "weekly", priority: "0.85" }
   ];
@@ -3160,8 +3271,8 @@ function buildSitemapXmlFromCatalog(origin, courses, instructors) {
     });
   }
   specs.push(
-    { cleanPath: "/privacy-policy", lastmod: "2026-01-01", changefreq: "yearly", priority: "0.4" },
-    { cleanPath: "/terms", lastmod: "2026-01-01", changefreq: "yearly", priority: "0.4" }
+    { cleanPath: "/privacy-policy", lastmod: "2026-01-01", changefreq: "yearly", priority: "0.7" },
+    { cleanPath: "/terms", lastmod: "2026-01-01", changefreq: "yearly", priority: "0.5" }
   );
   const urlNodes = [];
   for (const spec of specs) {
@@ -3174,6 +3285,16 @@ function buildSitemapXmlFromCatalog(origin, courses, instructors) {
         `${origin}${buildLocalizedPath(spec.cleanPath, "en")}`
       )}" />`
     ].join("\n");
+    const matchedCourse = spec.cleanPath.startsWith("/courses/") ? (courses || []).find((c) => `/courses/${getCourseSlug(c)}` === spec.cleanPath) : null;
+    const imageXml = matchedCourse?.image ? `
+    <image:image>
+      <image:loc>${escapeXml(resolveAbsImg(matchedCourse.image, origin))}</image:loc>
+      <image:title>${escapeXml(matchedCourse.title)}</image:title>
+    </image:image>` : spec.cleanPath === "/" ? `
+    <image:image>
+      <image:loc>${escapeXml(`${origin}/institute-logo.png`)}</image:loc>
+      <image:title>HamroLms \u2013 Online Learning &amp; Digital Skill Courses</image:title>
+    </image:image>` : "";
     for (const loc of SUPPORTED_LOCALES) {
       const fullLoc = `${origin}${buildLocalizedPath(spec.cleanPath, loc)}`;
       urlNodes.push(
@@ -3182,14 +3303,15 @@ function buildSitemapXmlFromCatalog(origin, courses, instructors) {
     <lastmod>${escapeXml(spec.lastmod)}</lastmod>
     <changefreq>${spec.changefreq}</changefreq>
     <priority>${loc === "en" ? spec.priority : (Number(spec.priority) * 0.9).toFixed(2)}</priority>
-${alternatesXml}
+${alternatesXml}${imageXml}
   </url>`
       );
     }
   }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urlNodes.join("\n")}
 </urlset>
 `;
@@ -3204,9 +3326,7 @@ async function generateSitemapXml(origin = DEFAULT_PUBLIC_ORIGIN) {
 }
 function generateRobotsTxt(origin = DEFAULT_PUBLIC_ORIGIN) {
   const safeOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, "");
-  return [
-    "User-agent: *",
-    "Allow: /",
+  const privateDisallows = [
     "Disallow: /api/",
     "Disallow: /admin",
     "Disallow: /classroom",
@@ -3214,11 +3334,116 @@ function generateRobotsTxt(origin = DEFAULT_PUBLIC_ORIGIN) {
     "Disallow: /enroll",
     "Disallow: /live",
     "Disallow: /ask",
-    "Disallow: /delete-account",
+    "Disallow: /delete-account"
+  ];
+  const aiCrawlers = [
+    "GPTBot",
+    "OAI-SearchBot",
+    "ChatGPT-User",
+    "PerplexityBot",
+    "ClaudeBot",
+    "anthropic-ai",
+    "Google-Extended",
+    "Applebot-Extended"
+  ];
+  return [
+    "User-agent: *",
+    "Allow: /",
+    ...privateDisallows,
     "",
+    ...aiCrawlers.flatMap((bot) => [
+      `User-agent: ${bot}`,
+      "Allow: /",
+      "Allow: /llms.txt",
+      "Allow: /llms-full.txt",
+      ...privateDisallows,
+      ""
+    ]),
     `Sitemap: ${safeOrigin}/sitemap.xml`,
+    `# LLMs Context: ${safeOrigin}/llms.txt`,
+    `# Full LLMs Context: ${safeOrigin}/llms-full.txt`,
     ""
   ].join("\n");
+}
+function buildLlmsTxtFromCatalog(origin, courses, instructors, isFull = false) {
+  const safeOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, "");
+  const safeCourses = Array.isArray(courses) && courses.length > 0 ? courses : SEED_COURSES;
+  const safeInstructors = Array.isArray(instructors) && instructors.length > 0 ? instructors : CORE_INSTRUCTORS;
+  const lines = [
+    "# HamroLms",
+    "",
+    "> HamroLms (also known as Hamro LMS) is an online learning management system in Nepal offering practical digital skill courses in AI tools, prompt engineering, video editing, graphic design, YouTube growth, and web development, taught in English by verified instructors with structured video modules, downloadable PDF notes, and certificates.",
+    "",
+    "## Platform Facts",
+    `- Official Website: ${safeOrigin}/`,
+    `- Course Catalog: ${safeOrigin}/courses`,
+    `- Instructors Directory: ${safeOrigin}/instructors`,
+    `- Learning Blog & Tutorials: ${safeOrigin}/blog`,
+    `- About Us: ${safeOrigin}/about-us`,
+    `- Learning Pathway: ${safeOrigin}/learn`,
+    `- Privacy Policy: ${safeOrigin}/privacy-policy`,
+    `- Terms of Use: ${safeOrigin}/terms`,
+    "- Primary Language: English",
+    "- Support Email: support.hamrolms@gmail.com",
+    "- Region Served: Nepal and global online learners",
+    "- Format: Self-paced HD video chapters, downloadable PDF notes, live workshops (course-dependent), and digital certificates of completion",
+    "",
+    "## Online Courses"
+  ];
+  for (const c of safeCourses) {
+    const cUrl = `${safeOrigin}/courses/${getCourseSlug(c)}`;
+    const priceLabel = c.isFree || c.amount === 0 ? "Free" : c.price || "Paid";
+    const resolvedInst = resolveServerCourseInstructor(c, safeInstructors);
+    const instName = resolvedInst?.name || c.instructorName;
+    const instLabel = instName ? ` | Instructor: ${instName}` : "";
+    const desc = c.overview || c.seoDescription || `Structured online course covering ${c.category || "digital skills"}.`;
+    lines.push(`- [${c.title}](${cUrl}) (${priceLabel}${instLabel}): ${desc}`);
+    if (isFull && Array.isArray(c.learn) && c.learn.length > 0) {
+      lines.push(`  - Key Skills Covered: ${c.learn.join("; ")}`);
+    }
+  }
+  lines.push("", "## Verified Instructors");
+  for (const inst of safeInstructors) {
+    const instUrl = `${safeOrigin}/instructors/${inst.slug}`;
+    lines.push(`- [${inst.name}](${instUrl}) \u2013 ${inst.role}: ${inst.bio}`);
+    if (isFull && Array.isArray(inst.expertise) && inst.expertise.length > 0) {
+      lines.push(`  - Expertise: ${inst.expertise.join(", ")}`);
+    }
+  }
+  lines.push("", "## Learning Guides & Blog Articles");
+  for (const post of SEED_BLOG_POSTS) {
+    const postUrl = `${safeOrigin}/blog/${post.slug}`;
+    lines.push(`- [${post.title}](${postUrl}) (${post.category}): ${post.excerpt}`);
+    if (isFull && post.seoDescription) {
+      lines.push(`  - Summary: ${post.seoDescription}`);
+    }
+  }
+  if (isFull) {
+    lines.push(
+      "",
+      "## Frequently Asked Questions",
+      "- What is HamroLms? HamroLms is an online learning platform in Nepal designed for students, creators, and professionals seeking practical digital skills in AI tools, video production, and web development.",
+      "- How do students enroll in HamroLms courses? Students choose a course from the catalog, complete enrollment (free or via QR/eSewa payment), and activate their access key in the student portal to unlock HD video lessons and study notes.",
+      "- Do HamroLms courses include certificates? Eligible self-paced courses include a verifiable Certificate of Completion once enrolled."
+    );
+  }
+  lines.push("", `Sitemap: ${safeOrigin}/sitemap.xml`, "");
+  return lines.join("\n");
+}
+async function generateLlmsDocument(origin = DEFAULT_PUBLIC_ORIGIN, isFull = false) {
+  try {
+    const { courses, instructors } = await fetchPublicCatalogSnapshot();
+    return buildLlmsTxtFromCatalog(origin, courses, instructors, isFull);
+  } catch {
+    return buildLlmsTxtFromCatalog(origin, SEED_COURSES, CORE_INSTRUCTORS, isFull);
+  }
+}
+function resolveAbsImg(img, origin) {
+  const cleanOrigin = String(origin || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, "");
+  const raw = String(img || "").trim();
+  if (!raw) return `${cleanOrigin}/institute-logo.png`;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${cleanOrigin}${raw.startsWith("/") ? raw : `/${raw}`}`;
 }
 
 // server/seoRoutes.ts
@@ -3251,6 +3476,14 @@ function mountSeoRoutes(app2) {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.status(200).send(generateRobotsTxt2(origin));
+  });
+  app2.get(["/llms.txt", "/llms-full.txt"], async (req, res) => {
+    const origin = resolvePublicOrigin2(req);
+    const isFull = req.path.includes("llms-full.txt");
+    const txt = await generateLlmsDocument(origin, isFull);
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400");
+    res.status(200).send(txt);
   });
 }
 
@@ -3434,7 +3667,7 @@ function mountSharedApiMiddlewareAndRoutes(app2) {
       }
       if (!ai) {
         return res.json({
-          reply: "\u0928\u092E\u0938\u094D\u0924\u0947! \u{1F64F} HamroLms \u092E\u093E \u092F\u0939\u093E\u0901\u0932\u093E\u0908 \u0938\u094D\u0935\u093E\u0917\u0924 \u091B\u0964 \u0939\u093E\u092E\u094D\u0930\u093E \u092A\u094D\u0930\u093F\u092E\u093F\u092F\u092E \u0915\u094B\u0930\u094D\u0937\u0939\u0930\u0942 (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, \u0935\u093E eSewa \u092D\u0941\u0915\u094D\u0924\u093E\u0928\u0940 \u0938\u092E\u094D\u092C\u0928\u094D\u0927\u0940 \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0938\u093F\u0927\u0948 \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964"
+          reply: "Hello! Welcome to HamroLms. For information about our premium courses (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Keys, or eSewa payments, please contact our official WhatsApp at 976-3323268."
         });
       }
       const contents = [];
@@ -3466,7 +3699,7 @@ Payment & Activation Flow:
 - Activation: Send payment screenshot to official WhatsApp 976-3323268 to receive instant course activation code.
 - Live Classes are available inside the website classroom for live-enabled courses; recorded courses include completion certificates.
 
-Respond concisely and politely in the user's language (Nepali or English).`;
+Respond concisely and politely in English.`;
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents,
@@ -3476,12 +3709,12 @@ Respond concisely and politely in the user's language (Nepali or English).`;
           maxOutputTokens: 800
         }
       });
-      const replyText = response.text || "\u0925\u092A \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0915\u0943\u092A\u092F\u093E \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964";
+      const replyText = response.text || "For further information, please contact our official WhatsApp number at 976-3323268.";
       res.json({ reply: replyText });
     } catch (error) {
       console.error("Gemini API Error:", error);
       res.json({
-        reply: "\u0928\u092E\u0938\u094D\u0924\u0947! \u{1F64F} HamroLms \u092E\u093E \u092F\u0939\u093E\u0901\u0932\u093E\u0908 \u0938\u094D\u0935\u093E\u0917\u0924 \u091B\u0964 \u0939\u093E\u092E\u094D\u0930\u093E \u092A\u094D\u0930\u093F\u092E\u093F\u092F\u092E \u0915\u094B\u0930\u094D\u0937\u0939\u0930\u0942 (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Key, \u0935\u093E eSewa \u092D\u0941\u0915\u094D\u0924\u093E\u0928\u0940 \u0938\u092E\u094D\u092C\u0928\u094D\u0927\u0940 \u091C\u093E\u0928\u0915\u093E\u0930\u0940\u0915\u093E \u0932\u093E\u0917\u093F \u0938\u093F\u0927\u0948 \u0939\u093E\u092E\u094D\u0930\u094B \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 WhatsApp \u0928\u092E\u094D\u092C\u0930 976-3323268 \u092E\u093E \u0938\u092E\u094D\u092A\u0930\u094D\u0915 \u0917\u0930\u094D\u0928\u0941\u0939\u094B\u0938\u094D\u0964"
+        reply: "Hello! Welcome to HamroLms. For information about our premium courses (AI Masterclass, YouTube Blueprint, AI Video & Song Creation), Activation Keys, or eSewa payments, please contact our official WhatsApp at 976-3323268."
       });
     }
   });

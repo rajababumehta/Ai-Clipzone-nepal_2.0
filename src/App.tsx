@@ -75,7 +75,7 @@ import { COURSES, TESTIMONIALS, DEFAULT_PAYMENT_CONFIG, DEFAULT_SITE_SETTINGS, c
 import { Course, ChatMessage, CourseVideo, CoursePdf, PaymentQrConfig, SiteSettingsConfig, FAQItem, PushNotificationItem, SubAdminAccount, LiveSession, ActivationKey, SupportedLocale } from './types';
 import { collection, getDocs, getDocsFromServer, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, getDocFromServer, onSnapshot, arrayUnion, writeBatch, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
-import { db, auth, fetchPublicBootstrapViaRest } from './firebase';
+import { db, auth, consumeEarlyCoreBootstrap, consumeEarlySecondaryBootstrap } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
 import { ImageAdjustModal } from './components/ImageAdjustModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
@@ -173,6 +173,163 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   };
   console.error('Firestore Error Details:', JSON.stringify(errInfo, null, 2));
   throw new Error(JSON.stringify(errInfo));
+}
+
+interface SsrBootstrapPayload {
+  courses?: Course[];
+  subAdmins?: SubAdminAccount[];
+  deletedCourseIds?: string[];
+  coursesSeeded?: boolean;
+  siteSettings?: Partial<SiteSettingsConfig> | null;
+  paymentQr?: Partial<PaymentQrConfig> | null;
+}
+
+function getSsrBootstrap(): SsrBootstrapPayload | null {
+  if (typeof window === 'undefined') return null;
+  const raw = (window as any).__HAMROLMS_BOOTSTRAP__;
+  return raw && typeof raw === 'object' ? (raw as SsrBootstrapPayload) : null;
+}
+
+function toPublicSubAdmins(list: any[]): SubAdminAccount[] {
+  if (!Array.isArray(list)) return [];
+  const out: SubAdminAccount[] = [];
+  for (const item of list) {
+    if (!item || item.status !== 'active' || !item.name) continue;
+    out.push({
+      id: String(item.id || ''),
+      code: '',
+      name: String(item.name),
+      courseId: String(item.courseId || ''),
+      courseTitle: String(item.courseTitle || ''),
+      courseIds: Array.isArray(item.courseIds) ? item.courseIds.map(String).filter(Boolean) : [],
+      courseTitles: Array.isArray(item.courseTitles) ? item.courseTitles.map(String).filter(Boolean) : [],
+      avatarUrl: item.avatarUrl ? String(item.avatarUrl) : undefined,
+      status: 'active',
+      createdAt: 0,
+    });
+  }
+  return out;
+}
+
+function normalizeSiteSettingsRecord(data: Partial<SiteSettingsConfig>): SiteSettingsConfig {
+  const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
+  return {
+    ...DEFAULT_SITE_SETTINGS,
+    ...data,
+    instituteName: normalizeLegacyBrandText(data.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
+    siteTitle: normalizeLegacyBrandText(data.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
+    siteTagline: normalizeLegacyBrandText(data.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
+    certificateInstituteName: normalizeLegacyBrandText(data.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
+    certificateCeoName: normalizeLegacyBrandText(data.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
+    certificateCeoTitle: normalizeLegacyBrandText(data.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
+    certificateSealText: normalizeLegacyBrandText(data.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
+    supportEmail:
+      data.supportEmail === 'ai.clipzone.edu@gmail.com' || data.supportEmail === 'support@hamrolms.com'
+        ? DEFAULT_SITE_SETTINGS.supportEmail
+        : data.supportEmail || DEFAULT_SITE_SETTINGS.supportEmail,
+    instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
+    certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
+  };
+}
+
+function sanitizeCourseItem(c: Course, index: number): Course {
+  let img = c.image;
+  if (!img || img.includes('2236.png') || img.includes('AVvXsEiI6q11UwbnIp')) {
+    img = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png';
+  } else if (img.includes('12843.jpg') || img.includes('AVvXsEgXZL_14KcAVWt')) {
+    img = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png';
+  }
+
+  let id = c.id;
+  if (id === 'al-master-class-course-by-al-clipzone') {
+    id = 'Ai master class course by Ai clipzone';
+  }
+
+  return {
+    ...c,
+    id,
+    title: normalizeLegacyBrandText(c.title) || c.title,
+    message: c.message ? normalizeLegacyBrandText(c.message) : c.message,
+    certificateInstituteName: c.certificateInstituteName
+      ? normalizeLegacyBrandText(c.certificateInstituteName)
+      : c.certificateInstituteName,
+    certificateCeoName: c.certificateCeoName
+      ? normalizeLegacyBrandText(c.certificateCeoName)
+      : c.certificateCeoName,
+    certificateSealText: c.certificateSealText
+      ? normalizeLegacyBrandText(c.certificateSealText)
+      : c.certificateSealText,
+    image: img,
+    learn: Array.isArray(c.learn) ? c.learn : [],
+    videos: Array.isArray(c.videos) ? c.videos : [],
+    pdfs: Array.isArray(c.pdfs) ? c.pdfs : [],
+    order: typeof c.order === 'number' ? c.order : index,
+  };
+}
+
+function getInitialDeletedIds(): string[] {
+  const boot = getSsrBootstrap();
+  if (Array.isArray(boot?.deletedCourseIds)) {
+    const ids = boot.deletedCourseIds.map(String);
+    try {
+      localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(ids));
+    } catch {}
+    return ids;
+  }
+  try {
+    const parsed = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getInitialCoursesSnapshot(): { courses: Course[]; hasCatalog: boolean } {
+  const deletedIds = getInitialDeletedIds();
+  const cachedById = new Map<string, Course>();
+  let cachedCourses: Course[] = [];
+  let hasCachedCatalog = false;
+
+  try {
+    const isInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
+    const cached = localStorage.getItem('clipzone_dynamic_courses');
+    if (isInitialized && cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        hasCachedCatalog = true;
+        cachedCourses = parsed
+          .filter((c: any) => c && c.id && !deletedIds.includes(c.id))
+          .map((c: any, index: number) => sanitizeCourseItem(c as Course, index))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        cachedCourses.forEach((c) => cachedById.set(c.id, c));
+      }
+    }
+  } catch {}
+
+  const boot = getSsrBootstrap();
+  if (boot && Array.isArray(boot.courses)) {
+    const hydrated = boot.courses
+      .filter((c: any) => c && c.id && !deletedIds.includes(c.id))
+      .map((c: any, index: number) => {
+        const sanitized = sanitizeCourseItem(c as Course, index);
+        const existing = cachedById.get(sanitized.id);
+        return {
+          ...sanitized,
+          videos: sanitized.videos.length > 0 ? sanitized.videos : (existing?.videos || []),
+          pdfs: (sanitized.pdfs && sanitized.pdfs.length > 0) ? sanitized.pdfs : (existing?.pdfs || []),
+        };
+      })
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    if (hydrated.length > 0 || boot.coursesSeeded === true) {
+      return { courses: hydrated, hasCatalog: true };
+    }
+  }
+
+  return {
+    courses: cachedCourses,
+    hasCatalog: hasCachedCatalog && cachedCourses.length > 0,
+  };
 }
 
 function cleanUndefined<T extends object>(obj: T): T {
@@ -373,7 +530,21 @@ export default function App() {
     } catch {}
     return [];
   });
-  const [activeSubAdmins, setActiveSubAdmins] = useState<SubAdminAccount[]>([]);
+  const [activeSubAdmins, setActiveSubAdmins] = useState<SubAdminAccount[]>(() => {
+    const boot = getSsrBootstrap();
+    if (Array.isArray(boot?.subAdmins)) {
+      const sanitized = toPublicSubAdmins(boot.subAdmins);
+      try {
+        localStorage.setItem('clipzone_public_sub_admins_cache', JSON.stringify(sanitized));
+      } catch {}
+      return sanitized;
+    }
+    try {
+      const saved = localStorage.getItem('clipzone_public_sub_admins_cache');
+      if (saved) return toPublicSubAdmins(JSON.parse(saved));
+    } catch {}
+    return [];
+  });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState<'keys' | 'subadmins' | 'qr' | 'faqs' | 'overall' | 'certificate' | 'courses' | 'live' | 'notifications' | 'ask'>('keys');
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
@@ -386,9 +557,17 @@ export default function App() {
 
   // Dynamic Payment & QR Code configuration
   const [paymentConfig, setPaymentConfig] = useState<PaymentQrConfig>(() => {
+    const boot = getSsrBootstrap();
+    if (boot?.paymentQr && typeof boot.paymentQr === 'object') {
+      const merged = { ...DEFAULT_PAYMENT_CONFIG, ...(boot.paymentQr as PaymentQrConfig) };
+      try {
+        localStorage.setItem('clipzone_payment_config', JSON.stringify(merged));
+      } catch {}
+      return merged;
+    }
     try {
       const saved = localStorage.getItem('clipzone_payment_config');
-      if (saved) return JSON.parse(saved);
+      if (saved) return { ...DEFAULT_PAYMENT_CONFIG, ...JSON.parse(saved) };
     } catch {}
     return DEFAULT_PAYMENT_CONFIG;
   });
@@ -403,24 +582,18 @@ export default function App() {
 
   // Dynamic Global Site & Branding settings
   const [siteSettings, setSiteSettings] = useState<SiteSettingsConfig>(() => {
+    const boot = getSsrBootstrap();
+    if (boot?.siteSettings && typeof boot.siteSettings === 'object') {
+      const normalized = normalizeSiteSettingsRecord(boot.siteSettings);
+      try {
+        localStorage.setItem('clipzone_site_settings', JSON.stringify(normalized));
+      } catch {}
+      return normalized;
+    }
     try {
       const saved = localStorage.getItem('clipzone_site_settings');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        const cleanedLogo = cleanLegacyLogoUrl(parsed.instituteLogoUrl);
-        return {
-          ...parsed,
-          instituteName: normalizeLegacyBrandText(parsed.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
-          siteTitle: normalizeLegacyBrandText(parsed.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
-          siteTagline: normalizeLegacyBrandText(parsed.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
-          certificateInstituteName: normalizeLegacyBrandText(parsed.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
-          certificateCeoName: normalizeLegacyBrandText(parsed.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
-          certificateCeoTitle: normalizeLegacyBrandText(parsed.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
-          certificateSealText: normalizeLegacyBrandText(parsed.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
-          supportEmail: (parsed.supportEmail === 'ai.clipzone.edu@gmail.com' || parsed.supportEmail === 'support@hamrolms.com') ? DEFAULT_SITE_SETTINGS.supportEmail : parsed.supportEmail,
-          instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
-          certificateLogoUrl: cleanLegacyLogoUrl(parsed.certificateLogoUrl),
-        };
+        return normalizeSiteSettingsRecord(JSON.parse(saved));
       }
     } catch {}
     return DEFAULT_SITE_SETTINGS;
@@ -505,13 +678,7 @@ export default function App() {
   });
 
   // Deleted Courses tracking
-  const [deletedCourseIds, setDeletedCourseIds] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const [deletedCourseIds, setDeletedCourseIds] = useState<string[]>(() => getInitialDeletedIds());
 
   // Custom Profile Avatar & Account Customizer States
   const [userAvatar, setUserAvatar] = useState<string>(() => {
@@ -696,71 +863,13 @@ export default function App() {
 
   // Helper to sanitize cached/remote course to eliminate stale/legacy thumbnails and details
   const sanitizeCourseRecord = useCallback((c: Course, index: number): Course => {
-    let img = c.image;
-    if (!img || img.includes('2236.png') || img.includes('AVvXsEiI6q11UwbnIp')) {
-      img = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiMBjnyDK0lXwuSXOriM05OQPKeCOWsX3jnnrZUrQMK-RlYRTM91s3c-tpEwRCOzGlyUUS3c3fpqMmQRtMiVweJRI2x1W7IW_7rwTv5D5cDK4h_jHUKOG2chJQEMkJA2rEoH60zX9vsZZqJlB53bn7n9DYa2_cdL67FbtC3qjzbH1EQEbjJdaigkzFgL2Zn/s1685/37585.png';
-    } else if (img.includes('12843.jpg') || img.includes('AVvXsEgXZL_14KcAVWt')) {
-      img = 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh0HHAMfJvAn3a08BTUd1ayj-Jo1A0C8abgyeft2SGJw_Q-AeiLwxD0DY6Ho8IcmU62EXVnzDtHJ4bZErIVuFi8vGipXH9AxO6vRwesLUcHIVLLbozUyVwq4mZFEixr2vEduC-RxIQ5q13R-tngJPDFgCA0oJr9EbVuivCA6VCTz1BLb3Y9DcZJQtcroANa/s1672/37587.png';
-    }
-
-    let id = c.id;
-    if (id === 'al-master-class-course-by-al-clipzone') {
-      id = 'Ai master class course by Ai clipzone';
-    }
-
-    return {
-      ...c,
-      id,
-      title: normalizeLegacyBrandText(c.title) || c.title,
-      message: c.message ? normalizeLegacyBrandText(c.message) : c.message,
-      certificateInstituteName: c.certificateInstituteName ? normalizeLegacyBrandText(c.certificateInstituteName) : c.certificateInstituteName,
-      certificateCeoName: c.certificateCeoName ? normalizeLegacyBrandText(c.certificateCeoName) : c.certificateCeoName,
-      certificateSealText: c.certificateSealText ? normalizeLegacyBrandText(c.certificateSealText) : c.certificateSealText,
-      image: img,
-      order: typeof c.order === 'number' ? c.order : index
-    };
+    return sanitizeCourseItem(c, index);
   }, []);
 
-  // Dynamic Courses state - hydrate from cache immediately ONLY when offline; when online wait for live server fetch so stale cache never flashes on first open
-  const [courses, setCourses] = useState<Course[]>(() => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    if (!isOffline) return [];
-
-    const deletedIds: string[] = (() => {
-      try {
-        return JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
-      } catch {
-        return [];
-      }
-    })();
-
-    try {
-      const isInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
-      const cached = localStorage.getItem('clipzone_dynamic_courses');
-      if (isInitialized && cached) {
-        const parsed: Course[] = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const activeList = parsed.filter(c => c && c.id && !deletedIds.includes(c.id));
-          if (activeList.length > 0) {
-            return activeList
-              .map((c, index) => ({
-                ...c,
-                id: c.id === 'al-master-class-course-by-al-clipzone' ? 'Ai master class course by Ai clipzone' : c.id,
-                title: normalizeLegacyBrandText(c.title) || c.title,
-                message: c.message ? normalizeLegacyBrandText(c.message) : c.message,
-                certificateInstituteName: c.certificateInstituteName ? normalizeLegacyBrandText(c.certificateInstituteName) : c.certificateInstituteName,
-                certificateCeoName: c.certificateCeoName ? normalizeLegacyBrandText(c.certificateCeoName) : c.certificateCeoName,
-                certificateSealText: c.certificateSealText ? normalizeLegacyBrandText(c.certificateSealText) : c.certificateSealText,
-                order: typeof c.order === 'number' ? c.order : index
-              }))
-              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-          }
-        }
-      }
-    } catch (e) {}
-
-    return [];
-  });
+  // Instant 0ms hydration from live SSR bootstrap or verified localStorage cache (no loading spinner flash on open),
+  // while silent background sync reconciles with live Firestore immediately after mount.
+  const initialCourseHydration = useMemo(() => getInitialCoursesSnapshot(), []);
+  const [courses, setCourses] = useState<Course[]>(() => initialCourseHydration.courses);
 
   // Push Notifications, PWA Install & Live Sessions state
   const {
@@ -784,21 +893,8 @@ export default function App() {
     return typeof navigator !== 'undefined' ? navigator.onLine : true;
   });
 
-  // Course loading & error states from database
-  // While online, wait for the live server bootstrap (~100-200ms) instead of flashing stale localStorage on first open
-  const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => {
-    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-    if (!isOffline) return true;
-    try {
-      const isInitialized = localStorage.getItem('clipzone_courses_initialized') === 'true';
-      const cached = localStorage.getItem('clipzone_dynamic_courses');
-      if (isInitialized && cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) return false;
-      }
-    } catch (e) {}
-    return true;
-  });
+  // Course loading & error states: only show skeleton when BOTH SSR bootstrap and local cache are empty
+  const [isCoursesLoading, setIsCoursesLoading] = useState<boolean>(() => !initialCourseHydration.hasCatalog);
   const [coursesLoadError, setCoursesLoadError] = useState<string | null>(null);
 
   // Keep activeCourseIds strictly in sync ONLY with explicitly deleted courses
@@ -949,72 +1045,79 @@ export default function App() {
         }
       })();
 
-      // Fast-path parallel REST bootstrap on cold loads (~100-200ms without waiting for WebChannel handshake)
+      // Fast-path parallel REST bootstrap: secondary settings run concurrently without blocking courses
       if (typeof navigator === 'undefined' || navigator.onLine) {
-        const bootstrap = await fetchPublicBootstrapViaRest(3500);
+        void consumeEarlySecondaryBootstrap(2500).then((secondary) => {
+          if (secondary.siteSettings) {
+            const cleaned = normalizeSiteSettingsRecord(secondary.siteSettings as Partial<SiteSettingsConfig>);
+            setSiteSettings((prev) => (JSON.stringify(prev) === JSON.stringify(cleaned) ? prev : cleaned));
+            try {
+              localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned));
+            } catch {}
+          }
 
-        if (bootstrap.config) {
-          if (Array.isArray(bootstrap.config.deletedCourseIds)) {
-            deletedIds = bootstrap.config.deletedCourseIds.map(String);
-            setDeletedCourseIds(deletedIds);
+          if (secondary.paymentQr) {
+            const qrData = { ...DEFAULT_PAYMENT_CONFIG, ...(secondary.paymentQr as Partial<PaymentQrConfig>) } as PaymentQrConfig;
+            setPaymentConfig((prev) => (JSON.stringify(prev) === JSON.stringify(qrData) ? prev : qrData));
+            try {
+              localStorage.setItem('clipzone_payment_config', JSON.stringify(qrData));
+            } catch {}
+          }
+
+          if (Array.isArray(secondary.faqs)) {
+            setFaqs((prev) => (JSON.stringify(prev) === JSON.stringify(secondary.faqs) ? prev : (secondary.faqs as FAQItem[])));
+          }
+
+          if (Array.isArray(secondary.liveSessions)) {
+            setLiveSessions((prev) =>
+              JSON.stringify(prev) === JSON.stringify(secondary.liveSessions)
+                ? prev
+                : (secondary.liveSessions as LiveSession[])
+            );
+          }
+        });
+
+        const core = await consumeEarlyCoreBootstrap(2200);
+
+        if (core.config) {
+          if (Array.isArray(core.config.deletedCourseIds)) {
+            deletedIds = core.config.deletedCourseIds.map(String);
+            setDeletedCourseIds((prev) => (JSON.stringify(prev) === JSON.stringify(deletedIds) ? prev : deletedIds));
             try {
               localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedIds));
             } catch {}
           }
         }
 
-        if (bootstrap.siteSettings) {
-          const data = bootstrap.siteSettings as SiteSettingsConfig;
-          const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
-          const cleaned: SiteSettingsConfig = {
-            ...data,
-            instituteName: normalizeLegacyBrandText(data.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
-            siteTitle: normalizeLegacyBrandText(data.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
-            siteTagline: normalizeLegacyBrandText(data.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
-            certificateInstituteName: normalizeLegacyBrandText(data.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
-            certificateCeoName: normalizeLegacyBrandText(data.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
-            certificateCeoTitle: normalizeLegacyBrandText(data.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
-            certificateSealText: normalizeLegacyBrandText(data.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
-            supportEmail: (data.supportEmail === 'ai.clipzone.edu@gmail.com' || data.supportEmail === 'support@hamrolms.com') ? DEFAULT_SITE_SETTINGS.supportEmail : data.supportEmail,
-            instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
-            certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
-          };
-          setSiteSettings(prev => ({ ...prev, ...cleaned }));
+        if (Array.isArray(core.subAdmins)) {
+          const publicSubs = toPublicSubAdmins(core.subAdmins);
           try {
-            localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned));
+            localStorage.setItem('clipzone_public_sub_admins_cache', JSON.stringify(publicSubs));
           } catch {}
-        }
-
-        if (bootstrap.paymentQr) {
-          const qrData = bootstrap.paymentQr as PaymentQrConfig;
-          setPaymentConfig(prev => ({ ...prev, ...qrData }));
-          try {
-            localStorage.setItem('clipzone_payment_config', JSON.stringify(qrData));
-          } catch {}
-        }
-
-        if (Array.isArray(bootstrap.faqs)) {
-          setFaqs(bootstrap.faqs as FAQItem[]);
-        }
-
-        if (Array.isArray(bootstrap.subAdmins)) {
           const mainAdminActive = Boolean(isAdminActivated || isFirebaseUserAdmin(currentUser?.email));
           if (!mainAdminActive) {
-            setActiveSubAdmins(bootstrap.subAdmins as SubAdminAccount[]);
+            setActiveSubAdmins((prev) => {
+              const prevById = new Map(prev.map((p) => [p.id, p]));
+              const merged = publicSubs.map((sub) => {
+                const existing = prevById.get(sub.id);
+                return {
+                  ...sub,
+                  code: existing?.code || sub.code || '',
+                  createdAt: existing?.createdAt || sub.createdAt || 0,
+                } as SubAdminAccount;
+              });
+              return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+            });
           }
         }
 
-        if (Array.isArray(bootstrap.liveSessions)) {
-          setLiveSessions(bootstrap.liveSessions as LiveSession[]);
-        }
-
-        if (Array.isArray(bootstrap.courses)) {
-          const activeRest = bootstrap.courses
+        if (Array.isArray(core.courses)) {
+          const activeRest = core.courses
             .filter((c) => c && c.id && !deletedIds.includes(c.id))
             .map((c, idx) => sanitizeCourseRecord(c as Course, idx))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-          if (activeRest.length > 0 || bootstrap.config?.courses_seeded === true) {
-            setCourses(activeRest);
+          if (activeRest.length > 0 || core.config?.courses_seeded === true) {
+            setCourses((prev) => (JSON.stringify(prev) === JSON.stringify(activeRest) ? prev : activeRest));
             setCoursesLoadError(null);
             setIsCoursesLoading(false);
             try {
@@ -1037,7 +1140,7 @@ export default function App() {
 
       if (!querySnapshot.empty) {
         const sortedCourses = processCourseSnapshotDocs(querySnapshot.docs);
-        setCourses(sortedCourses);
+        setCourses((prev) => (JSON.stringify(prev) === JSON.stringify(sortedCourses) ? prev : sortedCourses));
         setCoursesLoadError(null);
         setIsCoursesLoading(false);
         if (resolvedFromServer) {
@@ -1153,7 +1256,7 @@ export default function App() {
       try {
         if (!querySnapshot.empty) {
           const sortedCourses = processCourseSnapshotDocs(querySnapshot.docs);
-          setCourses(sortedCourses);
+          setCourses((prev) => (JSON.stringify(prev) === JSON.stringify(sortedCourses) ? prev : sortedCourses));
           setCoursesLoadError(null);
           setIsCoursesLoading(false);
           try {
@@ -1393,8 +1496,8 @@ export default function App() {
     const unsubPayment = onSnapshot(doc(db, 'system', 'payment_qr'), (snap) => {
       if (snap.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       if (snap.exists()) {
-        const data = snap.data() as PaymentQrConfig;
-        setPaymentConfig(prev => ({ ...prev, ...data }));
+        const data = { ...DEFAULT_PAYMENT_CONFIG, ...(snap.data() as Partial<PaymentQrConfig>) } as PaymentQrConfig;
+        setPaymentConfig((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
         try {
           localStorage.setItem('clipzone_payment_config', JSON.stringify(data));
         } catch (e) {}
@@ -1409,7 +1512,7 @@ export default function App() {
       if (snap.exists()) {
         const data = snap.data();
         if (Array.isArray(data?.items)) {
-          setFaqs(data.items);
+          setFaqs((prev) => (JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items));
         }
       }
     }, (err) => {
@@ -1420,22 +1523,8 @@ export default function App() {
     const unsubSettings = onSnapshot(doc(db, 'system', 'site_settings'), (snap) => {
       if (snap.metadata?.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return;
       if (snap.exists()) {
-        const data = snap.data() as SiteSettingsConfig;
-        const cleanedLogo = cleanLegacyLogoUrl(data.instituteLogoUrl);
-        const cleaned: SiteSettingsConfig = {
-          ...data,
-          instituteName: normalizeLegacyBrandText(data.instituteName) || DEFAULT_SITE_SETTINGS.instituteName,
-          siteTitle: normalizeLegacyBrandText(data.siteTitle) || DEFAULT_SITE_SETTINGS.siteTitle,
-          siteTagline: normalizeLegacyBrandText(data.siteTagline) || DEFAULT_SITE_SETTINGS.siteTagline,
-          certificateInstituteName: normalizeLegacyBrandText(data.certificateInstituteName) || DEFAULT_SITE_SETTINGS.certificateInstituteName,
-          certificateCeoName: normalizeLegacyBrandText(data.certificateCeoName) || DEFAULT_SITE_SETTINGS.certificateCeoName,
-          certificateCeoTitle: normalizeLegacyBrandText(data.certificateCeoTitle) || DEFAULT_SITE_SETTINGS.certificateCeoTitle,
-          certificateSealText: normalizeLegacyBrandText(data.certificateSealText) || DEFAULT_SITE_SETTINGS.certificateSealText,
-          supportEmail: (data.supportEmail === 'ai.clipzone.edu@gmail.com' || data.supportEmail === 'support@hamrolms.com') ? DEFAULT_SITE_SETTINGS.supportEmail : data.supportEmail,
-          instituteLogoUrl: cleanedLogo || DEFAULT_SITE_SETTINGS.instituteLogoUrl || '',
-          certificateLogoUrl: cleanLegacyLogoUrl(data.certificateLogoUrl),
-        };
-        setSiteSettings(prev => ({ ...prev, ...cleaned }));
+        const cleaned = normalizeSiteSettingsRecord(snap.data() as Partial<SiteSettingsConfig>);
+        setSiteSettings((prev) => (JSON.stringify(prev) === JSON.stringify(cleaned) ? prev : cleaned));
         try {
           localStorage.setItem('clipzone_site_settings', JSON.stringify(cleaned));
         } catch (e) {}
@@ -2582,7 +2671,10 @@ export default function App() {
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...(docSnap.data() as Omit<SubAdminAccount, 'id'>) });
         });
-        setActiveSubAdmins(list);
+        try {
+          localStorage.setItem('clipzone_public_sub_admins_cache', JSON.stringify(toPublicSubAdmins(list)));
+        } catch {}
+        setActiveSubAdmins((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
       }, (err) => {
         console.warn('Active sub_admins listener error:', err);
       });

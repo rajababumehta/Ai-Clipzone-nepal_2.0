@@ -52,15 +52,20 @@ function decodeFirestoreRestValue(val: any): any {
   return undefined;
 }
 
-export interface PublicBootstrapSnapshot {
+export interface CoreCatalogSnapshot {
   courses: any[] | null;
   config: Record<string, any> | null;
+  subAdmins: any[] | null;
+}
+
+export interface SecondarySettingsSnapshot {
   siteSettings: Record<string, any> | null;
   paymentQr: Record<string, any> | null;
   faqs: any[] | null;
-  subAdmins: any[] | null;
   liveSessions: any[] | null;
 }
+
+export interface PublicBootstrapSnapshot extends CoreCatalogSnapshot, SecondarySettingsSnapshot {}
 
 function decodeFirestoreDocItem(docItem: any): Record<string, any> {
   const obj: Record<string, any> = {};
@@ -72,145 +77,195 @@ function decodeFirestoreDocItem(docItem: any): Record<string, any> {
   return { ...obj, id: docId };
 }
 
-export async function fetchCoursesViaRest(timeoutMs = 3500): Promise<any[] | null> {
-  if (typeof fetch === 'undefined' || !firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId) {
+function canUseFirestoreRest(): boolean {
+  return Boolean(
+    typeof fetch !== 'undefined' &&
+      firebaseConfig?.projectId &&
+      firebaseConfig?.firestoreDatabaseId
+  );
+}
+
+function getFirestoreRestBaseUrl(): string {
+  return `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents`;
+}
+
+async function fetchRestDocSafe(
+  baseUrl: string,
+  docPath: string,
+  signal: AbortSignal
+): Promise<Record<string, any> | null> {
+  try {
+    const res = await fetch(`${baseUrl}/${docPath}`, { signal, cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json?.fields) return null;
+    return decodeFirestoreDocItem(json);
+  } catch {
     return null;
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+}
+
+async function fetchRestCollectionSafe(
+  baseUrl: string,
+  colPath: string,
+  pageSize: number,
+  signal: AbortSignal
+): Promise<any[] | null> {
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/courses?pageSize=100`;
-    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/${colPath}?pageSize=${pageSize}`, {
+      signal,
+      cache: 'no-store',
+    });
     if (!res.ok) return null;
     const json = await res.json();
     const docs = Array.isArray(json?.documents) ? json.documents : [];
     return docs.map(decodeFirestoreDocItem);
   } catch {
     return null;
+  }
+}
+
+async function fetchRestActiveSubAdminsSafe(
+  baseUrl: string,
+  signal: AbortSignal
+): Promise<any[] | null> {
+  try {
+    const res = await fetch(`${baseUrl}:runQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      cache: 'no-store',
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'sub_admins' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'status' },
+              op: 'EQUAL',
+              value: { stringValue: 'active' },
+            },
+          },
+        },
+      }),
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    const subs: any[] = [];
+    for (const row of rows) {
+      if (!row?.document?.fields) continue;
+      const d = decodeFirestoreDocItem(row.document);
+      if (d.status !== 'active' || !d.name) continue;
+      // Public-safe fields only (never expose secret `code` or `activeDeviceId` from public bootstrap)
+      subs.push({
+        id: d.id,
+        name: String(d.name),
+        courseId: String(d.courseId || ''),
+        courseTitle: String(d.courseTitle || ''),
+        courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
+        courseTitles: Array.isArray(d.courseTitles) ? d.courseTitles.map(String).filter(Boolean) : [],
+        avatarUrl: d.avatarUrl ? String(d.avatarUrl) : undefined,
+        status: 'active',
+      });
+    }
+    return subs;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCoursesViaRest(timeoutMs = 3500): Promise<any[] | null> {
+  if (!canUseFirestoreRest()) {
+    return null;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchRestCollectionSafe(getFirestoreRestBaseUrl(), 'courses', 100, controller.signal);
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function fetchPublicBootstrapViaRest(timeoutMs = 3500): Promise<PublicBootstrapSnapshot> {
-  const empty: PublicBootstrapSnapshot = {
-    courses: null,
-    config: null,
-    siteSettings: null,
-    paymentQr: null,
-    faqs: null,
-    subAdmins: null,
-    liveSessions: null,
-  };
-  if (typeof fetch === 'undefined' || !firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId) {
-    return empty;
+export async function fetchCoreCatalogViaRest(timeoutMs = 2200): Promise<CoreCatalogSnapshot> {
+  if (!canUseFirestoreRest()) {
+    return { courses: null, config: null, subAdmins: null };
   }
-
-  const baseUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents`;
+  const baseUrl = getFirestoreRestBaseUrl();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  const fetchDocSafe = async (docPath: string): Promise<Record<string, any> | null> => {
-    try {
-      const res = await fetch(`${baseUrl}/${docPath}`, { signal: controller.signal, cache: 'no-store' });
-      if (!res.ok) return null;
-      const json = await res.json();
-      if (!json?.fields) return null;
-      return decodeFirestoreDocItem(json);
-    } catch {
-      return null;
-    }
-  };
-
-  const fetchCollectionSafe = async (colPath: string, pageSize = 100): Promise<any[] | null> => {
-    try {
-      const res = await fetch(`${baseUrl}/${colPath}?pageSize=${pageSize}`, {
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-      if (!res.ok) return null;
-      const json = await res.json();
-      const docs = Array.isArray(json?.documents) ? json.documents : [];
-      return docs.map(decodeFirestoreDocItem);
-    } catch {
-      return null;
-    }
-  };
-
-  const fetchActiveSubAdminsSafe = async (): Promise<any[] | null> => {
-    try {
-      const res = await fetch(`${baseUrl}:runQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        cache: 'no-store',
-        body: JSON.stringify({
-          structuredQuery: {
-            from: [{ collectionId: 'sub_admins' }],
-            where: {
-              fieldFilter: {
-                field: { fieldPath: 'status' },
-                op: 'EQUAL',
-                value: { stringValue: 'active' },
-              },
-            },
-          },
-        }),
-      });
-      if (!res.ok) return null;
-      const rows = await res.json();
-      if (!Array.isArray(rows)) return null;
-      const subs: any[] = [];
-      for (const row of rows) {
-        if (!row?.document?.fields) continue;
-        const d = decodeFirestoreDocItem(row.document);
-        if (d.status !== 'active' || !d.name) continue;
-        // Public-safe fields only (never expose secret `code` or `activeDeviceId` from public bootstrap)
-        subs.push({
-          id: d.id,
-          name: String(d.name),
-          courseId: String(d.courseId || ''),
-          courseTitle: String(d.courseTitle || ''),
-          courseIds: Array.isArray(d.courseIds) ? d.courseIds.map(String).filter(Boolean) : [],
-          courseTitles: Array.isArray(d.courseTitles) ? d.courseTitles.map(String).filter(Boolean) : [],
-          avatarUrl: d.avatarUrl ? String(d.avatarUrl) : undefined,
-          status: 'active',
-        });
-      }
-      return subs;
-    } catch {
-      return null;
-    }
-  };
-
   try {
-    const [courses, config, siteSettings, paymentQr, faqsDoc, subAdmins, liveSessionsRaw] =
-      await Promise.all([
-        fetchCollectionSafe('courses', 100),
-        fetchDocSafe('system/config'),
-        fetchDocSafe('system/site_settings'),
-        fetchDocSafe('system/payment_qr'),
-        fetchDocSafe('system/faqs'),
-        fetchActiveSubAdminsSafe(),
-        fetchCollectionSafe('live_sessions', 50),
-      ]);
+    const [courses, config, subAdmins] = await Promise.all([
+      fetchRestCollectionSafe(baseUrl, 'courses', 100, controller.signal),
+      fetchRestDocSafe(baseUrl, 'system/config', controller.signal),
+      fetchRestActiveSubAdminsSafe(baseUrl, controller.signal),
+    ]);
+    return { courses, config, subAdmins };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
+export async function fetchSecondarySettingsViaRest(timeoutMs = 2500): Promise<SecondarySettingsSnapshot> {
+  if (!canUseFirestoreRest()) {
+    return { siteSettings: null, paymentQr: null, faqs: null, liveSessions: null };
+  }
+  const baseUrl = getFirestoreRestBaseUrl();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const [siteSettings, paymentQr, faqsDoc, liveSessionsRaw] = await Promise.all([
+      fetchRestDocSafe(baseUrl, 'system/site_settings', controller.signal),
+      fetchRestDocSafe(baseUrl, 'system/payment_qr', controller.signal),
+      fetchRestDocSafe(baseUrl, 'system/faqs', controller.signal),
+      fetchRestCollectionSafe(baseUrl, 'live_sessions', 50, controller.signal),
+    ]);
     const liveSessions = Array.isArray(liveSessionsRaw)
       ? [...liveSessionsRaw].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
       : null;
-
     return {
-      courses,
-      config,
       siteSettings,
       paymentQr,
       faqs: Array.isArray(faqsDoc?.items) ? faqsDoc.items : null,
-      subAdmins,
       liveSessions,
     };
   } finally {
     clearTimeout(timer);
   }
+}
+
+let earlyCoreBootstrapPromise: Promise<CoreCatalogSnapshot> | null = null;
+let earlyCoreConsumed = false;
+let earlySecondaryBootstrapPromise: Promise<SecondarySettingsSnapshot> | null = null;
+let earlySecondaryConsumed = false;
+
+if (typeof window !== 'undefined' && (typeof navigator === 'undefined' || navigator.onLine)) {
+  earlyCoreBootstrapPromise = fetchCoreCatalogViaRest(2200);
+  earlySecondaryBootstrapPromise = fetchSecondarySettingsViaRest(2500);
+}
+
+export function consumeEarlyCoreBootstrap(timeoutMs = 2200): Promise<CoreCatalogSnapshot> {
+  if (earlyCoreBootstrapPromise && !earlyCoreConsumed) {
+    earlyCoreConsumed = true;
+    return earlyCoreBootstrapPromise;
+  }
+  return fetchCoreCatalogViaRest(timeoutMs);
+}
+
+export function consumeEarlySecondaryBootstrap(timeoutMs = 2500): Promise<SecondarySettingsSnapshot> {
+  if (earlySecondaryBootstrapPromise && !earlySecondaryConsumed) {
+    earlySecondaryConsumed = true;
+    return earlySecondaryBootstrapPromise;
+  }
+  return fetchSecondarySettingsViaRest(timeoutMs);
+}
+
+export async function fetchPublicBootstrapViaRest(timeoutMs = 3500): Promise<PublicBootstrapSnapshot> {
+  const [core, secondary] = await Promise.all([
+    fetchCoreCatalogViaRest(timeoutMs),
+    fetchSecondarySettingsViaRest(timeoutMs),
+  ]);
+  return { ...core, ...secondary };
 }
 
 export enum OperationType {

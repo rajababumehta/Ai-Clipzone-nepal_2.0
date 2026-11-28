@@ -668,11 +668,11 @@ function mergePublicInstructors(courses, subAdmins) {
   return Array.from(bySlug.values());
 }
 
-async function fetchJsonWithTimeout(url, init = {}, timeoutMs = 2200) {
+async function fetchJsonWithTimeout(url, init = {}, timeoutMs = 1800) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    const res = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -686,10 +686,14 @@ export async function fetchPublicCatalogSnapshot() {
   let deletedIds = [];
   let courses = [...SEED_COURSES];
   const subAdmins = [];
+  let coursesSeeded = false;
+  let siteSettings = null;
+  let paymentQr = null;
+  let liveFetched = false;
 
   try {
     const baseUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents`;
-    const [configJson, coursesJson, subAdminsJson] = await Promise.all([
+    const [configJson, coursesJson, subAdminsJson, siteSettingsJson, paymentQrJson] = await Promise.all([
       fetchJsonWithTimeout(`${baseUrl}/system/config`),
       fetchJsonWithTimeout(`${baseUrl}/courses?pageSize=100`),
       fetchJsonWithTimeout(`${baseUrl}:runQuery`, {
@@ -708,52 +712,74 @@ export async function fetchPublicCatalogSnapshot() {
           },
         }),
       }),
+      fetchJsonWithTimeout(`${baseUrl}/system/site_settings`),
+      fetchJsonWithTimeout(`${baseUrl}/system/payment_qr`),
     ]);
 
     if (configJson?.fields) {
+      liveFetched = true;
       const cfg = fromFirestoreDoc(configJson);
+      coursesSeeded = Boolean(cfg.courses_seeded === true);
       if (Array.isArray(cfg.deletedCourseIds)) {
         deletedIds = cfg.deletedCourseIds.map(String);
       }
     }
 
-    const docList = Array.isArray(coursesJson?.documents) ? coursesJson.documents : [];
-    if (docList.length > 0) {
-      const liveCourses = [];
-      for (const docItem of docList) {
-        const d = fromFirestoreDoc(docItem);
-        const docId = String(docItem?.name?.split('/').pop() || d.id || '');
-        if (!docId || deletedIds.includes(docId) || d.isHidden === true) continue;
-        const normalizedTitle = normalizeLegacyBrandText(String(d.title || 'Course'))
-          .replace(/\s+/g, ' ')
-          .trim();
-        liveCourses.push({
-          id: docId,
-          slug: d.slug ? slugifyText(d.slug) : undefined,
-          title: normalizedTitle || 'Course',
-          seoTitle: d.seoTitle ? String(d.seoTitle) : undefined,
-          seoDescription: d.seoDescription ? String(d.seoDescription) : undefined,
-          overview: d.overview ? String(d.overview) : undefined,
-          category: d.category ? String(d.category) : 'Online Course',
-          level: d.level ? String(d.level) : 'All Levels',
-          price: String(d.price || 'FREE'),
-          amount: typeof d.amount === 'number' ? d.amount : 0,
-          isFree: Boolean(d.isFree),
-          order: typeof d.order === 'number' ? d.order : 0,
-          language:
-            d.language && !/nepali|hindi/i.test(String(d.language))
-              ? String(d.language)
-              : 'English',
-          instructorSlug: d.instructorSlug ? String(d.instructorSlug) : undefined,
-          instructorName: d.instructorName ? String(d.instructorName) : undefined,
-          includeCertificate: d.includeCertificate !== false,
-          includeLive: Boolean(d.includeLive),
-          learn: Array.isArray(d.learn) ? d.learn.map(String) : [],
-          image: d.image ? String(d.image) : '/institute-logo.png',
-          updatedAt: d.updatedAt || docItem.updateTime || undefined,
-        });
+    if (siteSettingsJson?.fields) {
+      siteSettings = fromFirestoreDoc(siteSettingsJson);
+    }
+
+    if (paymentQrJson?.fields) {
+      paymentQr = fromFirestoreDoc(paymentQrJson);
+    }
+
+    if (coursesJson && typeof coursesJson === 'object') {
+      liveFetched = true;
+      const docList = Array.isArray(coursesJson.documents) ? coursesJson.documents : [];
+      if (docList.length > 0) {
+        const liveCourses = [];
+        for (const docItem of docList) {
+          const d = fromFirestoreDoc(docItem);
+          const docId = String(docItem?.name?.split('/').pop() || d.id || '');
+          if (!docId || deletedIds.includes(docId) || d.isHidden === true) continue;
+          const normalizedTitle = normalizeLegacyBrandText(String(d.title || 'Course'))
+            .replace(/\s+/g, ' ')
+            .trim();
+          liveCourses.push({
+            id: docId,
+            slug: d.slug ? slugifyText(d.slug) : undefined,
+            title: normalizedTitle || 'Course',
+            seoTitle: d.seoTitle ? String(d.seoTitle) : undefined,
+            seoDescription: d.seoDescription ? String(d.seoDescription) : undefined,
+            overview: d.overview ? String(d.overview) : undefined,
+            message: d.message ? normalizeLegacyBrandText(String(d.message)) : undefined,
+            category: d.category ? String(d.category) : 'Online Course',
+            level: d.level ? String(d.level) : 'All Levels',
+            price: String(d.price || 'FREE'),
+            amount: typeof d.amount === 'number' ? d.amount : 0,
+            isFree: Boolean(d.isFree),
+            isPopular: Boolean(d.isPopular),
+            popularText: d.popularText ? String(d.popularText) : undefined,
+            order: typeof d.order === 'number' ? d.order : 0,
+            language:
+              d.language && !/nepali|hindi/i.test(String(d.language))
+                ? String(d.language)
+                : 'English',
+            instructorSlug: d.instructorSlug ? String(d.instructorSlug) : undefined,
+            instructorName: d.instructorName ? String(d.instructorName) : undefined,
+            includeCertificate: d.includeCertificate !== false,
+            includeLive: Boolean(d.includeLive),
+            learn: Array.isArray(d.learn) ? d.learn.map(String) : [],
+            image: d.image ? String(d.image) : '/institute-logo.png',
+            updatedAt: d.updatedAt || docItem.updateTime || undefined,
+          });
+        }
+        courses = liveCourses.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      } else if (coursesSeeded) {
+        courses = [];
+      } else if (deletedIds.length > 0) {
+        courses = courses.filter((c) => !deletedIds.includes(c.id));
       }
-      courses = liveCourses.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     } else if (deletedIds.length > 0) {
       courses = courses.filter((c) => !deletedIds.includes(c.id));
     }
@@ -781,7 +807,16 @@ export async function fetchPublicCatalogSnapshot() {
   }
 
   const instructors = mergePublicInstructors(courses, subAdmins);
-  return { courses, instructors };
+  return {
+    courses,
+    instructors,
+    subAdmins,
+    deletedCourseIds: deletedIds,
+    coursesSeeded,
+    siteSettings,
+    paymentQr,
+    liveFetched,
+  };
 }
 
 export function buildSitemapXmlFromCatalog(origin, courses, instructors) {
@@ -1053,7 +1088,16 @@ function resolveAbsImg(img, origin) {
 export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC_ORIGIN) {
   const parsed = parsePathnameToRoute(pathname);
   const dict = SEO_LOCALE_TEXT[parsed.locale] || SEO_LOCALE_TEXT.en;
-  const { courses, instructors } = await fetchPublicCatalogSnapshot();
+  const {
+    courses,
+    instructors,
+    subAdmins,
+    deletedCourseIds,
+    coursesSeeded,
+    siteSettings,
+    paymentQr,
+    liveFetched,
+  } = await fetchPublicCatalogSnapshot();
 
   let statusCode = 200;
   let title = dict.homeTitle;
@@ -1784,6 +1828,19 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
   );
   updated = updated.replace(/<div id="root"><\/div>/i, ssrShellHtml);
 
+  const bootstrapScript = liveFetched
+    ? `<script id="hamrolms-bootstrap">window.__HAMROLMS_BOOTSTRAP__=${JSON.stringify({
+        courses,
+        subAdmins,
+        deletedCourseIds,
+        coursesSeeded,
+        siteSettings,
+        paymentQr,
+      })
+        .replace(/</g, '\\u003c')
+        .replace(/<\/script/gi, '<\\/script')};</script>`
+    : '';
+
   const extraHeadParts = [
     `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
     `<meta name="publisher" content="HamroLms" />`,
@@ -1792,6 +1849,7 @@ export async function injectRouteSeoMeta(html, pathname, origin = DEFAULT_PUBLIC
     hreflangTags,
     articleTags,
     dynamicGraphScript,
+    bootstrapScript,
   ]
     .filter(Boolean)
     .join('\n    ');
