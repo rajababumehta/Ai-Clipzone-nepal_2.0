@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, FormEvent } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, type Variants } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
   Sparkles, 
@@ -100,6 +100,32 @@ import { getDirectPdfViewerUrl, getDirectPdfDownloadUrl } from './pdfUtils';
 import { compressImageFile, estimateJsonByteSize } from './utils/chatMedia';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { PwaDownloadAdModal } from './components/PwaDownloadAdModal';
+
+const courseGridContainerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const courseGridCardVariants: Variants = {
+  hidden: { opacity: 0, y: 28, scale: 0.96 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 260,
+      damping: 22,
+      mass: 0.85,
+    },
+  },
+};
 
 enum OperationType {
   CREATE = 'create',
@@ -7732,23 +7758,25 @@ export default function App() {
             )}
 
             {filteredHomeCourses.length > 0 ? (
-              <div className={`grid gap-3.5 sm:gap-5 lg:gap-6 ${
-                filteredHomeCourses.length + (isMainAdmin ? 1 : 0) === 1
-                  ? 'grid-cols-1'
-                  : filteredHomeCourses.length + (isMainAdmin ? 1 : 0) === 2
-                    ? 'grid-cols-1 sm:grid-cols-2'
-                    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-              }`}>
+              <motion.div
+                variants={courseGridContainerVariants}
+                initial="hidden"
+                animate="visible"
+                className={`grid gap-3.5 sm:gap-5 lg:gap-6 ${
+                  filteredHomeCourses.length + (isMainAdmin ? 1 : 0) === 1
+                    ? 'grid-cols-1'
+                    : filteredHomeCourses.length + (isMainAdmin ? 1 : 0) === 2
+                      ? 'grid-cols-1 sm:grid-cols-2'
+                      : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                }`}
+              >
                 {filteredHomeCourses.map((course, index) => (
                   <motion.div
                     key={course.id}
                     id={`course-card-${course.id}`}
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-40px' }}
-                    transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.25) }}
+                    variants={courseGridCardVariants}
                     whileHover={{ y: -6 }}
-                    className="group bg-zinc-950 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
+                    className="group bg-zinc-950 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-[border-color,box-shadow] duration-300 relative flex flex-col h-full scroll-mt-28"
                   >
                     {course.isPopular && (
                       <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-center py-1.5 sm:py-2 text-[11px] sm:text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
@@ -7944,12 +7972,10 @@ export default function App() {
 
               {isMainAdmin && (
                 <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-50px' }}
-                  whileHover={{ scale: 1.01 }}
+                  variants={courseGridCardVariants}
+                  whileHover={{ y: -6, scale: 1.01 }}
                   onClick={handleCreateCourseClick}
-                  className="bg-zinc-900/60 hover:bg-zinc-900 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-zinc-700 hover:border-blue-500 transition-all duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group font-sans"
+                  className="bg-zinc-900/60 hover:bg-zinc-900 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-zinc-700 hover:border-blue-500 transition-[border-color,box-shadow,background-color] duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group font-sans"
                 >
                   <div className="w-16 h-16 bg-blue-500/15 border border-blue-500/30 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-blue-400">
                     <Plus className="w-8 h-8" />
@@ -7958,7 +7984,7 @@ export default function App() {
                   <span className="text-xs text-zinc-400 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
                 </motion.div>
               )}
-              </div>
+              </motion.div>
             ) : courseSearchQuery.trim() ? (
               <div className="py-16 text-center bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-lg mx-auto">
                 <Search className="w-10 h-10 text-zinc-600 mx-auto mb-3" />

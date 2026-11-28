@@ -225,7 +225,7 @@ export function generateDynamicPageMetadata(
 
   let pageTitle = dict.seoHomeTitle;
   let pageDescription = dict.seoHomeDescription;
-  let keywords = `${brand}, Hamro LMS, HamroLms Nepal, Online Learning, Digital Skill Courses, AI Course, Video Editing, Web Development`;
+  let keywords = `${brand}, Hamro LMS, Learn AI in Nepal, Best Coding Bootcamp Kathmandu, Online Skill Training, HamroLms Nepal, Online Learning, Digital Skill Courses, AI Course, Video Editing, Web Development`;
   let robotsDirective = parsedRoute.isPublicIndexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
     : 'noindex, nofollow';
