@@ -8052,33 +8052,10 @@ export default function App() {
           )}
         </section>
 
-            {/* Compact Footer with Crawlable Internal Links */}
+            {/* Compact Footer */}
             {(currentView === 'home' || currentView === 'courses') && (
               <footer className="mt-auto pt-4">
-                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left space-y-2">
-                  <nav aria-label="Footer Navigation" className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-[11px] text-zinc-400">
-                    {[
-                      { label: 'Courses', path: '/courses' },
-                      { label: 'Instructors', path: '/instructors' },
-                      { label: 'Learning Blog', path: '/blog' },
-                      { label: 'About Us', path: '/about-us' },
-                      { label: 'Learn. Apply. Grow.', path: '/learn' },
-                      { label: 'Privacy Policy', path: '/privacy-policy' },
-                      { label: 'Terms of Use', path: '/terms' },
-                    ].map((linkItem) => (
-                      <a
-                        key={linkItem.path}
-                        href={buildLocalizedPath(linkItem.path, activeLocale)}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          navigateToPath(linkItem.path);
-                        }}
-                        className="hover:text-blue-400 transition-colors"
-                      >
-                        {linkItem.label}
-                      </a>
-                    ))}
-                  </nav>
+                <div className="pt-3 pb-2.5 border-t border-zinc-900 text-center sm:text-left">
                   <div className="text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <span>© {new Date().getFullYear()} HamroLms. All rights reserved.</span>
                     <span>Learn. Apply. Grow. — Structured Online Courses &amp; Certificates</span>
